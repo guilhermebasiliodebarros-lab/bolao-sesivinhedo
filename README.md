@@ -1,16 +1,68 @@
-# React + Vite
+# Bolao SESI Vinhedo
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Aplicacao React + Vite para cadastro de participantes, login, palpites, ranking automatico e painel master com Firebase Authentication e Firestore.
 
-Currently, two official plugins are available:
+## Configuracao do Firebase
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+1. Crie um projeto no Firebase Console.
+2. Ative Authentication > Sign-in method > Email/Password.
+3. Ative Firestore Database.
+4. Copie `.env.example` para `.env.local`.
+5. Preencha as variaveis:
 
-## React Compiler
+```env
+VITE_FIREBASE_API_KEY=
+VITE_FIREBASE_AUTH_DOMAIN=
+VITE_FIREBASE_PROJECT_ID=
+VITE_FIREBASE_STORAGE_BUCKET=
+VITE_FIREBASE_MESSAGING_SENDER_ID=
+VITE_FIREBASE_APP_ID=
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+As chaves reais ficam somente em `.env.local`; nao coloque credenciais diretamente no codigo.
 
-## Expanding the ESLint configuration
+## Primeiro usuario master
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+1. Crie o usuario normalmente pela tela de cadastro ou pelo Firebase Authentication.
+2. Abra Firestore Database > `users`.
+3. Selecione o documento do usuario.
+4. Altere `role` de `"user"` para `"master"`.
+5. Altere ou crie `participaRanking` como `false`.
+
+O usuario master serve apenas para administracao. Para participar do bolao, crie outra conta normal com `role: "user"`.
+
+## Colecoes usadas
+
+- `users`: perfil, role, pontos e flags de ranking.
+- `games`: jogos, status e placar final.
+- `predictions`: palpites por usuario e jogo.
+
+Cada jogo tambem tem `limitePalpites`. Participantes so conseguem criar ou editar palpites enquanto o jogo estiver `aberto` e antes desse horario.
+
+Status de jogo:
+
+- `aberto`: participantes podem criar ou editar palpites.
+- `encerrado`: palpites bloqueados, placar ainda nao finalizado.
+- `finalizado`: placar lancado, palpites pontuados e ranking atualizado.
+
+## Regras do Firestore
+
+O arquivo `firestore.rules.example` traz uma base de seguranca para impedir que participantes alterem `role`, pontuacao ou dados de outros usuarios. Revise no Firebase Console antes de publicar como `firestore.rules`.
+
+## Rodar localmente
+
+```bash
+npm install
+npm run dev
+npm run build
+```
+
+## Publicacao
+
+```bash
+npm run build
+git add .
+git commit -m "Configura Firebase, usuario master e sistema do bolao"
+git push
+firebase deploy
+```

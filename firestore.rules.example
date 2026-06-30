@@ -1,0 +1,112 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function currentUser() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isMaster() {
+      return signedIn() && currentUser().role == "master";
+    }
+
+    function isParticipant() {
+      return signedIn()
+        && currentUser().role == "user"
+        && currentUser().participaRanking == true;
+    }
+
+    function gameAcceptsPredictions(gameId) {
+      let game = get(/databases/$(database)/documents/games/$(gameId)).data;
+
+      return game.status == "aberto"
+        && (!game.keys().hasAny(["limitePalpites"]) || request.time <= game.limitePalpites);
+    }
+
+    function validNonNegativeScores() {
+      return request.resource.data.palpiteA is int
+        && request.resource.data.palpiteB is int
+        && request.resource.data.palpiteA >= 0
+        && request.resource.data.palpiteB >= 0;
+    }
+
+    function userCannotChangeScoreOrRole() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(["nome", "updatedAt"]);
+    }
+
+    function predictionCreatedByOwner() {
+      return request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          "userId",
+          "gameId",
+          "nomeUsuario",
+          "palpiteA",
+          "palpiteB",
+          "pontos",
+          "acertoExato",
+          "acertoResultado",
+          "createdAt",
+          "updatedAt"
+        ])
+        && request.resource.data.pontos == 0
+        && request.resource.data.acertoExato == false
+        && request.resource.data.acertoResultado == false
+        && validNonNegativeScores()
+        && gameAcceptsPredictions(request.resource.data.gameId);
+    }
+
+    function predictionEditedByOwner() {
+      return resource.data.userId == request.auth.uid
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.gameId == resource.data.gameId
+        && request.resource.data.pontos == 0
+        && request.resource.data.acertoExato == false
+        && request.resource.data.acertoResultado == false
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "nomeUsuario",
+          "palpiteA",
+          "palpiteB",
+          "pontos",
+          "acertoExato",
+          "acertoResultado",
+          "updatedAt"
+        ])
+        && validNonNegativeScores()
+        && gameAcceptsPredictions(resource.data.gameId);
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn();
+
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.role == "user"
+        && request.resource.data.participaRanking == true
+        && request.resource.data.pontos == 0
+        && request.resource.data.acertosExatos == 0
+        && request.resource.data.acertosResultado == 0;
+
+      allow update: if isMaster()
+        || (signedIn() && request.auth.uid == uid && userCannotChangeScoreOrRole());
+
+      allow delete: if isMaster();
+    }
+
+    match /games/{gameId} {
+      allow read: if signedIn();
+      allow create, update, delete: if isMaster();
+    }
+
+    match /predictions/{predictionId} {
+      allow read: if signedIn() && (isMaster() || resource.data.userId == request.auth.uid);
+      allow create: if isParticipant() && predictionCreatedByOwner();
+      allow update: if isMaster() || (isParticipant() && predictionEditedByOwner());
+      allow delete: if isMaster();
+    }
+  }
+}

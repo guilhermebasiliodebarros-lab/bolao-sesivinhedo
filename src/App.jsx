@@ -1,121 +1,127 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
+import { useEffect, useState } from 'react'
 import './App.css'
+import AdminPanel from './components/AdminPanel.jsx'
+import Cadastro from './components/Cadastro.jsx'
+import Classificacao from './components/Classificacao.jsx'
+import Dashboard from './components/Dashboard.jsx'
+import Footer from './components/Footer.jsx'
+import Header from './components/Header.jsx'
+import Home from './components/Home.jsx'
+import Jogos from './components/Jogos.jsx'
+import Login from './components/Login.jsx'
+import Palpites from './components/Palpites.jsx'
+import { AuthProvider } from './context/AuthContext.jsx'
+import { useAuth } from './context/useAuth.js'
+import { firebaseEnvNames, isFirebaseConfigured, missingFirebaseConfig } from './config/firebase.js'
 
-function App() {
-  const [count, setCount] = useState(0)
+const protectedViews = ['dashboard', 'jogos', 'palpites', 'classificacao', 'admin']
+
+function ConfigNotice() {
+  if (isFirebaseConfigured) {
+    return null
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <div className="config-notice" role="status">
+      <strong>Firebase pendente:</strong> configure as variaveis{' '}
+      {missingFirebaseConfig.map((item) => firebaseEnvNames[item]).join(', ')}{' '}
+      no ambiente para liberar login, cadastro, Firestore e ranking em tempo real.
+    </div>
+  )
+}
 
-      <div className="ticks"></div>
+function AppShell() {
+  const [view, setView] = useState('home')
+  const [theme, setTheme] = useState(() => {
+    const storedTheme = window.localStorage.getItem('theme')
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+    if (storedTheme) {
+      return storedTheme
+    }
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  })
+  const { user, isMaster, loading, profileLoading } = useAuth()
+  let activeView = view
+  const authLoading = loading || profileLoading
+
+  if (!authLoading && !user && protectedViews.includes(view)) {
+    activeView = 'login'
+  }
+
+  if (!authLoading && user && isMaster && ['dashboard', 'jogos', 'palpites', 'classificacao'].includes(view)) {
+    activeView = 'admin'
+  }
+
+  if (!authLoading && user && view === 'admin' && !isMaster) {
+    activeView = 'dashboard'
+  }
+
+  if (!authLoading && user && ['login', 'cadastro'].includes(view)) {
+    activeView = isMaster ? 'admin' : 'dashboard'
+  }
+
+  const navigate = (nextView) => {
+    setView(nextView)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    window.localStorage.setItem('theme', theme)
+  }, [theme])
+
+  const toggleTheme = () => {
+    setTheme((current) => (current === 'dark' ? 'light' : 'dark'))
+  }
+
+  const renderView = () => {
+    if (activeView === 'login') {
+      return <Login onNavigate={navigate} onSuccess={(nextView) => navigate(nextView || 'dashboard')} />
+    }
+
+    if (activeView === 'cadastro') {
+      return <Cadastro onNavigate={navigate} onSuccess={() => navigate('dashboard')} />
+    }
+
+    if (activeView === 'dashboard') {
+      return <Dashboard onNavigate={navigate} />
+    }
+
+    if (activeView === 'jogos') {
+      return <Jogos onNavigate={navigate} />
+    }
+
+    if (activeView === 'palpites') {
+      return <Palpites onNavigate={navigate} />
+    }
+
+    if (activeView === 'classificacao') {
+      return <Classificacao onNavigate={navigate} />
+    }
+
+    if (activeView === 'admin') {
+      return <AdminPanel onNavigate={navigate} />
+    }
+
+    return <Home onNavigate={navigate} />
+  }
+
+  return (
+    <div className="app">
+      <Header activeView={activeView} onNavigate={navigate} theme={theme} onToggleTheme={toggleTheme} />
+      <ConfigNotice />
+      <main>{renderView()}</main>
+      <Footer />
+    </div>
+  )
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppShell />
+    </AuthProvider>
   )
 }
 

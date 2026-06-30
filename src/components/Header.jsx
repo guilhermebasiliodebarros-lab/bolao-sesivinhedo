@@ -1,0 +1,103 @@
+import { useState } from 'react'
+import { useAuth } from '../context/useAuth.js'
+
+export default function Header({ activeView, onNavigate, theme, onToggleTheme }) {
+  const { user, profile, isMaster, isParticipant, logout } = useAuth()
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  let navItems = [{ id: 'home', label: 'Inicio' }]
+
+  if (!user) {
+    navItems = [
+      ...navItems,
+      { id: 'jogos', label: 'Jogos' },
+      { id: 'classificacao', label: 'Classificacao' },
+    ]
+  }
+
+  if (isParticipant) {
+    navItems = [
+      ...navItems,
+      { id: 'dashboard', label: 'Painel' },
+      { id: 'jogos', label: 'Jogos' },
+      { id: 'palpites', label: 'Meus palpites' },
+      { id: 'classificacao', label: 'Classificacao' },
+    ]
+  }
+
+  if (isMaster) {
+    navItems = [...navItems, { id: 'admin', label: 'Admin' }]
+  }
+
+  const handleNavigate = (view) => {
+    onNavigate(view)
+    setMenuOpen(false)
+  }
+
+  const handleLogout = async () => {
+    await logout()
+    handleNavigate('home')
+  }
+
+  return (
+    <header className="site-header">
+      <button className="brand" type="button" onClick={() => handleNavigate('home')}>
+        <span className="brand-mark">BV</span>
+        <span>
+          <strong>Bolao SESI</strong>
+          <small>Vinhedo</small>
+        </span>
+      </button>
+
+      <button
+        className="menu-toggle"
+        type="button"
+        aria-label="Abrir menu"
+        aria-expanded={menuOpen}
+        onClick={() => setMenuOpen((current) => !current)}
+      >
+        <span />
+        <span />
+        <span />
+      </button>
+
+      <nav className={menuOpen ? 'main-nav is-open' : 'main-nav'} aria-label="Navegacao principal">
+        {navItems.map((item) => (
+          <button
+            className={activeView === item.id ? 'nav-link is-active' : 'nav-link'}
+            type="button"
+            key={item.id}
+            onClick={() => handleNavigate(item.id)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </nav>
+
+      <div className="header-actions">
+        <button className="theme-toggle" type="button" onClick={onToggleTheme}>
+          {theme === 'dark' ? 'Modo claro' : 'Modo noturno'}
+        </button>
+        {user ? (
+          <>
+            <button className="user-pill" type="button" onClick={() => handleNavigate(isMaster ? 'admin' : 'dashboard')}>
+              {profile?.nome || user.displayName || user.email}
+            </button>
+            <button className="btn btn-outline" type="button" onClick={handleLogout}>
+              Sair
+            </button>
+          </>
+        ) : (
+          <>
+            <button className="btn btn-ghost" type="button" onClick={() => handleNavigate('login')}>
+              Entrar
+            </button>
+            <button className="btn btn-primary" type="button" onClick={() => handleNavigate('cadastro')}>
+              Cadastrar
+            </button>
+          </>
+        )}
+      </div>
+    </header>
+  )
+}
