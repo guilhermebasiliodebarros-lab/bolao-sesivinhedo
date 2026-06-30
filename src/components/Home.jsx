@@ -48,6 +48,27 @@ export default function Home({ onNavigate }) {
         </article>
       </div>
 
+      <section className="sports-showcase" aria-label="Esportes do evento">
+        <div>
+          <span className="eyebrow">Clima de competicao</span>
+          <h2>Visual pensado para quadra, torcida e placar ao vivo.</h2>
+        </div>
+        <div className="sport-tile-grid">
+          <article className="sport-tile sport-tile-field">
+            <span>Futebol</span>
+          </article>
+          <article className="sport-tile sport-tile-court">
+            <span>Basquete</span>
+          </article>
+          <article className="sport-tile sport-tile-net">
+            <span>Volei</span>
+          </article>
+          <article className="sport-tile sport-tile-handball">
+            <span>Handebol</span>
+          </article>
+        </div>
+      </section>
+
       <section className="feature-band">
         <div>
           <span className="eyebrow">Organizacao simples</span>

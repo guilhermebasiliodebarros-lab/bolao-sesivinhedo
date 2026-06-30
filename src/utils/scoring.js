@@ -91,3 +91,15 @@ export function calculateGuessScore(game, guess) {
 
   return { points: POINTS.RESULT, type: 'result' }
 }
+
+export function getScoreTypeLabel(type) {
+  const labels = {
+    exact: 'Placar exato x1,4',
+    'partial-score': 'Resultado + gol parcial x1,2',
+    result: 'Resultado correto',
+    miss: 'Palpite sem ponto',
+    pending: 'Aguardando resultado',
+  }
+
+  return labels[type] || labels.pending
+}

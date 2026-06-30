@@ -9,8 +9,8 @@ import {
   STATUS_LABELS,
 } from '../services/bolaoService.js'
 import { formatDateTime, formatPoints, formatTimeRemaining, minutesUntil } from '../utils/format.js'
-import { getGameStageLabel } from '../utils/game.js'
-import { calculateGuessScore, hasFinalScore } from '../utils/scoring.js'
+import { getGameStageLabel, getSportVisualClass } from '../utils/game.js'
+import { calculateGuessScore, getScoreTypeLabel, hasFinalScore } from '../utils/scoring.js'
 
 export default function GameCard({ game, existingPrediction, existingGuess, compact = false, onGuessSaved, onNavigate }) {
   const { user, profile, isParticipant, isMaster } = useAuth()
@@ -78,7 +78,8 @@ export default function GameCard({ game, existingPrediction, existingGuess, comp
   }
 
   return (
-    <article className={compact ? 'game-card is-compact' : 'game-card'}>
+    <article className={compact ? `game-card is-compact ${getSportVisualClass(game.esporteNome)}` : `game-card ${getSportVisualClass(game.esporteNome)}`}>
+      <span className="sport-illustration" aria-hidden="true" />
       <div className="game-card-header">
         <span className="sport-badge">{game.esporteNome}</span>
         <span>{getGameStageLabel(game)}</span>
@@ -115,8 +116,11 @@ export default function GameCard({ game, existingPrediction, existingGuess, comp
             {prediction.palpiteA} x {prediction.palpiteB}
           </strong>
           {game.status === GAME_STATUS.FINISHED ? (
-            <small>
-              {formatPoints(result.points)} ponto{result.points === 1 ? '' : 's'}
+            <small className="score-detail">
+              <span>{getScoreTypeLabel(result.type)}</span>
+              <strong>
+                {formatPoints(result.points)} ponto{result.points === 1 ? '' : 's'}
+              </strong>
             </small>
           ) : null}
         </div>

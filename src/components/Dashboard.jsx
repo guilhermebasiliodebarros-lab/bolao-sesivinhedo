@@ -7,7 +7,7 @@ import {
   subscribeRanking,
   subscribeUserPredictions,
 } from '../services/bolaoService.js'
-import { formatPoints } from '../utils/format.js'
+import { formatDateTime, formatPoints } from '../utils/format.js'
 import { getGameStageLabel } from '../utils/game.js'
 import EmptyState from './EmptyState.jsx'
 import GameCard from './GameCard.jsx'
@@ -47,9 +47,24 @@ export default function Dashboard({ onNavigate }) {
     return new Map(predictions.map((prediction) => [prediction.gameId, prediction]))
   }, [predictions])
 
-  const openGames = games.filter((game) => canEditPrediction(game)).slice(0, 4)
+  const openGamesAll = games.filter((game) => canEditPrediction(game))
+  const openGames = openGamesAll.slice(0, 4)
   const gamesById = useMemo(() => new Map(games.map((game) => [game.id, game])), [games])
-  const scoredHistory = predictions.filter((prediction) => gamesById.get(prediction.gameId)?.status === GAME_STATUS.FINISHED)
+  const scoredHistory = predictions
+    .filter((prediction) => gamesById.get(prediction.gameId)?.status === GAME_STATUS.FINISHED)
+    .sort((a, b) => {
+      const firstGame = gamesById.get(a.gameId)
+      const secondGame = gamesById.get(b.gameId)
+      const firstDate = new Date(firstGame?.dataHora || 0).getTime()
+      const secondDate = new Date(secondGame?.dataHora || 0).getTime()
+
+      return secondDate - firstDate
+    })
+  const pendingOpenGames = openGamesAll.filter((game) => !predictionsByGame.has(game.id))
+  const allOpenGamesGuessed = openGamesAll.length > 0 && pendingOpenGames.length === 0
+  const nextGameToGuess = pendingOpenGames[0] || openGamesAll[0] || null
+  const latestScore = scoredHistory[0] || null
+  const latestScoreGame = latestScore ? gamesById.get(latestScore.gameId) : null
   const participantPosition = ranking.findIndex((item) => item.id === user?.uid) + 1
 
   if (!user) {
@@ -98,7 +113,65 @@ export default function Dashboard({ onNavigate }) {
           <span>Acertos resultado</span>
           <strong>{profile?.acertosResultado || 0}</strong>
         </article>
+        <article className="stat-card">
+          <span>Faltam palpitar</span>
+          <strong>{pendingOpenGames.length}</strong>
+        </article>
+        <article className="stat-card">
+          <span>Jogos abertos</span>
+          <strong>{openGamesAll.length}</strong>
+        </article>
       </div>
+
+      <section className="dashboard-spotlight">
+        <article>
+          <span className="eyebrow">{allOpenGamesGuessed ? 'Tudo em dia' : 'Proximo foco'}</span>
+          {allOpenGamesGuessed ? (
+            <>
+              <strong>Voce ja palpitou todos os jogos abertos</strong>
+              <small>Quando novos jogos forem liberados, eles entram aqui automaticamente.</small>
+              <button className="btn btn-outline btn-small" type="button" onClick={() => onNavigate('palpites')}>
+                Ver palpites
+              </button>
+            </>
+          ) : nextGameToGuess ? (
+            <>
+              <strong>
+                {nextGameToGuess.timeA} x {nextGameToGuess.timeB}
+              </strong>
+              <small>
+                {nextGameToGuess.esporteNome} | {formatDateTime(nextGameToGuess.dataHora)}
+              </small>
+              <button className="btn btn-primary btn-small" type="button" onClick={() => onNavigate('jogos')}>
+                Palpitar
+              </button>
+            </>
+          ) : (
+            <>
+              <strong>Nenhum jogo aberto agora</strong>
+              <small>Assim que a organizacao liberar novos jogos, eles aparecem aqui.</small>
+            </>
+          )}
+        </article>
+        <article>
+          <span className="eyebrow">Ultimo ganho</span>
+          {latestScore ? (
+            <>
+              <strong>{formatPoints(latestScore.pontos)} ponto(s)</strong>
+              <small>
+                {latestScoreGame
+                  ? `${latestScoreGame.esporteNome} | ${latestScoreGame.timeA} x ${latestScoreGame.timeB}`
+                  : 'Jogo finalizado'}
+              </small>
+            </>
+          ) : (
+            <>
+              <strong>Aguardando resultados</strong>
+              <small>Quando um placar for finalizado, seu ganho aparece aqui.</small>
+            </>
+          )}
+        </article>
+      </section>
 
       <div className="split-layout">
         <section>

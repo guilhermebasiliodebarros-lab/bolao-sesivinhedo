@@ -41,3 +41,33 @@ export function getUniqueGameSports(games) {
 
   return [...sports.values()].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
 }
+
+export function getSportVisualClass(sportName) {
+  const normalized = normalizeFilterText(sportName)
+
+  if (normalized.includes('fut') || normalized.includes('soccer')) {
+    return 'sport-visual-field'
+  }
+
+  if (normalized.includes('basquete') || normalized.includes('basket')) {
+    return 'sport-visual-court'
+  }
+
+  if (normalized.includes('volei') || normalized.includes('volley')) {
+    return 'sport-visual-net'
+  }
+
+  if (normalized.includes('hand')) {
+    return 'sport-visual-handball'
+  }
+
+  if (normalized.includes('tenis') || normalized.includes('ping') || normalized.includes('mesa')) {
+    return 'sport-visual-table'
+  }
+
+  if (normalized.includes('queimada') || normalized.includes('dodge')) {
+    return 'sport-visual-dodgeball'
+  }
+
+  return 'sport-visual-generic'
+}

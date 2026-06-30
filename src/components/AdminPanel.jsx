@@ -55,6 +55,13 @@ const GAME_FILTERS = [
   { value: GAME_STATUS.FINISHED, label: 'Finalizados' },
 ]
 
+const ADMIN_TABS = [
+  { id: 'esportes', label: 'Esportes' },
+  { id: 'jogos', label: 'Jogos' },
+  { id: 'participantes', label: 'Participantes' },
+  { id: 'palpites', label: 'Palpites' },
+]
+
 export default function AdminPanel({ onNavigate }) {
   const { user, isMaster } = useAuth()
   const [games, setGames] = useState([])
@@ -66,6 +73,7 @@ export default function AdminPanel({ onNavigate }) {
   const [finalScores, setFinalScores] = useState({})
   const [gameFilter, setGameFilter] = useState(ALL_GAMES_FILTER)
   const [selectedSportId, setSelectedSportId] = useState('')
+  const [activeAdminTab, setActiveAdminTab] = useState('esportes')
   const [phaseFilter, setPhaseFilter] = useState(ALL_PHASES_FILTER)
   const [gameSearch, setGameSearch] = useState('')
   const [loadingState, setLoadingState] = useState({
@@ -140,6 +148,7 @@ export default function AdminPanel({ onNavigate }) {
 
     return games.filter((game) => game.sportId === selectedSportId || game.esporteNome === selectedSport?.nome)
   }, [games, selectedSport?.nome, selectedSportId])
+  const predictionTabGames = selectedSport ? selectedSportGames : games
   const gameCountBySport = useMemo(() => {
     return games.reduce((counts, game) => {
       if (!game.sportId) {
@@ -242,6 +251,7 @@ export default function AdminPanel({ onNavigate }) {
 
   const selectSport = (sport) => {
     setSelectedSportId(sport.id)
+    setActiveAdminTab('jogos')
     setGameFilter(ALL_GAMES_FILTER)
     setPhaseFilter(ALL_PHASES_FILTER)
     setGameSearch('')
@@ -265,6 +275,7 @@ export default function AdminPanel({ onNavigate }) {
 
   const editGame = (game) => {
     setSelectedSportId(game.sportId || '')
+    setActiveAdminTab('jogos')
     setForm({
       id: game.id,
       sportId: game.sportId || '',
@@ -297,6 +308,7 @@ export default function AdminPanel({ onNavigate }) {
   }
 
   const editSport = (sport) => {
+    setActiveAdminTab('esportes')
     setSportForm({
       id: sport.id,
       nome: sport.nome,
@@ -498,6 +510,30 @@ export default function AdminPanel({ onNavigate }) {
         </article>
       </div>
 
+      <div className="admin-tabs segmented-control" aria-label="Areas do painel master">
+        {ADMIN_TABS.map((tab) => {
+          const tabCount = {
+            esportes: sports.length,
+            jogos: selectedSport ? selectedSportGames.length : games.length,
+            participantes: participants.length,
+            palpites: predictions.length,
+          }[tab.id]
+
+          return (
+            <button
+              className={activeAdminTab === tab.id ? 'is-active' : ''}
+              type="button"
+              key={tab.id}
+              aria-pressed={activeAdminTab === tab.id}
+              onClick={() => setActiveAdminTab(tab.id)}
+            >
+              {tab.label} ({tabCount})
+            </button>
+          )
+        })}
+      </div>
+
+      {activeAdminTab === 'esportes' ? (
       <form className="admin-form admin-sport-form" onSubmit={handleSportSubmit}>
         <div className="section-heading">
           <h2>{sportForm.id ? 'Editar esporte' : 'Esportes'}</h2>
@@ -557,9 +593,11 @@ export default function AdminPanel({ onNavigate }) {
           </div>
         ) : null}
       </form>
+      ) : null}
 
-      {selectedSport ? (
-        <>
+      {activeAdminTab === 'jogos' ? (
+        selectedSport ? (
+          <>
           <div className="selected-sport-bar">
             <div>
               <span className="eyebrow">Esporte selecionado</span>
@@ -843,90 +881,104 @@ export default function AdminPanel({ onNavigate }) {
           )}
         </section>
 
-        <aside className="admin-side">
-          <section>
-            <div className="section-heading">
-              <h2>Participantes</h2>
-              <span>{participants.length}</span>
-            </div>
-            <div className="mini-list">
-              {participants.length ? (
-                participants.map((participant) => (
-                  <article className="mini-item" key={participant.id}>
-                    <span>{participant.nome}</span>
-                    <strong>{formatPoints(participant.pontos)} pts</strong>
-                  </article>
-                ))
-              ) : (
-                <EmptyState title="Sem participantes" description="Usuarios cadastrados aparecem aqui." />
-              )}
-            </div>
-          </section>
-
-          <section>
-            <div className="section-heading">
-              <h2>Palpites por jogo</h2>
-              <span>{selectedSportGames.length}</span>
-            </div>
-            <div className="prediction-admin-list">
-              {selectedSportGames.length ? (
-                selectedSportGames.map((game) => {
-                  const gamePredictions = predictionsByGame.get(game.id) || []
-                  const pendingParticipants = getPendingParticipants(gamePredictions)
-                  const pendingPredictions = pendingParticipants.length
-
-                  return (
-                    <article className="admin-prediction-group" key={`predictions-${game.id}`}>
-                      <strong>
-                        {game.timeA} x {game.timeB}
-                      </strong>
-                      <small>
-                        {game.esporteNome} | {getGameStageLabel(game)}
-                      </small>
-                      <small>
-                        {gamePredictions.length} enviado(s) | {pendingPredictions} pendente(s)
-                      </small>
-                      {pendingParticipants.length ? (
-                        <div className="pending-list" aria-label="Participantes pendentes">
-                          {pendingParticipants.slice(0, 8).map((participant) => (
-                            <span key={participant.id}>{participant.nome}</span>
-                          ))}
-                          {pendingParticipants.length > 8 ? (
-                            <span>+{pendingParticipants.length - 8} participante(s)</span>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <div className="pending-list is-complete">
-                          <span>Todos os participantes enviaram palpite.</span>
-                        </div>
-                      )}
-                      {gamePredictions.length ? (
-                        gamePredictions.map((prediction) => (
-                          <span key={prediction.id}>
-                            {prediction.nomeUsuario}: {prediction.palpiteA} x {prediction.palpiteB} (
-                            {formatPoints(prediction.pontos)} pts)
-                          </span>
-                        ))
-                      ) : (
-                        <span>Nenhum palpite enviado.</span>
-                      )}
-                    </article>
-                  )
-                })
-              ) : (
-                <EmptyState title="Sem jogos" description="Cadastre jogos neste esporte para acompanhar palpites." />
-              )}
-            </div>
-          </section>
-        </aside>
       </div>
-        </>
+          </>
+        ) : (
+          <EmptyState
+            title="Escolha um esporte"
+            description="Volte para a aba Esportes e clique em um esporte cadastrado para criar jogos, finalizar placares e acompanhar palpites daquele esporte."
+            action={
+              <button className="btn btn-primary" type="button" onClick={() => setActiveAdminTab('esportes')}>
+                Ver esportes
+              </button>
+            }
+          />
+        )
       ) : (
-        <EmptyState
-          title="Escolha um esporte"
-          description="Clique em um esporte cadastrado acima para criar jogos, finalizar placares e acompanhar palpites daquele esporte."
-        />
+        null
       )}
+
+      {activeAdminTab === 'participantes' ? (
+        <section className="admin-tab-panel">
+          <div className="section-heading">
+            <h2>Participantes</h2>
+            <span>{participants.length} participante(s)</span>
+          </div>
+          <div className="mini-list admin-participant-grid">
+            {participants.length ? (
+              participants.map((participant) => (
+                <article className="mini-item" key={participant.id}>
+                  <span>{participant.nome}</span>
+                  <strong>{formatPoints(participant.pontos)} pts</strong>
+                </article>
+              ))
+            ) : (
+              <EmptyState title="Sem participantes" description="Usuarios cadastrados aparecem aqui." />
+            )}
+          </div>
+        </section>
+      ) : null}
+
+      {activeAdminTab === 'palpites' ? (
+        <section className="admin-tab-panel">
+          <div className="section-heading">
+            <div>
+              <h2>Palpites por jogo</h2>
+              <p>{selectedSport ? `Filtrando por ${selectedSport.nome}.` : 'Mostrando todos os esportes.'}</p>
+            </div>
+            <span>{predictionTabGames.length} jogo(s)</span>
+          </div>
+          <div className="prediction-admin-list">
+            {predictionTabGames.length ? (
+              predictionTabGames.map((game) => {
+                const gamePredictions = predictionsByGame.get(game.id) || []
+                const pendingParticipants = getPendingParticipants(gamePredictions)
+                const pendingPredictions = pendingParticipants.length
+
+                return (
+                  <article className="admin-prediction-group" key={`predictions-${game.id}`}>
+                    <strong>
+                      {game.timeA} x {game.timeB}
+                    </strong>
+                    <small>
+                      {game.esporteNome} | {getGameStageLabel(game)}
+                    </small>
+                    <small>
+                      {gamePredictions.length} enviado(s) | {pendingPredictions} pendente(s)
+                    </small>
+                    {pendingParticipants.length ? (
+                      <div className="pending-list" aria-label="Participantes pendentes">
+                        {pendingParticipants.slice(0, 8).map((participant) => (
+                          <span key={participant.id}>{participant.nome}</span>
+                        ))}
+                        {pendingParticipants.length > 8 ? (
+                          <span>+{pendingParticipants.length - 8} participante(s)</span>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <div className="pending-list is-complete">
+                        <span>Todos os participantes enviaram palpite.</span>
+                      </div>
+                    )}
+                    {gamePredictions.length ? (
+                      gamePredictions.map((prediction) => (
+                        <span key={prediction.id}>
+                          {prediction.nomeUsuario}: {prediction.palpiteA} x {prediction.palpiteB} (
+                          {formatPoints(prediction.pontos)} pts)
+                        </span>
+                      ))
+                    ) : (
+                      <span>Nenhum palpite enviado.</span>
+                    )}
+                  </article>
+                )
+              })
+            ) : (
+              <EmptyState title="Sem jogos" description="Cadastre jogos para acompanhar palpites." />
+            )}
+          </div>
+        </section>
+      ) : null}
 
       {confirmDialog ? (
         <div className="modal-backdrop" role="presentation" onClick={closeConfirmDialog}>
@@ -937,9 +989,12 @@ export default function AdminPanel({ onNavigate }) {
             aria-labelledby="confirm-modal-title"
             onClick={(event) => event.stopPropagation()}
           >
-            <span className="eyebrow">Confirmacao</span>
-            <h2 id="confirm-modal-title">{confirmDialog.title}</h2>
-            <p>{confirmDialog.description}</p>
+            <div className="confirm-modal-mark" aria-hidden="true" />
+            <div className="confirm-modal-content">
+              <span className="eyebrow">Confirmacao</span>
+              <h2 id="confirm-modal-title">{confirmDialog.title}</h2>
+              <p>{confirmDialog.description}</p>
+            </div>
             <div className="modal-actions">
               <button className="btn btn-outline" type="button" disabled={saving} onClick={closeConfirmDialog}>
                 Cancelar

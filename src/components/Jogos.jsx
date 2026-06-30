@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/useAuth.js'
-import { GAME_STATUS, subscribeGames, subscribeUserPredictions } from '../services/bolaoService.js'
+import { canEditPrediction, GAME_STATUS, subscribeGames, subscribeUserPredictions } from '../services/bolaoService.js'
 import { gameMatchesSearch, getGameStageLabel, getUniqueGamePhases, getUniqueGameSports } from '../utils/game.js'
 import EmptyState from './EmptyState.jsx'
 import GameCard from './GameCard.jsx'
@@ -49,6 +49,12 @@ export default function Jogos({ onNavigate }) {
   const predictionsByGame = useMemo(() => {
     return new Map((user ? predictions : []).map((prediction) => [prediction.gameId, prediction]))
   }, [predictions, user])
+  const openGamesAll = useMemo(() => games.filter((game) => canEditPrediction(game)), [games])
+  const pendingOpenGames = useMemo(
+    () => openGamesAll.filter((game) => !predictionsByGame.has(game.id)),
+    [openGamesAll, predictionsByGame],
+  )
+  const allOpenGamesGuessed = Boolean(isParticipant && openGamesAll.length > 0 && pendingOpenGames.length === 0)
 
   const sportOptions = useMemo(() => getUniqueGameSports(games), [games])
   const phaseOptions = useMemo(() => getUniqueGamePhases(games), [games])
@@ -107,6 +113,19 @@ export default function Jogos({ onNavigate }) {
       ) : null}
 
       {error ? <div className="alert alert-error">{error}</div> : null}
+
+      {allOpenGamesGuessed ? (
+        <div className="completion-banner" role="status">
+          <div>
+            <span className="eyebrow">Tudo em dia</span>
+            <strong>Voce ja palpitou todos os jogos abertos.</strong>
+            <p>Agora e so acompanhar os resultados e esperar a organizacao liberar novos jogos.</p>
+          </div>
+          <button className="btn btn-outline btn-small" type="button" onClick={() => onNavigate('palpites')}>
+            Ver meus palpites
+          </button>
+        </div>
+      ) : null}
 
       <div className="segmented-control" role="tablist" aria-label="Filtro de jogos">
         {filters.map((filter) => (

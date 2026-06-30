@@ -53,7 +53,7 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
       <button
         className="menu-toggle"
         type="button"
-        aria-label="Abrir menu"
+        aria-label={menuOpen ? 'Fechar menu' : 'Abrir menu'}
         aria-expanded={menuOpen}
         onClick={() => setMenuOpen((current) => !current)}
       >
@@ -62,42 +62,53 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
         <span />
       </button>
 
-      <nav className={menuOpen ? 'main-nav is-open' : 'main-nav'} aria-label="Navegacao principal">
-        {navItems.map((item) => (
-          <button
-            className={activeView === item.id ? 'nav-link is-active' : 'nav-link'}
-            type="button"
-            key={item.id}
-            onClick={() => handleNavigate(item.id)}
-          >
-            {item.label}
-          </button>
-        ))}
-      </nav>
+      {menuOpen ? (
+        <button
+          className="mobile-menu-backdrop"
+          type="button"
+          aria-label="Fechar menu"
+          onClick={() => setMenuOpen(false)}
+        />
+      ) : null}
 
-      <div className="header-actions">
-        <button className="theme-toggle" type="button" onClick={onToggleTheme}>
-          {theme === 'dark' ? 'Modo claro' : 'Modo noturno'}
-        </button>
-        {user ? (
-          <>
-            <button className="user-pill" type="button" onClick={() => handleNavigate(isMaster ? 'admin' : 'dashboard')}>
-              {profile?.nome || user.displayName || user.email}
+      <div className={menuOpen ? 'mobile-drawer is-open' : 'mobile-drawer'}>
+        <nav className="main-nav" aria-label="Navegacao principal">
+          {navItems.map((item) => (
+            <button
+              className={activeView === item.id ? 'nav-link is-active' : 'nav-link'}
+              type="button"
+              key={item.id}
+              onClick={() => handleNavigate(item.id)}
+            >
+              {item.label}
             </button>
-            <button className="btn btn-outline" type="button" onClick={handleLogout}>
-              Sair
-            </button>
-          </>
-        ) : (
-          <>
-            <button className="btn btn-ghost" type="button" onClick={() => handleNavigate('login')}>
-              Entrar
-            </button>
-            <button className="btn btn-primary" type="button" onClick={() => handleNavigate('cadastro')}>
-              Cadastrar
-            </button>
-          </>
-        )}
+          ))}
+        </nav>
+
+        <div className="header-actions">
+          <button className="theme-toggle" type="button" onClick={onToggleTheme}>
+            {theme === 'dark' ? 'Modo claro' : 'Modo noturno'}
+          </button>
+          {user ? (
+            <>
+              <button className="user-pill" type="button" onClick={() => handleNavigate(isMaster ? 'admin' : 'dashboard')}>
+                {profile?.nome || user.displayName || user.email}
+              </button>
+              <button className="btn btn-outline" type="button" onClick={handleLogout}>
+                Sair
+              </button>
+            </>
+          ) : (
+            <>
+              <button className="btn btn-ghost" type="button" onClick={() => handleNavigate('login')}>
+                Entrar
+              </button>
+              <button className="btn btn-primary" type="button" onClick={() => handleNavigate('cadastro')}>
+                Cadastrar
+              </button>
+            </>
+          )}
+        </div>
       </div>
     </header>
   )
