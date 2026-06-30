@@ -48,10 +48,6 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
         ) : (
           <span className="brand-mark">BV</span>
         )}
-        <span>
-          <strong>Bolao SESI</strong>
-          <small>Vinhedo</small>
-        </span>
       </button>
 
       <button

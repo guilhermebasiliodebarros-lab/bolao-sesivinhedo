@@ -1,3 +1,5 @@
+import { formatPoints } from '../utils/format.js'
+
 export default function RankingTable({ ranking }) {
   const topThree = ranking.slice(0, 3)
 
@@ -9,7 +11,7 @@ export default function RankingTable({ ranking }) {
             <article className={`podium-card podium-${index + 1}`} key={participant.id}>
               <span>{index + 1}o lugar</span>
               <strong>{participant.nome || participant.email}</strong>
-              <small>{participant.pontos || 0} pts</small>
+              <small>{formatPoints(participant.pontos)} pts</small>
             </article>
           ))}
         </div>
@@ -28,7 +30,7 @@ export default function RankingTable({ ranking }) {
           <div className="ranking-row" key={participant.id}>
             <strong>{index + 1}o</strong>
             <span>{participant.nome || participant.email}</span>
-            <span>{participant.pontos || 0}</span>
+            <span>{formatPoints(participant.pontos)}</span>
             <span>{participant.acertosExatos || 0}</span>
             <span>{participant.acertosResultado || 0}</span>
           </div>

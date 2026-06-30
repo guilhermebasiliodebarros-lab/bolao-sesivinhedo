@@ -39,7 +39,7 @@ export default function Home({ onNavigate }) {
         <article className="info-card">
           <span className="card-number">02</span>
           <h2>Pontuacao automatica</h2>
-          <p>Placar exato vale 3 pontos. Acertar vencedor ou empate vale 1 ponto. Erro nao pontua.</p>
+          <p>Acertar vencedor ou empate vale 3 pontos, com multiplicador de 1,2 por gol parcial e 1,4 no placar exato.</p>
         </article>
         <article className="info-card">
           <span className="card-number">03</span>

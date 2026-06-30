@@ -8,7 +8,7 @@ import {
   savePrediction,
   STATUS_LABELS,
 } from '../services/bolaoService.js'
-import { formatDateTime, formatTimeRemaining, minutesUntil } from '../utils/format.js'
+import { formatDateTime, formatPoints, formatTimeRemaining, minutesUntil } from '../utils/format.js'
 import { getGameStageLabel } from '../utils/game.js'
 import { calculateGuessScore, hasFinalScore } from '../utils/scoring.js'
 
@@ -116,7 +116,7 @@ export default function GameCard({ game, existingPrediction, existingGuess, comp
           </strong>
           {game.status === GAME_STATUS.FINISHED ? (
             <small>
-              {result.points} ponto{result.points === 1 ? '' : 's'}
+              {formatPoints(result.points)} ponto{result.points === 1 ? '' : 's'}
             </small>
           ) : null}
         </div>

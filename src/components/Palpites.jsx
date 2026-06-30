@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/useAuth.js'
 import { GAME_STATUS, subscribeGames, subscribeUserPredictions } from '../services/bolaoService.js'
+import { formatPoints } from '../utils/format.js'
 import { getGameStageLabel } from '../utils/game.js'
 import EmptyState from './EmptyState.jsx'
 import LoadingState from './LoadingState.jsx'
@@ -92,7 +93,7 @@ export default function Palpites({ onNavigate }) {
                 <div>
                   <span>Status</span>
                   <strong>
-                    {game?.status === GAME_STATUS.FINISHED ? `${prediction.pontos} ponto(s)` : 'Aguardando'}
+                    {game?.status === GAME_STATUS.FINISHED ? `${formatPoints(prediction.pontos)} ponto(s)` : 'Aguardando'}
                   </strong>
                 </div>
               </article>

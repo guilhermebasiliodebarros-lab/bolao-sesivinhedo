@@ -7,6 +7,7 @@ import {
   subscribeRanking,
   subscribeUserPredictions,
 } from '../services/bolaoService.js'
+import { formatPoints } from '../utils/format.js'
 import { getGameStageLabel } from '../utils/game.js'
 import EmptyState from './EmptyState.jsx'
 import GameCard from './GameCard.jsx'
@@ -83,7 +84,7 @@ export default function Dashboard({ onNavigate }) {
       <div className="stats-grid">
         <article className="stat-card">
           <span>Pontuacao atual</span>
-          <strong>{profile?.pontos || 0}</strong>
+          <strong>{formatPoints(profile?.pontos)}</strong>
         </article>
         <article className="stat-card">
           <span>Posicao</span>
@@ -187,7 +188,7 @@ export default function Dashboard({ onNavigate }) {
                         ? `${game.esporteNome} | ${getGameStageLabel(game)} | ${game.timeA} x ${game.timeB}`
                         : 'Jogo removido'}
                     </span>
-                    <strong>{prediction.pontos} ponto(s)</strong>
+                    <strong>{formatPoints(prediction.pontos)} ponto(s)</strong>
                   </article>
                 )
               })

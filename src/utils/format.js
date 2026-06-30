@@ -87,3 +87,12 @@ export function asNumberOrNull(value) {
   const number = Number(value)
   return Number.isFinite(number) ? number : null
 }
+
+export function formatPoints(value) {
+  const number = Number(value || 0)
+
+  return new Intl.NumberFormat('pt-BR', {
+    minimumFractionDigits: Number.isInteger(number) ? 0 : 1,
+    maximumFractionDigits: 1,
+  }).format(number)
+}

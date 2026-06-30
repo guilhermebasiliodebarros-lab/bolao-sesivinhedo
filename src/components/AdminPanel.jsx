@@ -17,7 +17,7 @@ import {
   subscribeParticipants,
   subscribeSports,
 } from '../services/bolaoService.js'
-import { formatDateTime } from '../utils/format.js'
+import { formatDateTime, formatPoints } from '../utils/format.js'
 import { gameMatchesSearch, getGameStageLabel, getUniqueGamePhases } from '../utils/game.js'
 import EmptyState from './EmptyState.jsx'
 import LoadingState from './LoadingState.jsx'
@@ -42,7 +42,6 @@ const blankSport = {
 }
 
 const ALL_GAMES_FILTER = 'todos'
-const ALL_SPORTS_FILTER = 'todos'
 const ALL_PHASES_FILTER = 'todas'
 const EXPIRED_GAMES_FILTER = 'prazo-vencido'
 
@@ -66,7 +65,7 @@ export default function AdminPanel({ onNavigate }) {
   const [sportForm, setSportForm] = useState(blankSport)
   const [finalScores, setFinalScores] = useState({})
   const [gameFilter, setGameFilter] = useState(ALL_GAMES_FILTER)
-  const [sportFilter, setSportFilter] = useState(ALL_SPORTS_FILTER)
+  const [selectedSportId, setSelectedSportId] = useState('')
   const [phaseFilter, setPhaseFilter] = useState(ALL_PHASES_FILTER)
   const [gameSearch, setGameSearch] = useState('')
   const [loadingState, setLoadingState] = useState({
@@ -130,6 +129,17 @@ export default function AdminPanel({ onNavigate }) {
   }, [predictions])
   const participantIds = useMemo(() => new Set(participants.map((participant) => participant.id)), [participants])
   const sportNameById = useMemo(() => new Map(sports.map((sport) => [sport.id, sport.nome])), [sports])
+  const selectedSport = useMemo(
+    () => sports.find((sport) => sport.id === selectedSportId) || null,
+    [selectedSportId, sports],
+  )
+  const selectedSportGames = useMemo(() => {
+    if (!selectedSportId) {
+      return []
+    }
+
+    return games.filter((game) => game.sportId === selectedSportId || game.esporteNome === selectedSport?.nome)
+  }, [games, selectedSport?.nome, selectedSportId])
   const gameCountBySport = useMemo(() => {
     return games.reduce((counts, game) => {
       if (!game.sportId) {
@@ -141,38 +151,40 @@ export default function AdminPanel({ onNavigate }) {
     }, new Map())
   }, [games])
   const availablePhases = useMemo(() => {
-    return [...new Set([...PHASE_OPTIONS, ...getUniqueGamePhases(games)])]
-  }, [games])
-  const expiredOpenGames = useMemo(
+    return [...new Set([...PHASE_OPTIONS, ...getUniqueGamePhases(selectedSportId ? selectedSportGames : games)])]
+  }, [games, selectedSportGames, selectedSportId])
+  const allExpiredOpenGames = useMemo(
     () => games.filter((game) => game.status === GAME_STATUS.OPEN && !isPredictionDeadlineOpen(game)),
     [games],
   )
+  const expiredOpenGames = useMemo(
+    () => selectedSportGames.filter((game) => game.status === GAME_STATUS.OPEN && !isPredictionDeadlineOpen(game)),
+    [selectedSportGames],
+  )
   const filteredGames = useMemo(() => {
-    let statusFilteredGames = games
+    let statusFilteredGames = selectedSportGames
 
     if (gameFilter === EXPIRED_GAMES_FILTER) {
       statusFilteredGames = expiredOpenGames
     } else if (gameFilter !== ALL_GAMES_FILTER) {
-      statusFilteredGames = games.filter((game) => game.status === gameFilter)
+      statusFilteredGames = selectedSportGames.filter((game) => game.status === gameFilter)
     }
 
     return statusFilteredGames.filter((game) => {
-      const matchesSport =
-        sportFilter === ALL_SPORTS_FILTER || game.sportId === sportFilter || game.esporteNome === sportFilter
       const matchesPhase = phaseFilter === ALL_PHASES_FILTER || game.fase === phaseFilter
 
-      return matchesSport && matchesPhase && gameMatchesSearch(game, gameSearch)
+      return matchesPhase && gameMatchesSearch(game, gameSearch)
     })
-  }, [expiredOpenGames, gameFilter, gameSearch, games, phaseFilter, sportFilter])
+  }, [expiredOpenGames, gameFilter, gameSearch, phaseFilter, selectedSportGames])
   const gameFilterCounts = useMemo(
     () => ({
-      [ALL_GAMES_FILTER]: games.length,
-      [GAME_STATUS.OPEN]: games.filter((game) => game.status === GAME_STATUS.OPEN).length,
+      [ALL_GAMES_FILTER]: selectedSportGames.length,
+      [GAME_STATUS.OPEN]: selectedSportGames.filter((game) => game.status === GAME_STATUS.OPEN).length,
       [EXPIRED_GAMES_FILTER]: expiredOpenGames.length,
-      [GAME_STATUS.CLOSED]: games.filter((game) => game.status === GAME_STATUS.CLOSED).length,
-      [GAME_STATUS.FINISHED]: games.filter((game) => game.status === GAME_STATUS.FINISHED).length,
+      [GAME_STATUS.CLOSED]: selectedSportGames.filter((game) => game.status === GAME_STATUS.CLOSED).length,
+      [GAME_STATUS.FINISHED]: selectedSportGames.filter((game) => game.status === GAME_STATUS.FINISHED).length,
     }),
-    [expiredOpenGames.length, games],
+    [expiredOpenGames.length, selectedSportGames],
   )
   const getPendingParticipants = (gamePredictions) => {
     const usersWithPrediction = new Set(
@@ -195,9 +207,9 @@ export default function AdminPanel({ onNavigate }) {
       abertos: games.filter((game) => game.status === GAME_STATUS.OPEN).length,
       encerrados: games.filter((game) => game.status === GAME_STATUS.CLOSED).length,
       finalizados: games.filter((game) => game.status === GAME_STATUS.FINISHED).length,
-      prazoVencido: expiredOpenGames.length,
+      prazoVencido: allExpiredOpenGames.length,
     }
-  }, [expiredOpenGames.length, games, participants, predictions, sports.length])
+  }, [allExpiredOpenGames.length, games, participants, predictions, sports.length])
 
   if (!isMaster) {
     return (
@@ -220,11 +232,25 @@ export default function AdminPanel({ onNavigate }) {
   }
 
   const updateSportField = (sportId) => {
+    setSelectedSportId(sportId)
     setForm((current) => ({
       ...current,
       sportId,
       esporteNome: sportNameById.get(sportId) || '',
     }))
+  }
+
+  const selectSport = (sport) => {
+    setSelectedSportId(sport.id)
+    setGameFilter(ALL_GAMES_FILTER)
+    setPhaseFilter(ALL_PHASES_FILTER)
+    setGameSearch('')
+    setForm({
+      ...blankGame,
+      sportId: sport.id,
+      esporteNome: sport.nome,
+    })
+    setMessage('')
   }
 
   const updateFinalScore = (gameId, field, value) => {
@@ -238,6 +264,7 @@ export default function AdminPanel({ onNavigate }) {
   }
 
   const editGame = (game) => {
+    setSelectedSportId(game.sportId || '')
     setForm({
       id: game.id,
       sportId: game.sportId || '',
@@ -257,7 +284,15 @@ export default function AdminPanel({ onNavigate }) {
   }
 
   const resetForm = () => {
-    setForm(blankGame)
+    setForm(
+      selectedSport
+        ? {
+            ...blankGame,
+            sportId: selectedSport.id,
+            esporteNome: selectedSport.nome,
+          }
+        : blankGame,
+    )
     setMessage('')
   }
 
@@ -333,7 +368,7 @@ export default function AdminPanel({ onNavigate }) {
           }
 
       await saveGame(gamePayload)
-      setForm(blankGame)
+      resetForm()
     }, 'Jogo salvo e classificacao recalculada.')
   }
 
@@ -351,7 +386,14 @@ export default function AdminPanel({ onNavigate }) {
       title: 'Excluir esporte',
       description: `Excluir ${sport.nome}? Esta acao so e permitida quando nao existem jogos cadastrados nesse esporte.`,
       confirmLabel: 'Excluir esporte',
-      action: () => deleteSport(sport.id),
+      action: async () => {
+        await deleteSport(sport.id)
+
+        if (selectedSportId === sport.id) {
+          setSelectedSportId('')
+          setForm(blankGame)
+        }
+      },
       successMessage: 'Esporte excluido com sucesso.',
     })
   }
@@ -486,9 +528,18 @@ export default function AdminPanel({ onNavigate }) {
               const sportGameCount = gameCountBySport.get(sport.id) || 0
 
               return (
-                <span className="sport-chip sport-chip-editable" key={sport.id}>
-                  <span>{sport.nome}</span>
-                  <small>{sportGameCount} jogo(s)</small>
+                <span
+                  className={
+                    selectedSportId === sport.id
+                      ? 'sport-chip sport-chip-editable is-selected'
+                      : 'sport-chip sport-chip-editable'
+                  }
+                  key={sport.id}
+                >
+                  <button className="sport-select-button" type="button" onClick={() => selectSport(sport)}>
+                    <span>{sport.nome}</span>
+                    <small>{sportGameCount} jogo(s)</small>
+                  </button>
                   <button className="chip-action" type="button" onClick={() => editSport(sport)}>
                     Editar
                   </button>
@@ -506,6 +557,18 @@ export default function AdminPanel({ onNavigate }) {
           </div>
         ) : null}
       </form>
+
+      {selectedSport ? (
+        <>
+          <div className="selected-sport-bar">
+            <div>
+              <span className="eyebrow">Esporte selecionado</span>
+              <strong>{selectedSport.nome}</strong>
+            </div>
+            <button className="btn btn-outline btn-small" type="button" onClick={resetForm}>
+              Novo jogo em {selectedSport.nome}
+            </button>
+          </div>
 
       <form className="admin-form" onSubmit={handleSubmit}>
         <div className="section-heading">
@@ -622,9 +685,9 @@ export default function AdminPanel({ onNavigate }) {
       <div className="admin-layout">
         <section className="admin-list">
           <div className="section-heading">
-            <h2>Jogos cadastrados</h2>
+            <h2>Jogos de {selectedSport.nome}</h2>
             <span>
-              {filteredGames.length} de {games.length} jogo(s)
+              {filteredGames.length} de {selectedSportGames.length} jogo(s)
             </span>
           </div>
 
@@ -635,19 +698,8 @@ export default function AdminPanel({ onNavigate }) {
                 type="search"
                 value={gameSearch}
                 onChange={(event) => setGameSearch(event.target.value)}
-                placeholder="Time, esporte, fase..."
+                placeholder="Time ou fase..."
               />
-            </label>
-            <label>
-              Esporte
-              <select value={sportFilter} onChange={(event) => setSportFilter(event.target.value)}>
-                <option value={ALL_SPORTS_FILTER}>Todos</option>
-                {sports.map((sport) => (
-                  <option value={sport.id} key={sport.id}>
-                    {sport.nome}
-                  </option>
-                ))}
-              </select>
             </label>
             <label>
               Fase
@@ -678,7 +730,7 @@ export default function AdminPanel({ onNavigate }) {
             </div>
           </div>
 
-          {games.length ? (
+          {selectedSportGames.length ? (
             <div className="admin-game-list">
               {filteredGames.length ? (
                 filteredGames.map((game) => {
@@ -785,8 +837,8 @@ export default function AdminPanel({ onNavigate }) {
             </div>
           ) : (
             <EmptyState
-              title="Nenhum jogo cadastrado"
-              description="Use o formulario acima para criar o primeiro jogo do bolao."
+              title="Nenhum jogo neste esporte"
+              description="Use o formulario acima para criar o primeiro jogo deste esporte."
             />
           )}
         </section>
@@ -802,7 +854,7 @@ export default function AdminPanel({ onNavigate }) {
                 participants.map((participant) => (
                   <article className="mini-item" key={participant.id}>
                     <span>{participant.nome}</span>
-                    <strong>{participant.pontos} pts</strong>
+                    <strong>{formatPoints(participant.pontos)} pts</strong>
                   </article>
                 ))
               ) : (
@@ -814,11 +866,11 @@ export default function AdminPanel({ onNavigate }) {
           <section>
             <div className="section-heading">
               <h2>Palpites por jogo</h2>
-              <span>{predictions.length}</span>
+              <span>{selectedSportGames.length}</span>
             </div>
             <div className="prediction-admin-list">
-              {games.length ? (
-                games.map((game) => {
+              {selectedSportGames.length ? (
+                selectedSportGames.map((game) => {
                   const gamePredictions = predictionsByGame.get(game.id) || []
                   const pendingParticipants = getPendingParticipants(gamePredictions)
                   const pendingPredictions = pendingParticipants.length
@@ -851,8 +903,8 @@ export default function AdminPanel({ onNavigate }) {
                       {gamePredictions.length ? (
                         gamePredictions.map((prediction) => (
                           <span key={prediction.id}>
-                            {prediction.nomeUsuario}: {prediction.palpiteA} x {prediction.palpiteB} ({prediction.pontos}{' '}
-                            pts)
+                            {prediction.nomeUsuario}: {prediction.palpiteA} x {prediction.palpiteB} (
+                            {formatPoints(prediction.pontos)} pts)
                           </span>
                         ))
                       ) : (
@@ -862,12 +914,19 @@ export default function AdminPanel({ onNavigate }) {
                   )
                 })
               ) : (
-                <EmptyState title="Sem jogos" description="Cadastre jogos para acompanhar palpites." />
+                <EmptyState title="Sem jogos" description="Cadastre jogos neste esporte para acompanhar palpites." />
               )}
             </div>
           </section>
         </aside>
       </div>
+        </>
+      ) : (
+        <EmptyState
+          title="Escolha um esporte"
+          description="Clique em um esporte cadastrado acima para criar jogos, finalizar placares e acompanhar palpites daquele esporte."
+        />
+      )}
 
       {confirmDialog ? (
         <div className="modal-backdrop" role="presentation" onClick={closeConfirmDialog}>

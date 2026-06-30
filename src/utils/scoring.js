@@ -1,7 +1,12 @@
 export const POINTS = {
-  EXACT_SCORE: 3,
-  RESULT: 1,
+  RESULT: 3,
+  PARTIAL_SCORE_MULTIPLIER: 1.2,
+  EXACT_SCORE_MULTIPLIER: 1.4,
   MISS: 0,
+}
+
+function applyMultiplier(points, multiplier = 1) {
+  return Number((points * multiplier).toFixed(1))
 }
 
 export function hasFinalScore(game) {
@@ -33,15 +38,31 @@ export function calcularPontuacao(palpiteA, palpiteB, placarA, placarB) {
     return { pontos: POINTS.MISS, acertoExato: false, acertoResultado: false, tipo: 'pendente' }
   }
 
+  const hasCorrectResult = getMatchResult(guessA, guessB) === getMatchResult(finalA, finalB)
+
+  if (!hasCorrectResult) {
+    return { pontos: POINTS.MISS, acertoExato: false, acertoResultado: false, tipo: 'erro' }
+  }
+
   if (guessA === finalA && guessB === finalB) {
-    return { pontos: POINTS.EXACT_SCORE, acertoExato: true, acertoResultado: false, tipo: 'exato' }
+    return {
+      pontos: applyMultiplier(POINTS.RESULT, POINTS.EXACT_SCORE_MULTIPLIER),
+      acertoExato: true,
+      acertoResultado: false,
+      tipo: 'exato',
+    }
   }
 
-  if (getMatchResult(guessA, guessB) === getMatchResult(finalA, finalB)) {
-    return { pontos: POINTS.RESULT, acertoExato: false, acertoResultado: true, tipo: 'resultado' }
+  if (guessA === finalA || guessB === finalB) {
+    return {
+      pontos: applyMultiplier(POINTS.RESULT, POINTS.PARTIAL_SCORE_MULTIPLIER),
+      acertoExato: false,
+      acertoResultado: true,
+      tipo: 'placar-parcial',
+    }
   }
 
-  return { pontos: POINTS.MISS, acertoExato: false, acertoResultado: false, tipo: 'erro' }
+  return { pontos: POINTS.RESULT, acertoExato: false, acertoResultado: true, tipo: 'resultado' }
 }
 
 export function calculateGuessScore(game, guess) {
@@ -54,13 +75,19 @@ export function calculateGuessScore(game, guess) {
   const guessA = Number(guess.palpiteA ?? guess.guessA)
   const guessB = Number(guess.palpiteB ?? guess.guessB)
 
+  const hasCorrectResult = getMatchResult(guessA, guessB) === getMatchResult(finalA, finalB)
+
+  if (!hasCorrectResult) {
+    return { points: POINTS.MISS, type: 'miss' }
+  }
+
   if (guessA === finalA && guessB === finalB) {
-    return { points: POINTS.EXACT_SCORE, type: 'exact' }
+    return { points: applyMultiplier(POINTS.RESULT, POINTS.EXACT_SCORE_MULTIPLIER), type: 'exact' }
   }
 
-  if (getMatchResult(guessA, guessB) === getMatchResult(finalA, finalB)) {
-    return { points: POINTS.RESULT, type: 'result' }
+  if (guessA === finalA || guessB === finalB) {
+    return { points: applyMultiplier(POINTS.RESULT, POINTS.PARTIAL_SCORE_MULTIPLIER), type: 'partial-score' }
   }
 
-  return { points: POINTS.MISS, type: 'miss' }
+  return { points: POINTS.RESULT, type: 'result' }
 }
