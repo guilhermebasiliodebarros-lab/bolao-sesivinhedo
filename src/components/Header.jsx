@@ -4,6 +4,7 @@ import { useAuth } from '../context/useAuth.js'
 export default function Header({ activeView, onNavigate, theme, onToggleTheme }) {
   const { user, profile, isMaster, isParticipant, logout } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [logoLoaded, setLogoLoaded] = useState(true)
 
   let navItems = [{ id: 'home', label: 'Inicio' }]
 
@@ -42,7 +43,11 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
   return (
     <header className="site-header">
       <button className="brand" type="button" onClick={() => handleNavigate('home')}>
-        <span className="brand-mark">BV</span>
+        {logoLoaded ? (
+          <img className="brand-logo" src="/logo.png" alt="Bolao SESI Vinhedo" onError={() => setLogoLoaded(false)} />
+        ) : (
+          <span className="brand-mark">BV</span>
+        )}
         <span>
           <strong>Bolao SESI</strong>
           <small>Vinhedo</small>

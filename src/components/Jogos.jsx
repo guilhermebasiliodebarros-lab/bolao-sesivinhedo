@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/useAuth.js'
 import { GAME_STATUS, subscribeGames, subscribeUserPredictions } from '../services/bolaoService.js'
+import { gameMatchesSearch, getGameStageLabel, getUniqueGamePhases, getUniqueGameSports } from '../utils/game.js'
 import EmptyState from './EmptyState.jsx'
 import GameCard from './GameCard.jsx'
 import LoadingState from './LoadingState.jsx'
 
+const ALL_ITEMS_FILTER = 'all'
+
 const filters = [
-  { id: 'all', label: 'Todos' },
+  { id: ALL_ITEMS_FILTER, label: 'Todos' },
   { id: GAME_STATUS.OPEN, label: 'Abertos' },
   { id: GAME_STATUS.CLOSED, label: 'Encerrados' },
   { id: GAME_STATUS.FINISHED, label: 'Finalizados' },
@@ -16,7 +19,10 @@ export default function Jogos({ onNavigate }) {
   const { user, isParticipant, isMaster } = useAuth()
   const [games, setGames] = useState([])
   const [predictions, setPredictions] = useState([])
-  const [activeFilter, setActiveFilter] = useState('all')
+  const [activeFilter, setActiveFilter] = useState(ALL_ITEMS_FILTER)
+  const [sportFilter, setSportFilter] = useState(ALL_ITEMS_FILTER)
+  const [phaseFilter, setPhaseFilter] = useState(ALL_ITEMS_FILTER)
+  const [searchTerm, setSearchTerm] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -44,8 +50,37 @@ export default function Jogos({ onNavigate }) {
     return new Map((user ? predictions : []).map((prediction) => [prediction.gameId, prediction]))
   }, [predictions, user])
 
-  const visibleGames =
-    activeFilter === 'all' ? games : games.filter((game) => game.status === activeFilter)
+  const sportOptions = useMemo(() => getUniqueGameSports(games), [games])
+  const phaseOptions = useMemo(() => getUniqueGamePhases(games), [games])
+  const visibleGames = useMemo(() => {
+    return games.filter((game) => {
+      const matchesStatus = activeFilter === ALL_ITEMS_FILTER || game.status === activeFilter
+      const matchesSport =
+        sportFilter === ALL_ITEMS_FILTER || game.sportId === sportFilter || game.esporteNome === sportFilter
+      const matchesPhase = phaseFilter === ALL_ITEMS_FILTER || game.fase === phaseFilter
+
+      return matchesStatus && matchesSport && matchesPhase && gameMatchesSearch(game, searchTerm)
+    })
+  }, [activeFilter, games, phaseFilter, searchTerm, sportFilter])
+  const groupedGames = useMemo(() => {
+    const groups = new Map()
+
+    visibleGames.forEach((game) => {
+      const stage = getGameStageLabel(game)
+      const key = `${game.esporteNome}-${stage}`
+      const current = groups.get(key) || {
+        key,
+        esporteNome: game.esporteNome,
+        stage,
+        games: [],
+      }
+
+      current.games.push(game)
+      groups.set(key, current)
+    })
+
+    return [...groups.values()]
+  }, [visibleGames])
 
   if (loading) {
     return <LoadingState label="Buscando jogos..." />
@@ -79,6 +114,7 @@ export default function Jogos({ onNavigate }) {
             className={activeFilter === filter.id ? 'is-active' : ''}
             key={filter.id}
             type="button"
+            aria-pressed={activeFilter === filter.id}
             onClick={() => setActiveFilter(filter.id)}
           >
             {filter.label}
@@ -86,17 +122,63 @@ export default function Jogos({ onNavigate }) {
         ))}
       </div>
 
-      <div className="game-grid">
-        {visibleGames.length ? (
-          visibleGames.map((game) => (
-            <GameCard
-              key={game.id}
-              game={game}
-              existingPrediction={predictionsByGame.get(game.id)}
-              onNavigate={onNavigate}
-            />
-          ))
-        ) : (
+      <div className="public-filter-panel">
+        <label>
+          Buscar
+          <input
+            type="search"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Time, esporte, fase..."
+          />
+        </label>
+        <label>
+          Esporte
+          <select value={sportFilter} onChange={(event) => setSportFilter(event.target.value)}>
+            <option value={ALL_ITEMS_FILTER}>Todos</option>
+            {sportOptions.map((sport) => (
+              <option value={sport.id} key={sport.id}>
+                {sport.nome}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Fase
+          <select value={phaseFilter} onChange={(event) => setPhaseFilter(event.target.value)}>
+            <option value={ALL_ITEMS_FILTER}>Todas</option>
+            {phaseOptions.map((phase) => (
+              <option value={phase} key={phase}>
+                {phase}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {groupedGames.length ? (
+        <div className="game-groups">
+          {groupedGames.map((group) => (
+            <section className="game-group" key={group.key}>
+              <div className="section-heading">
+                <h2>{group.esporteNome}</h2>
+                <span>{group.stage}</span>
+              </div>
+              <div className="game-grid">
+                {group.games.map((game) => (
+                  <GameCard
+                    key={game.id}
+                    game={game}
+                    existingPrediction={predictionsByGame.get(game.id)}
+                    onNavigate={onNavigate}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      ) : (
+        <div className="game-grid">
           <EmptyState
             title="Nenhum jogo encontrado"
             description="Quando o administrador cadastrar jogos, eles aparecem nesta pagina."
@@ -106,8 +188,8 @@ export default function Jogos({ onNavigate }) {
               </button>
             }
           />
-        )}
-      </div>
+        </div>
+      )}
     </section>
   )
 }

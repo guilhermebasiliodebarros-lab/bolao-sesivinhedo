@@ -9,6 +9,7 @@ import {
   STATUS_LABELS,
 } from '../services/bolaoService.js'
 import { formatDateTime, formatTimeRemaining, minutesUntil } from '../utils/format.js'
+import { getGameStageLabel } from '../utils/game.js'
 import { calculateGuessScore, hasFinalScore } from '../utils/scoring.js'
 
 export default function GameCard({ game, existingPrediction, existingGuess, compact = false, onGuessSaved, onNavigate }) {
@@ -79,6 +80,8 @@ export default function GameCard({ game, existingPrediction, existingGuess, comp
   return (
     <article className={compact ? 'game-card is-compact' : 'game-card'}>
       <div className="game-card-header">
+        <span className="sport-badge">{game.esporteNome}</span>
+        <span>{getGameStageLabel(game)}</span>
         <span className={`status-badge status-${game.status}`}>{STATUS_LABELS[game.status]}</span>
         <span>Jogo: {formatDateTime(game.dataHora)}</span>
         <span>Palpites ate: {formatDateTime(deadline)}</span>

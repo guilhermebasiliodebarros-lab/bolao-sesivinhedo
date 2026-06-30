@@ -96,6 +96,12 @@ button {
     inset 0 0 0 1px rgba(255, 255, 255, 0.2);
 }
 
+.brand-logo {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+}
+
 .brand strong,
 .brand small {
   display: block;
@@ -618,7 +624,21 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
+}
+
+.sport-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  color: var(--cyan);
+  font-size: 0.78rem;
+  font-weight: 900;
+  background: rgba(0, 167, 181, 0.1);
+  border: 1px solid rgba(0, 167, 181, 0.18);
+  border-radius: 999px;
 }
 
 .deadline-pill {
@@ -942,6 +962,10 @@ select:focus {
   gap: 22px;
 }
 
+.ranking-tabs {
+  margin-bottom: 20px;
+}
+
 .podium {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1043,6 +1067,77 @@ select:focus {
 .admin-list {
   display: grid;
   gap: 16px;
+}
+
+.admin-sport-form {
+  display: grid;
+  gap: 16px;
+}
+
+.sport-create-row,
+.admin-filter-panel,
+.public-filter-panel {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) repeat(2, minmax(160px, 0.35fr));
+  gap: 12px;
+  align-items: end;
+}
+
+.admin-filter-panel,
+.public-filter-panel {
+  margin-top: 14px;
+}
+
+.sport-create-row {
+  grid-template-columns: minmax(220px, 1fr) auto;
+}
+
+.sport-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sport-chip {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 900;
+  background: var(--gray);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.sport-chip small {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.sport-chip-editable {
+  min-height: 38px;
+  padding: 4px 6px 4px 12px;
+}
+
+.chip-action {
+  min-height: 28px;
+  padding: 0 8px;
+  color: var(--red);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 900;
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.chip-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .admin-filter-bar {
@@ -1149,6 +1244,21 @@ select:focus {
 .prediction-admin-list {
   display: grid;
   gap: 12px;
+}
+
+.game-groups {
+  display: grid;
+  gap: 26px;
+  margin-top: 18px;
+}
+
+.game-group {
+  display: grid;
+  gap: 14px;
+}
+
+.game-group .game-grid {
+  margin-top: 0;
 }
 
 .admin-prediction-group {
@@ -1394,6 +1504,12 @@ select:focus {
   background: rgba(255, 59, 54, 0.12);
 }
 
+:root[data-theme='dark'] .sport-badge {
+  color: #67e8f9;
+  background: rgba(34, 211, 238, 0.1);
+  border-color: rgba(34, 211, 238, 0.24);
+}
+
 :root[data-theme='dark'] .score-display,
 :root[data-theme='dark'] .site-footer,
 :root[data-theme='dark'] .master-badge,
@@ -1540,7 +1656,10 @@ select:focus {
   }
 
   .guess-form,
-  .form-grid {
+  .form-grid,
+  .sport-create-row,
+  .admin-filter-panel,
+  .public-filter-panel {
     grid-template-columns: 1fr;
   }
 
@@ -1591,6 +1710,11 @@ select:focus {
   .final-score-form {
     grid-template-columns: 1fr;
     width: 100%;
+  }
+
+  .sport-chip-editable {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .admin-filter-bar {

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/useAuth.js'
 import { GAME_STATUS, subscribeGames, subscribeUserPredictions } from '../services/bolaoService.js'
+import { getGameStageLabel } from '../utils/game.js'
 import EmptyState from './EmptyState.jsx'
 import LoadingState from './LoadingState.jsx'
 
@@ -83,6 +84,7 @@ export default function Palpites({ onNavigate }) {
               <article className="prediction-row" key={prediction.id}>
                 <div>
                   <span>{game ? `${game.timeA} x ${game.timeB}` : 'Jogo nao encontrado'}</span>
+                  {game ? <span>{`${game.esporteNome} | ${getGameStageLabel(game)}`}</span> : null}
                   <strong>
                     Palpite: {prediction.palpiteA} x {prediction.palpiteB}
                   </strong>

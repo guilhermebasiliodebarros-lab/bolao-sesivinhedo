@@ -7,6 +7,7 @@ import {
   subscribeRanking,
   subscribeUserPredictions,
 } from '../services/bolaoService.js'
+import { getGameStageLabel } from '../utils/game.js'
 import EmptyState from './EmptyState.jsx'
 import GameCard from './GameCard.jsx'
 import LoadingState from './LoadingState.jsx'
@@ -147,7 +148,11 @@ export default function Dashboard({ onNavigate }) {
 
                 return (
                   <article className="mini-item" key={prediction.id}>
-                    <span>{game ? `${game.timeA} x ${game.timeB}` : 'Jogo removido'}</span>
+                    <span>
+                      {game
+                        ? `${game.esporteNome} | ${getGameStageLabel(game)} | ${game.timeA} x ${game.timeB}`
+                        : 'Jogo removido'}
+                    </span>
                     <strong>
                       {prediction.palpiteA} x {prediction.palpiteB}
                     </strong>
@@ -177,7 +182,11 @@ export default function Dashboard({ onNavigate }) {
 
                 return (
                   <article className="mini-item" key={`score-${prediction.id}`}>
-                    <span>{game ? `${game.timeA} x ${game.timeB}` : 'Jogo removido'}</span>
+                    <span>
+                      {game
+                        ? `${game.esporteNome} | ${getGameStageLabel(game)} | ${game.timeA} x ${game.timeB}`
+                        : 'Jogo removido'}
+                    </span>
                     <strong>{prediction.pontos} ponto(s)</strong>
                   </article>
                 )

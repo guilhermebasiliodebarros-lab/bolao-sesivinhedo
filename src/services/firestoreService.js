@@ -67,6 +67,16 @@ function sortByDate(a, b) {
   return (Number.isFinite(first) ? first : 0) - (Number.isFinite(second) ? second : 0)
 }
 
+function sortByName(a, b) {
+  return String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR')
+}
+
+function getSportRankingKey(game) {
+  const key = String(game?.sportId || game?.esporteNome || 'geral').trim() || 'geral'
+
+  return key.replace(/[./[\]~*]/g, '-')
+}
+
 export function getPredictionDeadline(game) {
   return game?.limitePalpites || game?.predictionDeadline || game?.dataHora || game?.dateTime || null
 }
@@ -102,6 +112,16 @@ export function normalizeUserProfile(id, data = {}) {
     pontos: numberOrZero(data.pontos ?? data.score),
     acertosExatos: numberOrZero(data.acertosExatos ?? data.exactHits),
     acertosResultado: numberOrZero(data.acertosResultado ?? data.resultHits),
+    rankingPorEsporte: data.rankingPorEsporte || data.sportsRanking || {},
+    createdAt: data.createdAt || null,
+    updatedAt: data.updatedAt || null,
+  }
+}
+
+export function normalizeSport(id, data = {}) {
+  return {
+    id,
+    nome: data.nome || data.name || 'Esporte',
     createdAt: data.createdAt || null,
     updatedAt: data.updatedAt || null,
   }
@@ -112,6 +132,10 @@ export function normalizeGame(id, data = {}) {
 
   return {
     id,
+    sportId: data.sportId || data.esporteId || '',
+    esporteNome: data.esporteNome || data.sportName || data.nomeEsporte || 'Geral',
+    fase: data.fase || data.phase || 'Fase unica',
+    rodada: data.rodada || data.round || '',
     timeA: data.timeA || data.teamA || '',
     timeB: data.timeB || data.teamB || '',
     dataHora: data.dataHora || data.dateTime || '',
@@ -176,6 +200,10 @@ function validateScore(value, label) {
 }
 
 function normalizeGameInput(game) {
+  const sportId = String(game.sportId ?? game.esporteId ?? '').trim()
+  const esporteNome = String(game.esporteNome ?? game.sportName ?? game.nomeEsporte ?? '').trim()
+  const fase = String(game.fase ?? game.phase ?? '').trim()
+  const rodada = String(game.rodada ?? game.round ?? '').trim()
   const timeA = String(game.timeA ?? game.teamA ?? '').trim()
   const timeB = String(game.timeB ?? game.teamB ?? '').trim()
   const dataHora = game.dataHora ?? game.dateTime ?? ''
@@ -185,6 +213,14 @@ function normalizeGameInput(game) {
   const placarB = asNumberOrNull(game.placarB ?? game.finalScoreB)
   const gameDate = toDate(dataHora)
   const deadlineDate = toDate(limitePalpites)
+
+  if (!sportId || !esporteNome) {
+    throw new Error('Cadastre e selecione um esporte antes de criar o jogo.')
+  }
+
+  if (!fase) {
+    throw new Error('Informe a fase do jogo.')
+  }
 
   if (!timeA || !timeB || !dataHora || !limitePalpites) {
     throw new Error('Preencha os times, a data do jogo e o limite dos palpites.')
@@ -215,6 +251,10 @@ function normalizeGameInput(game) {
   }
 
   return {
+    sportId,
+    esporteNome,
+    fase,
+    rodada,
     timeA,
     timeB,
     dataHora,
@@ -223,6 +263,16 @@ function normalizeGameInput(game) {
     placarB,
     status,
   }
+}
+
+function normalizeSportInput(sport) {
+  const nome = String(sport?.nome ?? sport?.name ?? '').trim()
+
+  if (!nome) {
+    throw new Error('Informe o nome do esporte.')
+  }
+
+  return { nome }
 }
 
 export async function createParticipantProfile(user, nome) {
@@ -303,6 +353,21 @@ export function subscribeGames(onData, onError) {
       const games = snapshot.docs.map((item) => normalizeGame(item.id, item.data())).sort(sortByDate)
 
       onData(games)
+    },
+    (error) => onError?.(toFriendlyError(error)),
+  )
+}
+
+export function subscribeSports(onData, onError) {
+  if (!db) {
+    onData([])
+    return () => {}
+  }
+
+  return onSnapshot(
+    collection(db, 'sports'),
+    (snapshot) => {
+      onData(snapshot.docs.map((item) => normalizeSport(item.id, item.data())).sort(sortByName))
     },
     (error) => onError?.(toFriendlyError(error)),
   )
@@ -407,6 +472,49 @@ export async function saveGame(game) {
   }
 
   await recalculateScores()
+}
+
+export async function saveSport(sport) {
+  const firestore = ensureDb()
+  const payload = normalizeSportInput(sport)
+
+  if (sport.id) {
+    const batch = writeBatch(firestore)
+    const relatedGamesSnapshot = await getDocs(query(collection(firestore, 'games'), where('sportId', '==', sport.id)))
+
+    batch.update(doc(firestore, 'sports', sport.id), {
+      ...payload,
+      updatedAt: serverTimestamp(),
+    })
+
+    relatedGamesSnapshot.forEach((gameDoc) => {
+      batch.update(gameDoc.ref, {
+        esporteNome: payload.nome,
+        updatedAt: serverTimestamp(),
+      })
+    })
+
+    await batch.commit()
+  } else {
+    const sportRef = doc(collection(firestore, 'sports'))
+
+    await setDoc(sportRef, {
+      ...payload,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+  }
+}
+
+export async function deleteSport(sportId) {
+  const firestore = ensureDb()
+  const relatedGamesSnapshot = await getDocs(query(collection(firestore, 'games'), where('sportId', '==', sportId)))
+
+  if (!relatedGamesSnapshot.empty) {
+    throw new Error('Este esporte tem jogos cadastrados e nao pode ser excluido.')
+  }
+
+  await deleteDoc(doc(firestore, 'sports', sportId))
 }
 
 export async function closeGame(gameId) {
@@ -527,6 +635,7 @@ export async function recalculateScores() {
         pontos: 0,
         acertosExatos: 0,
         acertosResultado: 0,
+        rankingPorEsporte: {},
       },
     ]),
   )
@@ -541,9 +650,22 @@ export async function recalculateScores() {
 
     if (canScore) {
       const userStats = stats.get(prediction.userId)
+      const sportKey = getSportRankingKey(game)
+      const sportStats = userStats.rankingPorEsporte[sportKey] || {
+        sportId: game.sportId || sportKey,
+        esporteNome: game.esporteNome || 'Geral',
+        pontos: 0,
+        acertosExatos: 0,
+        acertosResultado: 0,
+      }
+
       userStats.pontos += result.pontos
       userStats.acertosExatos += result.acertoExato ? 1 : 0
       userStats.acertosResultado += result.acertoResultado ? 1 : 0
+      sportStats.pontos += result.pontos
+      sportStats.acertosExatos += result.acertoExato ? 1 : 0
+      sportStats.acertosResultado += result.acertoResultado ? 1 : 0
+      userStats.rankingPorEsporte[sportKey] = sportStats
     }
 
     batch.update(doc(firestore, 'predictions', prediction.id), {

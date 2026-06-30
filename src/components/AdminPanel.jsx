@@ -3,22 +3,30 @@ import { useAuth } from '../context/useAuth.js'
 import {
   closeGame,
   deleteGame,
+  deleteSport,
   finalizeGame,
   GAME_STATUS,
   isPredictionDeadlineOpen,
   recalculateScores,
   reopenGame,
   saveGame,
+  saveSport,
   STATUS_LABELS,
   subscribeAllPredictions,
   subscribeGames,
   subscribeParticipants,
+  subscribeSports,
 } from '../services/bolaoService.js'
 import { formatDateTime } from '../utils/format.js'
+import { gameMatchesSearch, getGameStageLabel, getUniqueGamePhases } from '../utils/game.js'
 import EmptyState from './EmptyState.jsx'
 import LoadingState from './LoadingState.jsx'
 
 const blankGame = {
+  sportId: '',
+  esporteNome: '',
+  fase: 'Fase de grupos',
+  rodada: '',
   timeA: '',
   timeB: '',
   dataHora: '',
@@ -28,8 +36,17 @@ const blankGame = {
   status: GAME_STATUS.OPEN,
 }
 
+const blankSport = {
+  id: '',
+  nome: '',
+}
+
 const ALL_GAMES_FILTER = 'todos'
+const ALL_SPORTS_FILTER = 'todos'
+const ALL_PHASES_FILTER = 'todas'
 const EXPIRED_GAMES_FILTER = 'prazo-vencido'
+
+const PHASE_OPTIONS = ['Fase de grupos', 'Eliminatorias', 'Quartas de final', 'Semifinal', 'Final']
 
 const GAME_FILTERS = [
   { value: ALL_GAMES_FILTER, label: 'Todos' },
@@ -42,12 +59,22 @@ const GAME_FILTERS = [
 export default function AdminPanel({ onNavigate }) {
   const { user, isMaster } = useAuth()
   const [games, setGames] = useState([])
+  const [sports, setSports] = useState([])
   const [participants, setParticipants] = useState([])
   const [predictions, setPredictions] = useState([])
   const [form, setForm] = useState(blankGame)
+  const [sportForm, setSportForm] = useState(blankSport)
   const [finalScores, setFinalScores] = useState({})
   const [gameFilter, setGameFilter] = useState(ALL_GAMES_FILTER)
-  const [loadingState, setLoadingState] = useState({ games: true, participants: true, predictions: true })
+  const [sportFilter, setSportFilter] = useState(ALL_SPORTS_FILTER)
+  const [phaseFilter, setPhaseFilter] = useState(ALL_PHASES_FILTER)
+  const [gameSearch, setGameSearch] = useState('')
+  const [loadingState, setLoadingState] = useState({
+    games: true,
+    sports: true,
+    participants: true,
+    predictions: true,
+  })
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [confirmDialog, setConfirmDialog] = useState(null)
@@ -57,6 +84,13 @@ export default function AdminPanel({ onNavigate }) {
       (items) => {
         setGames(items)
         setLoadingState((current) => ({ ...current, games: false }))
+      },
+      setMessage,
+    )
+    const unsubscribeSports = subscribeSports(
+      (items) => {
+        setSports(items)
+        setLoadingState((current) => ({ ...current, sports: false }))
       },
       setMessage,
     )
@@ -77,6 +111,7 @@ export default function AdminPanel({ onNavigate }) {
 
     return () => {
       unsubscribeGames()
+      unsubscribeSports()
       unsubscribeParticipants()
       unsubscribePredictions()
     }
@@ -94,21 +129,41 @@ export default function AdminPanel({ onNavigate }) {
     return grouped
   }, [predictions])
   const participantIds = useMemo(() => new Set(participants.map((participant) => participant.id)), [participants])
+  const sportNameById = useMemo(() => new Map(sports.map((sport) => [sport.id, sport.nome])), [sports])
+  const gameCountBySport = useMemo(() => {
+    return games.reduce((counts, game) => {
+      if (!game.sportId) {
+        return counts
+      }
+
+      counts.set(game.sportId, (counts.get(game.sportId) || 0) + 1)
+      return counts
+    }, new Map())
+  }, [games])
+  const availablePhases = useMemo(() => {
+    return [...new Set([...PHASE_OPTIONS, ...getUniqueGamePhases(games)])]
+  }, [games])
   const expiredOpenGames = useMemo(
     () => games.filter((game) => game.status === GAME_STATUS.OPEN && !isPredictionDeadlineOpen(game)),
     [games],
   )
   const filteredGames = useMemo(() => {
-    if (gameFilter === ALL_GAMES_FILTER) {
-      return games
-    }
+    let statusFilteredGames = games
 
     if (gameFilter === EXPIRED_GAMES_FILTER) {
-      return expiredOpenGames
+      statusFilteredGames = expiredOpenGames
+    } else if (gameFilter !== ALL_GAMES_FILTER) {
+      statusFilteredGames = games.filter((game) => game.status === gameFilter)
     }
 
-    return games.filter((game) => game.status === gameFilter)
-  }, [expiredOpenGames, gameFilter, games])
+    return statusFilteredGames.filter((game) => {
+      const matchesSport =
+        sportFilter === ALL_SPORTS_FILTER || game.sportId === sportFilter || game.esporteNome === sportFilter
+      const matchesPhase = phaseFilter === ALL_PHASES_FILTER || game.fase === phaseFilter
+
+      return matchesSport && matchesPhase && gameMatchesSearch(game, gameSearch)
+    })
+  }, [expiredOpenGames, gameFilter, gameSearch, games, phaseFilter, sportFilter])
   const gameFilterCounts = useMemo(
     () => ({
       [ALL_GAMES_FILTER]: games.length,
@@ -134,6 +189,7 @@ export default function AdminPanel({ onNavigate }) {
   const stats = useMemo(() => {
     return {
       participantes: participants.length,
+      esportes: sports.length,
       jogos: games.length,
       palpites: predictions.length,
       abertos: games.filter((game) => game.status === GAME_STATUS.OPEN).length,
@@ -141,7 +197,7 @@ export default function AdminPanel({ onNavigate }) {
       finalizados: games.filter((game) => game.status === GAME_STATUS.FINISHED).length,
       prazoVencido: expiredOpenGames.length,
     }
-  }, [expiredOpenGames.length, games, participants, predictions])
+  }, [expiredOpenGames.length, games, participants, predictions, sports.length])
 
   if (!isMaster) {
     return (
@@ -163,6 +219,14 @@ export default function AdminPanel({ onNavigate }) {
     setForm((current) => ({ ...current, [field]: value }))
   }
 
+  const updateSportField = (sportId) => {
+    setForm((current) => ({
+      ...current,
+      sportId,
+      esporteNome: sportNameById.get(sportId) || '',
+    }))
+  }
+
   const updateFinalScore = (gameId, field, value) => {
     setFinalScores((current) => ({
       ...current,
@@ -176,6 +240,10 @@ export default function AdminPanel({ onNavigate }) {
   const editGame = (game) => {
     setForm({
       id: game.id,
+      sportId: game.sportId || '',
+      esporteNome: game.esporteNome || sportNameById.get(game.sportId) || '',
+      fase: game.fase || 'Fase unica',
+      rodada: game.rodada || '',
       timeA: game.timeA || '',
       timeB: game.timeB || '',
       dataHora: game.dataHora || '',
@@ -190,6 +258,19 @@ export default function AdminPanel({ onNavigate }) {
 
   const resetForm = () => {
     setForm(blankGame)
+    setMessage('')
+  }
+
+  const editSport = (sport) => {
+    setSportForm({
+      id: sport.id,
+      nome: sport.nome,
+    })
+    setMessage('')
+  }
+
+  const resetSportForm = () => {
+    setSportForm(blankSport)
     setMessage('')
   }
 
@@ -236,9 +317,14 @@ export default function AdminPanel({ onNavigate }) {
     event.preventDefault()
 
     await runAdminAction(async () => {
+      const esporteNome = sportNameById.get(form.sportId) || form.esporteNome
       const gamePayload = form.id
-        ? form
+        ? { ...form, esporteNome }
         : {
+            sportId: form.sportId,
+            esporteNome,
+            fase: form.fase,
+            rodada: form.rodada,
             timeA: form.timeA,
             timeB: form.timeB,
             dataHora: form.dataHora,
@@ -249,6 +335,25 @@ export default function AdminPanel({ onNavigate }) {
       await saveGame(gamePayload)
       setForm(blankGame)
     }, 'Jogo salvo e classificacao recalculada.')
+  }
+
+  const handleSportSubmit = async (event) => {
+    event.preventDefault()
+
+    await runAdminAction(async () => {
+      await saveSport(sportForm)
+      setSportForm(blankSport)
+    }, 'Esporte salvo com sucesso.')
+  }
+
+  const handleDeleteSport = (sport) => {
+    confirmAdminAction({
+      title: 'Excluir esporte',
+      description: `Excluir ${sport.nome}? Esta acao so e permitida quando nao existem jogos cadastrados nesse esporte.`,
+      confirmLabel: 'Excluir esporte',
+      action: () => deleteSport(sport.id),
+      successMessage: 'Esporte excluido com sucesso.',
+    })
   }
 
   const handleFinalize = async (game) => {
@@ -322,6 +427,10 @@ export default function AdminPanel({ onNavigate }) {
           <strong>{stats.participantes}</strong>
         </article>
         <article className="stat-card">
+          <span>Esportes</span>
+          <strong>{stats.esportes}</strong>
+        </article>
+        <article className="stat-card">
           <span>Jogos</span>
           <strong>{stats.jogos}</strong>
         </article>
@@ -347,6 +456,57 @@ export default function AdminPanel({ onNavigate }) {
         </article>
       </div>
 
+      <form className="admin-form admin-sport-form" onSubmit={handleSportSubmit}>
+        <div className="section-heading">
+          <h2>{sportForm.id ? 'Editar esporte' : 'Esportes'}</h2>
+          <button className="btn btn-outline btn-small" type="button" onClick={resetSportForm}>
+            Novo esporte
+          </button>
+        </div>
+
+        <div className="sport-create-row">
+          <label>
+            Nome do esporte ou prova
+            <input
+              type="text"
+              value={sportForm.nome}
+              onChange={(event) => setSportForm((current) => ({ ...current, nome: event.target.value }))}
+              placeholder="Ex.: Basquete, Torta na cara"
+              required
+            />
+          </label>
+          <button className="btn btn-primary" type="submit" disabled={saving}>
+            {saving ? 'Salvando...' : sportForm.id ? 'Salvar esporte' : 'Cadastrar esporte'}
+          </button>
+        </div>
+
+        {sports.length ? (
+          <div className="sport-chip-list" aria-label="Esportes cadastrados">
+            {sports.map((sport) => {
+              const sportGameCount = gameCountBySport.get(sport.id) || 0
+
+              return (
+                <span className="sport-chip sport-chip-editable" key={sport.id}>
+                  <span>{sport.nome}</span>
+                  <small>{sportGameCount} jogo(s)</small>
+                  <button className="chip-action" type="button" onClick={() => editSport(sport)}>
+                    Editar
+                  </button>
+                  <button
+                    className="chip-action"
+                    type="button"
+                    disabled={saving || sportGameCount > 0}
+                    onClick={() => handleDeleteSport(sport)}
+                  >
+                    Excluir
+                  </button>
+                </span>
+              )
+            })}
+          </div>
+        ) : null}
+      </form>
+
       <form className="admin-form" onSubmit={handleSubmit}>
         <div className="section-heading">
           <h2>{form.id ? 'Editar jogo' : 'Criar novo jogo'}</h2>
@@ -356,6 +516,41 @@ export default function AdminPanel({ onNavigate }) {
         </div>
 
         <div className="form-grid">
+          <label>
+            Esporte
+            <select
+              value={form.sportId}
+              onChange={(event) => updateSportField(event.target.value)}
+              required
+            >
+              <option value="">Selecione</option>
+              {sports.map((sport) => (
+                <option value={sport.id} key={sport.id}>
+                  {sport.nome}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Fase
+            <input
+              type="text"
+              list="phase-options"
+              value={form.fase}
+              onChange={(event) => updateField('fase', event.target.value)}
+              placeholder="Ex.: Eliminatorias"
+              required
+            />
+          </label>
+          <label>
+            Rodada ou etapa
+            <input
+              type="text"
+              value={form.rodada}
+              onChange={(event) => updateField('rodada', event.target.value)}
+              placeholder="Ex.: Rodada 1, Semifinal, Final"
+            />
+          </label>
           <label>
             Time A
             <input
@@ -395,6 +590,11 @@ export default function AdminPanel({ onNavigate }) {
             />
           </label>
         </div>
+        <datalist id="phase-options">
+          {availablePhases.map((phase) => (
+            <option value={phase} key={phase} />
+          ))}
+        </datalist>
 
         <div className="form-actions">
           <button className="btn btn-primary" type="submit" disabled={saving}>
@@ -426,6 +626,40 @@ export default function AdminPanel({ onNavigate }) {
             <span>
               {filteredGames.length} de {games.length} jogo(s)
             </span>
+          </div>
+
+          <div className="admin-filter-panel">
+            <label>
+              Buscar
+              <input
+                type="search"
+                value={gameSearch}
+                onChange={(event) => setGameSearch(event.target.value)}
+                placeholder="Time, esporte, fase..."
+              />
+            </label>
+            <label>
+              Esporte
+              <select value={sportFilter} onChange={(event) => setSportFilter(event.target.value)}>
+                <option value={ALL_SPORTS_FILTER}>Todos</option>
+                {sports.map((sport) => (
+                  <option value={sport.id} key={sport.id}>
+                    {sport.nome}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Fase
+              <select value={phaseFilter} onChange={(event) => setPhaseFilter(event.target.value)}>
+                <option value={ALL_PHASES_FILTER}>Todas</option>
+                {availablePhases.map((phase) => (
+                  <option value={phase} key={phase}>
+                    {phase}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
 
           <div className="admin-filter-bar" aria-label="Filtrar jogos por situacao">
@@ -460,6 +694,8 @@ export default function AdminPanel({ onNavigate }) {
                       <strong>
                         {game.timeA} x {game.timeB}
                       </strong>
+                      <span>{game.esporteNome}</span>
+                      <span>{getGameStageLabel(game)}</span>
                       <span>{formatDateTime(game.dataHora)}</span>
                       <span>Palpites ate {formatDateTime(game.limitePalpites)}</span>
                       <span className={`status-badge status-${game.status}`}>{STATUS_LABELS[game.status]}</span>
@@ -592,6 +828,9 @@ export default function AdminPanel({ onNavigate }) {
                       <strong>
                         {game.timeA} x {game.timeB}
                       </strong>
+                      <small>
+                        {game.esporteNome} | {getGameStageLabel(game)}
+                      </small>
                       <small>
                         {gamePredictions.length} enviado(s) | {pendingPredictions} pendente(s)
                       </small>
