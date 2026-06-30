@@ -77,6 +77,76 @@ function getSportRankingKey(game) {
   return key.replace(/[./[\]~*]/g, '-')
 }
 
+function getGroupSeedLabel(position, groupName) {
+  return `${position}o ${groupName}`
+}
+
+export function calculateGroupStandings(games) {
+  const standings = new Map()
+
+  const ensureTeam = (teamName) => {
+    if (!standings.has(teamName)) {
+      standings.set(teamName, {
+        nome: teamName,
+        pontos: 0,
+        jogos: 0,
+        vitorias: 0,
+        empates: 0,
+        derrotas: 0,
+        golsPro: 0,
+        golsContra: 0,
+        saldo: 0,
+      })
+    }
+
+    return standings.get(teamName)
+  }
+
+  games.forEach((game) => {
+    const teamA = ensureTeam(game.timeA)
+    const teamB = ensureTeam(game.timeB)
+
+    if (!hasFinalScore(game)) {
+      return
+    }
+
+    teamA.jogos += 1
+    teamB.jogos += 1
+    teamA.golsPro += game.placarA
+    teamA.golsContra += game.placarB
+    teamB.golsPro += game.placarB
+    teamB.golsContra += game.placarA
+
+    if (game.placarA > game.placarB) {
+      teamA.pontos += 3
+      teamA.vitorias += 1
+      teamB.derrotas += 1
+    } else if (game.placarB > game.placarA) {
+      teamB.pontos += 3
+      teamB.vitorias += 1
+      teamA.derrotas += 1
+    } else {
+      teamA.pontos += 1
+      teamB.pontos += 1
+      teamA.empates += 1
+      teamB.empates += 1
+    }
+
+    teamA.saldo = teamA.golsPro - teamA.golsContra
+    teamB.saldo = teamB.golsPro - teamB.golsContra
+  })
+
+  return [...standings.values()].sort((a, b) => {
+    return (
+      b.pontos - a.pontos ||
+      b.vitorias - a.vitorias ||
+      b.saldo - a.saldo ||
+      b.golsPro - a.golsPro ||
+      a.nome.localeCompare(b.nome, 'pt-BR')
+    )
+  })
+}
+
 export function getPredictionDeadline(game) {
   return game?.limitePalpites || game?.predictionDeadline || game?.dataHora || game?.dateTime || null
 }
@@ -127,6 +197,18 @@ export function normalizeSport(id, data = {}) {
   }
 }
 
+export function normalizeTeam(id, data = {}) {
+  return {
+    id,
+    sportId: data.sportId || data.esporteId || '',
+    esporteNome: data.esporteNome || data.sportName || data.nomeEsporte || 'Geral',
+    nome: data.nome || data.name || data.teamName || 'Time',
+    categoria: data.categoria || data.category || '',
+    createdAt: data.createdAt || null,
+    updatedAt: data.updatedAt || null,
+  }
+}
+
 export function normalizeGame(id, data = {}) {
   const limitePalpites = data.limitePalpites || data.predictionDeadline || data.dataHora || data.dateTime || ''
 
@@ -143,6 +225,16 @@ export function normalizeGame(id, data = {}) {
     placarA: asNumberOrNull(data.placarA ?? data.finalScoreA),
     placarB: asNumberOrNull(data.placarB ?? data.finalScoreB),
     status: normalizeStatus(data.status),
+    tournamentId: data.tournamentId || '',
+    tournamentName: data.tournamentName || data.nomeTorneio || '',
+    groupName: data.groupName || '',
+    stageType: data.stageType || '',
+    sourceGameIdA: data.sourceGameIdA || '',
+    sourceGameIdB: data.sourceGameIdB || '',
+    seedLabelA: data.seedLabelA || '',
+    seedLabelB: data.seedLabelB || '',
+    nextGameId: data.nextGameId || '',
+    nextGameSlot: data.nextGameSlot || '',
     createdAt: data.createdAt || null,
     updatedAt: data.updatedAt || null,
     finalizadoPor: data.finalizadoPor || data.finishedBy || null,
@@ -213,6 +305,18 @@ function normalizeGameInput(game) {
   const placarB = asNumberOrNull(game.placarB ?? game.finalScoreB)
   const gameDate = toDate(dataHora)
   const deadlineDate = toDate(limitePalpites)
+  const metadata = {
+    tournamentId: String(game.tournamentId ?? '').trim(),
+    tournamentName: String(game.tournamentName ?? game.nomeTorneio ?? '').trim(),
+    groupName: String(game.groupName ?? '').trim(),
+    stageType: String(game.stageType ?? '').trim(),
+    sourceGameIdA: String(game.sourceGameIdA ?? '').trim(),
+    sourceGameIdB: String(game.sourceGameIdB ?? '').trim(),
+    seedLabelA: String(game.seedLabelA ?? '').trim(),
+    seedLabelB: String(game.seedLabelB ?? '').trim(),
+    nextGameId: String(game.nextGameId ?? '').trim(),
+    nextGameSlot: String(game.nextGameSlot ?? '').trim(),
+  }
 
   if (!sportId || !esporteNome) {
     throw new Error('Cadastre e selecione um esporte antes de criar o jogo.')
@@ -262,6 +366,7 @@ function normalizeGameInput(game) {
     placarA,
     placarB,
     status,
+    ...metadata,
   }
 }
 
@@ -273,6 +378,23 @@ function normalizeSportInput(sport) {
   }
 
   return { nome }
+}
+
+function normalizeTeamInput(team) {
+  const sportId = String(team?.sportId ?? team?.esporteId ?? '').trim()
+  const esporteNome = String(team?.esporteNome ?? team?.sportName ?? '').trim()
+  const nome = String(team?.nome ?? team?.name ?? '').trim()
+  const categoria = String(team?.categoria ?? team?.category ?? '').trim()
+
+  if (!sportId || !esporteNome) {
+    throw new Error('Selecione o esporte antes de cadastrar o time.')
+  }
+
+  if (!nome) {
+    throw new Error('Informe o nome do time.')
+  }
+
+  return { sportId, esporteNome, nome, categoria }
 }
 
 export async function createParticipantProfile(user, nome) {
@@ -368,6 +490,21 @@ export function subscribeSports(onData, onError) {
     collection(db, 'sports'),
     (snapshot) => {
       onData(snapshot.docs.map((item) => normalizeSport(item.id, item.data())).sort(sortByName))
+    },
+    (error) => onError?.(toFriendlyError(error)),
+  )
+}
+
+export function subscribeTeams(onData, onError) {
+  if (!db) {
+    onData([])
+    return () => {}
+  }
+
+  return onSnapshot(
+    collection(db, 'teams'),
+    (snapshot) => {
+      onData(snapshot.docs.map((item) => normalizeTeam(item.id, item.data())).sort(sortByName))
     },
     (error) => onError?.(toFriendlyError(error)),
   )
@@ -474,6 +611,37 @@ export async function saveGame(game) {
   await recalculateScores()
 }
 
+export async function saveGames(games) {
+  const firestore = ensureDb()
+  const normalizedGames = games.map((game) => ({
+    id: String(game?.id ?? '').trim(),
+    payload: normalizeGameInput(game),
+  }))
+
+  if (!normalizedGames.length) {
+    throw new Error('Gere pelo menos um jogo antes de salvar.')
+  }
+
+  if (normalizedGames.length > 450) {
+    throw new Error('Gere no maximo 450 jogos por vez para respeitar o limite do Firebase.')
+  }
+
+  const batch = writeBatch(firestore)
+
+  normalizedGames.forEach((game) => {
+    const gameRef = game.id ? doc(firestore, 'games', game.id) : doc(collection(firestore, 'games'))
+
+    batch.set(gameRef, {
+      ...game.payload,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+  })
+
+  await batch.commit()
+  await recalculateScores()
+}
+
 export async function saveSport(sport) {
   const firestore = ensureDb()
   const payload = normalizeSportInput(sport)
@@ -504,6 +672,32 @@ export async function saveSport(sport) {
       updatedAt: serverTimestamp(),
     })
   }
+}
+
+export async function saveTeam(team) {
+  const firestore = ensureDb()
+  const payload = normalizeTeamInput(team)
+
+  if (team.id) {
+    await updateDoc(doc(firestore, 'teams', team.id), {
+      ...payload,
+      updatedAt: serverTimestamp(),
+    })
+  } else {
+    const teamRef = doc(collection(firestore, 'teams'))
+
+    await setDoc(teamRef, {
+      ...payload,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+  }
+}
+
+export async function deleteTeam(teamId) {
+  const firestore = ensureDb()
+
+  await deleteDoc(doc(firestore, 'teams', teamId))
 }
 
 export async function deleteSport(sportId) {
@@ -542,17 +736,119 @@ export async function reopenGame(gameId) {
   await recalculateScores()
 }
 
+async function advanceGroupQualifiers(firestore, game) {
+  if (game?.stageType !== 'group' || !game.tournamentId || !game.groupName) {
+    return
+  }
+
+  const groupGamesSnapshot = await getDocs(query(collection(firestore, 'games'), where('tournamentId', '==', game.tournamentId)))
+  const groupGames = groupGamesSnapshot.docs
+    .map((item) => normalizeGame(item.id, item.data()))
+    .filter((item) => item.stageType === 'group' && item.groupName === game.groupName)
+
+  if (!groupGames.length || groupGames.some((item) => item.status !== GAME_STATUS.FINISHED || !hasFinalScore(item))) {
+    return
+  }
+
+  const standings = calculateGroupStandings(groupGames)
+  const batch = writeBatch(firestore)
+  let updates = 0
+
+  await Promise.all(
+    standings.map(async (team, index) => {
+      const seedLabel = getGroupSeedLabel(index + 1, game.groupName)
+      const [slotASnapshot, slotBSnapshot] = await Promise.all([
+        getDocs(query(collection(firestore, 'games'), where('seedLabelA', '==', seedLabel))),
+        getDocs(query(collection(firestore, 'games'), where('seedLabelB', '==', seedLabel))),
+      ])
+
+      slotASnapshot.forEach((nextGameDoc) => {
+        const nextGame = normalizeGame(nextGameDoc.id, nextGameDoc.data())
+
+        if (nextGame.tournamentId !== game.tournamentId) {
+          return
+        }
+
+        batch.update(nextGameDoc.ref, {
+          timeA: team.nome,
+          seedLabelA: '',
+          updatedAt: serverTimestamp(),
+        })
+        updates += 1
+      })
+
+      slotBSnapshot.forEach((nextGameDoc) => {
+        const nextGame = normalizeGame(nextGameDoc.id, nextGameDoc.data())
+
+        if (nextGame.tournamentId !== game.tournamentId) {
+          return
+        }
+
+        batch.update(nextGameDoc.ref, {
+          timeB: team.nome,
+          seedLabelB: '',
+          updatedAt: serverTimestamp(),
+        })
+        updates += 1
+      })
+    }),
+  )
+
+  if (updates > 0) {
+    await batch.commit()
+  }
+}
+
 export async function finalizeGame({ gameId, placarA, placarB, user }) {
   const firestore = ensureDb()
   const finalA = validateScore(placarA, 'o placar final do Time A')
   const finalB = validateScore(placarB, 'o placar final do Time B')
+  const gameRef = doc(firestore, 'games', gameId)
+  const gameSnapshot = await getDoc(gameRef)
+  const game = gameSnapshot.exists() ? normalizeGame(gameSnapshot.id, gameSnapshot.data()) : null
+  const winner = finalA === finalB ? '' : finalA > finalB ? game?.timeA : game?.timeB
 
-  await updateDoc(doc(firestore, 'games', gameId), {
+  await updateDoc(gameRef, {
     placarA: finalA,
     placarB: finalB,
     status: GAME_STATUS.FINISHED,
     finalizadoPor: user?.uid || null,
     updatedAt: serverTimestamp(),
+  })
+
+  if (winner) {
+    const [slotASnapshot, slotBSnapshot] = await Promise.all([
+      getDocs(query(collection(firestore, 'games'), where('sourceGameIdA', '==', gameId))),
+      getDocs(query(collection(firestore, 'games'), where('sourceGameIdB', '==', gameId))),
+    ])
+    const batch = writeBatch(firestore)
+
+    slotASnapshot.forEach((nextGameDoc) => {
+      batch.update(nextGameDoc.ref, {
+        timeA: winner,
+        seedLabelA: '',
+        updatedAt: serverTimestamp(),
+      })
+    })
+
+    slotBSnapshot.forEach((nextGameDoc) => {
+      batch.update(nextGameDoc.ref, {
+        timeB: winner,
+        seedLabelB: '',
+        updatedAt: serverTimestamp(),
+      })
+    })
+
+    if (!slotASnapshot.empty || !slotBSnapshot.empty) {
+      await batch.commit()
+    }
+  }
+
+  await advanceGroupQualifiers(firestore, {
+    ...game,
+    placarA: finalA,
+    placarB: finalB,
+    status: GAME_STATUS.FINISHED,
   })
 
   await recalculateScores()

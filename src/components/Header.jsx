@@ -6,12 +6,14 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
   const [menuOpen, setMenuOpen] = useState(false)
   const [logoLoaded, setLogoLoaded] = useState(true)
 
-  let navItems = [{ id: 'home', label: 'Inicio' }]
+  let navItems = [
+    { id: 'home', label: 'Inicio' },
+    { id: 'calendario', label: 'Calendario' },
+  ]
 
   if (!user) {
     navItems = [
       ...navItems,
-      { id: 'jogos', label: 'Jogos' },
       { id: 'classificacao', label: 'Classificacao' },
     ]
   }

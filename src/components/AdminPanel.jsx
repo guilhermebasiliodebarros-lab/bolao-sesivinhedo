@@ -4,21 +4,26 @@ import {
   closeGame,
   deleteGame,
   deleteSport,
+  deleteTeam,
   finalizeGame,
   GAME_STATUS,
   isPredictionDeadlineOpen,
+  calculateGroupStandings,
   recalculateScores,
   reopenGame,
   saveGame,
+  saveGames,
   saveSport,
+  saveTeam,
   STATUS_LABELS,
   subscribeAllPredictions,
   subscribeGames,
   subscribeParticipants,
   subscribeSports,
+  subscribeTeams,
 } from '../services/bolaoService.js'
-import { formatDateTime, formatPoints } from '../utils/format.js'
-import { gameMatchesSearch, getGameStageLabel, getUniqueGamePhases } from '../utils/game.js'
+import { formatDateTime, formatPoints, toDateTimeLocalValue } from '../utils/format.js'
+import { gameMatchesSearch, getGameStageLabel, getSportVisualClass, getUniqueGamePhases } from '../utils/game.js'
 import EmptyState from './EmptyState.jsx'
 import LoadingState from './LoadingState.jsx'
 
@@ -41,11 +46,45 @@ const blankSport = {
   nome: '',
 }
 
+const blankTeam = {
+  id: '',
+  sportId: '',
+  esporteNome: '',
+  nome: '',
+  categoria: '',
+}
+
+const blankBracketForm = {
+  tournamentName: '',
+  formato: 'grupos-mata-mata',
+  fase: 'Chaveamento',
+  rodadaPrefixo: 'Jogo',
+  dataInicial: '',
+  intervaloMinutos: 30,
+  limiteHorasAntes: 1,
+  grupos: 2,
+  timesPorGrupo: 3,
+  classificadosPorGrupo: 2,
+  mataMataInicial: 'Semifinal',
+}
+
 const ALL_GAMES_FILTER = 'todos'
 const ALL_PHASES_FILTER = 'todas'
 const EXPIRED_GAMES_FILTER = 'prazo-vencido'
 
 const PHASE_OPTIONS = ['Fase de grupos', 'Eliminatorias', 'Quartas de final', 'Semifinal', 'Final']
+
+const BRACKET_FORMATS = [
+  { value: 'grupos-mata-mata', label: 'Grupos + mata-mata' },
+  { value: 'sorteio', label: 'Sorteio simples' },
+  { value: 'todos-contra-todos', label: 'Todos contra todos' },
+]
+
+const KNOCKOUT_STARTS = [
+  { value: 'Final', label: 'Final direta', slots: 2 },
+  { value: 'Semifinal', label: 'Semifinal + final', slots: 4 },
+  { value: 'Quartas de final', label: 'Quartas + semi + final', slots: 8 },
+]
 
 const GAME_FILTERS = [
   { value: ALL_GAMES_FILTER, label: 'Todos' },
@@ -57,19 +96,352 @@ const GAME_FILTERS = [
 
 const ADMIN_TABS = [
   { id: 'esportes', label: 'Esportes' },
+  { id: 'times', label: 'Times' },
   { id: 'jogos', label: 'Jogos' },
   { id: 'participantes', label: 'Participantes' },
   { id: 'palpites', label: 'Palpites' },
 ]
 
+function createSeededRandom(seed) {
+  let value = seed % 2147483647
+
+  if (value <= 0) {
+    value += 2147483646
+  }
+
+  return () => {
+    value = (value * 16807) % 2147483647
+    return (value - 1) / 2147483646
+  }
+}
+
+function shuffleItems(items, seed) {
+  const draft = [...items]
+  const random = createSeededRandom(seed || Date.now())
+
+  for (let index = draft.length - 1; index > 0; index -= 1) {
+    const randomIndex = Math.floor(random() * (index + 1))
+    const current = draft[index]
+
+    draft[index] = draft[randomIndex]
+    draft[randomIndex] = current
+  }
+
+  return draft
+}
+
+function buildMatchups(teams, formato) {
+  if (formato === 'todos-contra-todos') {
+    const matchups = []
+
+    teams.forEach((teamA, teamIndex) => {
+      teams.slice(teamIndex + 1).forEach((teamB) => {
+        matchups.push({ timeA: teamA, timeB: teamB })
+      })
+    })
+
+    return { matchups, byes: [] }
+  }
+
+  return teams.reduce(
+    (bracket, team, index) => {
+      if (index % 2 !== 0) {
+        return bracket
+      }
+
+      const opponent = teams[index + 1]
+
+      if (opponent) {
+        bracket.matchups.push({ timeA: team, timeB: opponent })
+      } else {
+        bracket.byes.push(team)
+      }
+
+      return bracket
+    },
+    { matchups: [], byes: [] },
+  )
+}
+
+function createLocalId(prefix = 'game') {
+  if (window.crypto?.randomUUID) {
+    return `${prefix}-${window.crypto.randomUUID()}`
+  }
+
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+function getGroupLabel(index) {
+  return `Grupo ${String.fromCharCode(65 + index)}`
+}
+
+function getPreviewTeamName(team) {
+  return typeof team === 'string' ? team : team?.nome || 'Time'
+}
+
+function getKnockoutSlots(roundName) {
+  return KNOCKOUT_STARTS.find((item) => item.value === roundName)?.slots || 4
+}
+
+function getNextKnockoutRound(roundName) {
+  if (roundName === 'Quartas de final') {
+    return 'Semifinal'
+  }
+
+  if (roundName === 'Semifinal') {
+    return 'Final'
+  }
+
+  return ''
+}
+
+function createGameDraft({ id, fase, rodada, timeA, timeB, dateIndex, bracketForm, extra = {} }) {
+  const interval = Math.max(0, Number(bracketForm.intervaloMinutos) || 0)
+  const deadlineOffset = Math.max(0, Number(bracketForm.limiteHorasAntes) || 0) * 60
+  const dataHora = addMinutesToDateTimeLocal(bracketForm.dataInicial, interval * dateIndex)
+
+  return {
+    id: id || createLocalId('game'),
+    fase,
+    rodada,
+    timeA: getPreviewTeamName(timeA),
+    timeB: getPreviewTeamName(timeB),
+    dataHora,
+    limitePalpites: addMinutesToDateTimeLocal(dataHora, -deadlineOffset),
+    ...extra,
+  }
+}
+
+function pairSeeds(labels, roundName) {
+  if (roundName === 'Semifinal' && labels.length === 4) {
+    return [
+      [labels[0], labels[3]],
+      [labels[2], labels[1]],
+    ]
+  }
+
+  const pairs = []
+
+  for (let index = 0; index < labels.length / 2; index += 1) {
+    pairs.push([labels[index], labels[labels.length - 1 - index]])
+  }
+
+  return pairs
+}
+
+function createKnockoutTree(seedLabels, roundName, bracketForm, startIndex) {
+  const slots = getKnockoutSlots(roundName)
+  const seeds = [...seedLabels].slice(0, slots)
+
+  while (seeds.length < slots) {
+    seeds.push(`Classificado ${seeds.length + 1}`)
+  }
+
+  const rounds = []
+  let currentRoundName = roundName
+  let currentSources = pairSeeds(seeds, currentRoundName).map(([timeA, timeB], index) => ({
+    id: createLocalId('game'),
+    rodada: `${currentRoundName} ${index + 1}`,
+    timeA,
+    timeB,
+    seedLabelA: timeA,
+    seedLabelB: timeB,
+  }))
+  let dateIndex = startIndex
+
+  while (currentSources.length) {
+    const roundGames = currentSources.map((source, index) =>
+      createGameDraft({
+        id: source.id,
+        fase: currentRoundName,
+        rodada: currentSources.length === 1 ? 'Final' : source.rodada,
+        timeA: source.timeA,
+        timeB: source.timeB,
+        dateIndex: dateIndex + index,
+        bracketForm,
+        extra: {
+          stageType: 'knockout',
+          sourceGameIdA: source.sourceGameIdA || '',
+          sourceGameIdB: source.sourceGameIdB || '',
+          seedLabelA: source.seedLabelA || '',
+          seedLabelB: source.seedLabelB || '',
+        },
+      }),
+    )
+
+    rounds.push(roundGames)
+    dateIndex += roundGames.length
+
+    const nextRoundName = getNextKnockoutRound(currentRoundName)
+
+    if (!nextRoundName) {
+      break
+    }
+
+    currentSources = []
+
+    for (let index = 0; index < roundGames.length; index += 2) {
+      const gameA = roundGames[index]
+      const gameB = roundGames[index + 1]
+
+      if (!gameB) {
+        continue
+      }
+
+      currentSources.push({
+        id: createLocalId('game'),
+        rodada: `${nextRoundName} ${currentSources.length + 1}`,
+        timeA: `Vencedor ${gameA.rodada}`,
+        timeB: `Vencedor ${gameB.rodada}`,
+        sourceGameIdA: gameA.id,
+        sourceGameIdB: gameB.id,
+      })
+    }
+
+    currentRoundName = nextRoundName
+  }
+
+  return rounds.flat()
+}
+
+function buildTournamentPlan(teams, bracketForm) {
+  if (bracketForm.formato !== 'grupos-mata-mata') {
+    const bracket = buildMatchups(teams, bracketForm.formato)
+    const games = bracket.matchups.map((matchup, index) =>
+      createGameDraft({
+        fase: bracketForm.fase,
+        rodada: `${bracketForm.rodadaPrefixo || 'Jogo'} ${index + 1}`,
+        timeA: matchup.timeA,
+        timeB: matchup.timeB,
+        dateIndex: index,
+        bracketForm,
+        extra: { stageType: bracketForm.formato === 'todos-contra-todos' ? 'league' : 'knockout' },
+      }),
+    )
+
+    return {
+      mode: bracketForm.formato,
+      groups: [],
+      games,
+      byes: bracket.byes.map(getPreviewTeamName),
+    }
+  }
+
+  const groupCount = Math.max(1, Number(bracketForm.grupos) || 1)
+  const teamsPerGroup = Math.max(2, Number(bracketForm.timesPorGrupo) || 2)
+  const qualifiersPerGroup = Math.max(1, Number(bracketForm.classificadosPorGrupo) || 1)
+  const groups = Array.from({ length: groupCount }, (_, index) => ({
+    name: getGroupLabel(index),
+    teams: teams.slice(index * teamsPerGroup, index * teamsPerGroup + teamsPerGroup),
+  })).filter((group) => group.teams.length)
+  const games = []
+
+  groups.forEach((group) => {
+    group.teams.forEach((teamA, teamIndex) => {
+      group.teams.slice(teamIndex + 1).forEach((teamB) => {
+        games.push(
+          createGameDraft({
+            fase: 'Fase de grupos',
+            rodada: group.name,
+            timeA: teamA,
+            timeB: teamB,
+            dateIndex: games.length,
+            bracketForm,
+            extra: {
+              stageType: 'group',
+              groupName: group.name,
+            },
+          }),
+        )
+      })
+    })
+  })
+
+  const seedLabels = groups.flatMap((group) =>
+    Array.from({ length: Math.min(qualifiersPerGroup, group.teams.length) }, (_, index) => `${index + 1}o ${group.name}`),
+  )
+  const knockoutGames = createKnockoutTree(seedLabels, bracketForm.mataMataInicial, bracketForm, games.length)
+
+  return {
+    mode: bracketForm.formato,
+    groups,
+    games: [...games, ...knockoutGames],
+    byes: teams.slice(groupCount * teamsPerGroup).map(getPreviewTeamName),
+  }
+}
+
+function addMinutesToDateTimeLocal(value, minutes) {
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return ''
+  }
+
+  date.setMinutes(date.getMinutes() + Number(minutes || 0))
+  return toDateTimeLocalValue(date)
+}
+
+function getTournamentName(game) {
+  return game?.tournamentName || game?.nomeTorneio || game?.fase || 'Torneio'
+}
+
+function groupGamesByTournament(games) {
+  const grouped = new Map()
+
+  games
+    .filter((game) => game.tournamentId)
+    .forEach((game) => {
+      const current = grouped.get(game.tournamentId) || {
+        id: game.tournamentId,
+        nome: getTournamentName(game),
+        esporteNome: game.esporteNome,
+        games: [],
+      }
+
+      current.games.push(game)
+      grouped.set(game.tournamentId, current)
+    })
+
+  return [...grouped.values()].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+}
+
+function getTournamentGroups(games) {
+  const groups = new Map()
+
+  games
+    .filter((game) => game.stageType === 'group' && game.groupName)
+    .forEach((game) => {
+      const current = groups.get(game.groupName) || []
+
+      current.push(game)
+      groups.set(game.groupName, current)
+    })
+
+  return [...groups.entries()].map(([name, groupGames]) => ({
+    name,
+    games: groupGames,
+    standings: calculateGroupStandings(groupGames),
+  }))
+}
+
+function getTournamentKnockoutGames(games) {
+  return games.filter((game) => game.stageType === 'knockout' || ['Quartas de final', 'Semifinal', 'Final'].includes(game.fase))
+}
+
 export default function AdminPanel({ onNavigate }) {
   const { user, isMaster } = useAuth()
   const [games, setGames] = useState([])
   const [sports, setSports] = useState([])
+  const [teams, setTeams] = useState([])
   const [participants, setParticipants] = useState([])
   const [predictions, setPredictions] = useState([])
   const [form, setForm] = useState(blankGame)
   const [sportForm, setSportForm] = useState(blankSport)
+  const [teamForm, setTeamForm] = useState(blankTeam)
+  const [bracketForm, setBracketForm] = useState(blankBracketForm)
+  const [bracketGenerated, setBracketGenerated] = useState(false)
+  const [bracketTeamOrderIds, setBracketTeamOrderIds] = useState([])
+  const [bracketSpinning, setBracketSpinning] = useState(false)
   const [finalScores, setFinalScores] = useState({})
   const [gameFilter, setGameFilter] = useState(ALL_GAMES_FILTER)
   const [selectedSportId, setSelectedSportId] = useState('')
@@ -79,6 +451,7 @@ export default function AdminPanel({ onNavigate }) {
   const [loadingState, setLoadingState] = useState({
     games: true,
     sports: true,
+    teams: true,
     participants: true,
     predictions: true,
   })
@@ -101,6 +474,13 @@ export default function AdminPanel({ onNavigate }) {
       },
       setMessage,
     )
+    const unsubscribeTeams = subscribeTeams(
+      (items) => {
+        setTeams(items)
+        setLoadingState((current) => ({ ...current, teams: false }))
+      },
+      setMessage,
+    )
     const unsubscribeParticipants = subscribeParticipants(
       (items) => {
         setParticipants(items)
@@ -119,6 +499,7 @@ export default function AdminPanel({ onNavigate }) {
     return () => {
       unsubscribeGames()
       unsubscribeSports()
+      unsubscribeTeams()
       unsubscribeParticipants()
       unsubscribePredictions()
     }
@@ -148,6 +529,33 @@ export default function AdminPanel({ onNavigate }) {
 
     return games.filter((game) => game.sportId === selectedSportId || game.esporteNome === selectedSport?.nome)
   }, [games, selectedSport?.nome, selectedSportId])
+  const selectedSportTeams = useMemo(() => {
+    if (!selectedSportId) {
+      return []
+    }
+
+    return teams.filter((team) => team.sportId === selectedSportId || team.esporteNome === selectedSport?.nome)
+  }, [selectedSport?.nome, selectedSportId, teams])
+  const orderedBracketTeams = useMemo(() => {
+    if (!bracketGenerated || !bracketTeamOrderIds.length) {
+      return selectedSportTeams
+    }
+
+    const teamById = new Map(selectedSportTeams.map((team) => [team.id, team]))
+    const ordered = bracketTeamOrderIds.map((teamId) => teamById.get(teamId)).filter(Boolean)
+    const missingTeams = selectedSportTeams.filter((team) => !bracketTeamOrderIds.includes(team.id))
+
+    return [...ordered, ...missingTeams]
+  }, [bracketGenerated, bracketTeamOrderIds, selectedSportTeams])
+  const tournamentPlan = useMemo(
+    () =>
+      bracketGenerated
+        ? buildTournamentPlan(orderedBracketTeams, bracketForm)
+        : { mode: bracketForm.formato, groups: [], games: [], byes: [] },
+    [bracketForm, bracketGenerated, orderedBracketTeams],
+  )
+  const bracketPreviewGames = tournamentPlan.games
+  const selectedSportTournaments = useMemo(() => groupGamesByTournament(selectedSportGames), [selectedSportGames])
   const predictionTabGames = selectedSport ? selectedSportGames : games
   const gameCountBySport = useMemo(() => {
     return games.reduce((counts, game) => {
@@ -211,6 +619,7 @@ export default function AdminPanel({ onNavigate }) {
     return {
       participantes: participants.length,
       esportes: sports.length,
+      times: teams.length,
       jogos: games.length,
       palpites: predictions.length,
       abertos: games.filter((game) => game.status === GAME_STATUS.OPEN).length,
@@ -218,7 +627,7 @@ export default function AdminPanel({ onNavigate }) {
       finalizados: games.filter((game) => game.status === GAME_STATUS.FINISHED).length,
       prazoVencido: allExpiredOpenGames.length,
     }
-  }, [allExpiredOpenGames.length, games, participants, predictions, sports.length])
+  }, [allExpiredOpenGames.length, games, participants, predictions, sports.length, teams.length])
 
   if (!isMaster) {
     return (
@@ -251,10 +660,17 @@ export default function AdminPanel({ onNavigate }) {
 
   const selectSport = (sport) => {
     setSelectedSportId(sport.id)
-    setActiveAdminTab('jogos')
+    setActiveAdminTab('times')
     setGameFilter(ALL_GAMES_FILTER)
     setPhaseFilter(ALL_PHASES_FILTER)
     setGameSearch('')
+    setBracketGenerated(false)
+    setBracketTeamOrderIds([])
+    setTeamForm({
+      ...blankTeam,
+      sportId: sport.id,
+      esporteNome: sport.nome,
+    })
     setForm({
       ...blankGame,
       sportId: sport.id,
@@ -321,6 +737,78 @@ export default function AdminPanel({ onNavigate }) {
     setMessage('')
   }
 
+  const updateTeamSportField = (sportId) => {
+    const esporteNome = sportNameById.get(sportId) || ''
+
+    setSelectedSportId(sportId)
+    setBracketGenerated(false)
+    setBracketTeamOrderIds([])
+    setTeamForm((current) => ({
+      ...current,
+      sportId,
+      esporteNome,
+    }))
+  }
+
+  const editTeam = (team) => {
+    setActiveAdminTab('times')
+    setSelectedSportId(team.sportId || '')
+    setTeamForm({
+      id: team.id,
+      sportId: team.sportId || '',
+      esporteNome: team.esporteNome || sportNameById.get(team.sportId) || '',
+      nome: team.nome,
+      categoria: team.categoria || '',
+    })
+    setMessage('')
+  }
+
+  const resetTeamForm = () => {
+    setTeamForm(
+      selectedSport
+        ? {
+            ...blankTeam,
+            sportId: selectedSport.id,
+            esporteNome: selectedSport.nome,
+          }
+        : blankTeam,
+    )
+    setMessage('')
+  }
+
+  const updateBracketField = (field, value) => {
+    setBracketForm((current) => ({ ...current, [field]: value }))
+  }
+
+  const handleShuffleBracket = () => {
+    setBracketTeamOrderIds(shuffleItems(selectedSportTeams, Date.now()).map((team) => team.id))
+    setBracketGenerated(true)
+    setBracketSpinning(true)
+    window.setTimeout(() => setBracketSpinning(false), 650)
+    setMessage('')
+  }
+
+  const swapBracketTeam = (currentTeamId, nextTeamId) => {
+    if (currentTeamId === nextTeamId) {
+      return
+    }
+
+    setBracketTeamOrderIds((current) => {
+      const order = current.length ? [...current] : selectedSportTeams.map((team) => team.id)
+      const currentIndex = order.indexOf(currentTeamId)
+      const nextIndex = order.indexOf(nextTeamId)
+
+      if (currentIndex < 0 || nextIndex < 0) {
+        return order
+      }
+
+      order[currentIndex] = nextTeamId
+      order[nextIndex] = currentTeamId
+      return order
+    })
+    setMessage('')
+  }
+
   const runAdminAction = async (action, successMessage) => {
     setMessage('')
 
@@ -363,6 +851,11 @@ export default function AdminPanel({ onNavigate }) {
   const handleSubmit = async (event) => {
     event.preventDefault()
 
+    if (form.timeA && form.timeB && form.timeA === form.timeB) {
+      setMessage('Selecione times diferentes para criar o jogo.')
+      return
+    }
+
     await runAdminAction(async () => {
       const esporteNome = sportNameById.get(form.sportId) || form.esporteNome
       const gamePayload = form.id
@@ -384,6 +877,72 @@ export default function AdminPanel({ onNavigate }) {
     }, 'Jogo salvo e classificacao recalculada.')
   }
 
+  const handleGenerateBracket = async () => {
+    if (!selectedSport) {
+      setMessage('Selecione um esporte antes de gerar chaveamento.')
+      return
+    }
+
+    if (selectedSportTeams.length < 2) {
+      setMessage('Cadastre pelo menos dois times para gerar confrontos.')
+      return
+    }
+
+    if (!bracketForm.dataInicial) {
+      setMessage('Informe a data inicial dos jogos do chaveamento.')
+      return
+    }
+
+    if (!bracketForm.tournamentName.trim()) {
+      setMessage('Informe o nome do torneio antes de salvar o chaveamento.')
+      return
+    }
+
+    if (
+      selectedSportTournaments.some(
+        (tournament) => tournament.nome.trim().toLocaleLowerCase('pt-BR') === bracketForm.tournamentName.trim().toLocaleLowerCase('pt-BR'),
+      )
+    ) {
+      setMessage('Ja existe um torneio com esse nome neste esporte.')
+      return
+    }
+
+    if (!bracketPreviewGames.length) {
+      setMessage('Nao ha confrontos para salvar com os times selecionados.')
+      return
+    }
+
+    await runAdminAction(async () => {
+      const tournamentId = `${selectedSport.id}-${Date.now()}`
+
+      await saveGames(
+        bracketPreviewGames.map((game) => ({
+          id: game.id,
+          sportId: selectedSport.id,
+          esporteNome: selectedSport.nome,
+          fase: game.fase || bracketForm.fase,
+          rodada: game.rodada,
+          timeA: game.timeA,
+          timeB: game.timeB,
+          dataHora: game.dataHora,
+          limitePalpites: game.limitePalpites,
+          status: GAME_STATUS.OPEN,
+          tournamentId,
+          tournamentName: bracketForm.tournamentName.trim(),
+          groupName: game.groupName,
+          stageType: game.stageType,
+          sourceGameIdA: game.sourceGameIdA,
+          sourceGameIdB: game.sourceGameIdB,
+          seedLabelA: game.seedLabelA,
+          seedLabelB: game.seedLabelB,
+        })),
+      )
+      setBracketGenerated(false)
+      setBracketTeamOrderIds([])
+      setBracketForm((current) => ({ ...current, tournamentName: '' }))
+    }, `${bracketPreviewGames.length} jogo(s) gerado(s) pelo chaveamento.`)
+  }
+
   const handleSportSubmit = async (event) => {
     event.preventDefault()
 
@@ -391,6 +950,25 @@ export default function AdminPanel({ onNavigate }) {
       await saveSport(sportForm)
       setSportForm(blankSport)
     }, 'Esporte salvo com sucesso.')
+  }
+
+  const handleTeamSubmit = async (event) => {
+    event.preventDefault()
+
+    await runAdminAction(async () => {
+      const esporteNome = sportNameById.get(teamForm.sportId) || teamForm.esporteNome
+
+      await saveTeam({ ...teamForm, esporteNome })
+      setTeamForm(
+        teamForm.sportId
+          ? {
+              ...blankTeam,
+              sportId: teamForm.sportId,
+              esporteNome,
+            }
+          : blankTeam,
+      )
+    }, 'Time salvo com sucesso.')
   }
 
   const handleDeleteSport = (sport) => {
@@ -407,6 +985,16 @@ export default function AdminPanel({ onNavigate }) {
         }
       },
       successMessage: 'Esporte excluido com sucesso.',
+    })
+  }
+
+  const handleDeleteTeam = (team) => {
+    confirmAdminAction({
+      title: 'Excluir time',
+      description: `Excluir ${team.nome}? Jogos ja criados com esse nome continuam cadastrados.`,
+      confirmLabel: 'Excluir time',
+      action: () => deleteTeam(team.id),
+      successMessage: 'Time excluido com sucesso.',
     })
   }
 
@@ -485,6 +1073,10 @@ export default function AdminPanel({ onNavigate }) {
           <strong>{stats.esportes}</strong>
         </article>
         <article className="stat-card">
+          <span>Times</span>
+          <strong>{stats.times}</strong>
+        </article>
+        <article className="stat-card">
           <span>Jogos</span>
           <strong>{stats.jogos}</strong>
         </article>
@@ -514,6 +1106,7 @@ export default function AdminPanel({ onNavigate }) {
         {ADMIN_TABS.map((tab) => {
           const tabCount = {
             esportes: sports.length,
+            times: selectedSport ? selectedSportTeams.length : teams.length,
             jogos: selectedSport ? selectedSportGames.length : games.length,
             participantes: participants.length,
             palpites: predictions.length,
@@ -573,6 +1166,7 @@ export default function AdminPanel({ onNavigate }) {
                   key={sport.id}
                 >
                   <button className="sport-select-button" type="button" onClick={() => selectSport(sport)}>
+                    <span className={`sport-chip-icon ${getSportVisualClass(sport.nome)}`} aria-hidden="true" />
                     <span>{sport.nome}</span>
                     <small>{sportGameCount} jogo(s)</small>
                   </button>
@@ -595,6 +1189,113 @@ export default function AdminPanel({ onNavigate }) {
       </form>
       ) : null}
 
+      {activeAdminTab === 'times' ? (
+        <section className="admin-tab-panel">
+          <form className="admin-form admin-team-form" onSubmit={handleTeamSubmit}>
+            <div className="section-heading">
+              <div>
+                <h2>{teamForm.id ? 'Editar time' : 'Times por esporte'}</h2>
+                <p>Cadastre os times uma vez e depois selecione Time A e Time B ao criar cada jogo.</p>
+              </div>
+              <button className="btn btn-outline btn-small" type="button" onClick={resetTeamForm}>
+                Novo time
+              </button>
+            </div>
+
+            <div className="team-create-row">
+              <label>
+                Esporte
+                <select value={teamForm.sportId} onChange={(event) => updateTeamSportField(event.target.value)} required>
+                  <option value="">Selecione</option>
+                  {sports.map((sport) => (
+                    <option value={sport.id} key={sport.id}>
+                      {sport.nome}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Nome do time
+                <input
+                  type="text"
+                  value={teamForm.nome}
+                  onChange={(event) => setTeamForm((current) => ({ ...current, nome: event.target.value }))}
+                  placeholder="Ex.: 9o A, SESI Vermelho"
+                  required
+                />
+              </label>
+              <label>
+                Categoria/turma
+                <input
+                  type="text"
+                  value={teamForm.categoria}
+                  onChange={(event) => setTeamForm((current) => ({ ...current, categoria: event.target.value }))}
+                  placeholder="Ex.: 9o ano, Ensino Medio"
+                />
+              </label>
+              <button className="btn btn-primary" type="submit" disabled={saving}>
+                {saving ? 'Salvando...' : teamForm.id ? 'Salvar time' : 'Cadastrar time'}
+              </button>
+            </div>
+          </form>
+
+          {selectedSport ? (
+            <div className="selected-sport-bar">
+              <div>
+                <span className="eyebrow">Times de {selectedSport.nome}</span>
+                <strong>{selectedSportTeams.length} time(s) cadastrados</strong>
+              </div>
+              <button className="btn btn-primary btn-small" type="button" onClick={() => setActiveAdminTab('jogos')}>
+                Criar jogos
+              </button>
+            </div>
+          ) : null}
+
+          {sports.length ? (
+            <div className="team-group-list">
+              {(selectedSport ? [selectedSport] : sports).map((sport) => {
+                const sportTeams = teams.filter((team) => team.sportId === sport.id || team.esporteNome === sport.nome)
+
+                return (
+                  <section className="team-group" key={`teams-${sport.id}`}>
+                    <div className="section-heading">
+                      <h2>{sport.nome}</h2>
+                      <span>{sportTeams.length} time(s)</span>
+                    </div>
+                    {sportTeams.length ? (
+                      <div className="team-chip-list">
+                        {sportTeams.map((team) => (
+                          <span className="team-chip" key={team.id}>
+                            <span className={`sport-chip-icon ${getSportVisualClass(team.esporteNome)}`} aria-hidden="true" />
+                            <strong>{team.nome}</strong>
+                            {team.categoria ? <small>{team.categoria}</small> : null}
+                            <button className="chip-action" type="button" onClick={() => editTeam(team)}>
+                              Editar
+                            </button>
+                            <button
+                              className="chip-action"
+                              type="button"
+                              disabled={saving}
+                              onClick={() => handleDeleteTeam(team)}
+                            >
+                              Excluir
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <EmptyState title="Sem times" description="Cadastre os times deste esporte para montar jogos mais rapido." />
+                    )}
+                  </section>
+                )
+              })}
+            </div>
+          ) : (
+            <EmptyState title="Cadastre um esporte primeiro" description="Os times precisam estar vinculados a um esporte." />
+          )}
+        </section>
+      ) : null}
+
       {activeAdminTab === 'jogos' ? (
         selectedSport ? (
           <>
@@ -607,6 +1308,282 @@ export default function AdminPanel({ onNavigate }) {
               Novo jogo em {selectedSport.nome}
             </button>
           </div>
+
+      {selectedSportTournaments.length ? (
+        <section className="tournament-library">
+          <div className="section-heading">
+            <div>
+              <span className="eyebrow">Torneios criados</span>
+              <h2>{selectedSportTournaments.length} torneio(s) de {selectedSport.nome}</h2>
+            </div>
+            <button className="btn btn-outline btn-small" type="button" onClick={() => onNavigate('calendario')}>
+              Ver calendario publico
+            </button>
+          </div>
+
+          <div className="tournament-library-grid">
+            {selectedSportTournaments.map((tournament) => {
+              const groups = getTournamentGroups(tournament.games)
+              const knockoutGames = getTournamentKnockoutGames(tournament.games)
+
+              return (
+                <article className="tournament-summary-card" key={tournament.id}>
+                  <div className="section-heading">
+                    <div>
+                      <span className="eyebrow">{tournament.esporteNome}</span>
+                      <h2>{tournament.nome}</h2>
+                    </div>
+                    <span>{tournament.games.length} jogo(s)</span>
+                  </div>
+
+                  {groups.length ? (
+                    <div className="standings-grid">
+                      {groups.map((group) => (
+                        <div className="standings-table" key={`${tournament.id}-${group.name}`}>
+                          <strong>{group.name}</strong>
+                          <div className="standings-row standings-head">
+                            <span>Time</span>
+                            <span>Pts</span>
+                            <span>SG</span>
+                            <span>GP</span>
+                          </div>
+                          {group.standings.map((team) => (
+                            <div className="standings-row" key={`${group.name}-${team.nome}`}>
+                              <span>{team.nome}</span>
+                              <span>{team.pontos}</span>
+                              <span>{team.saldo}</span>
+                              <span>{team.golsPro}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {knockoutGames.length ? (
+                    <div className="mini-bracket">
+                      {knockoutGames.map((game) => (
+                        <span key={game.id}>
+                          <strong>{game.fase}</strong>
+                          {game.timeA} x {game.timeB}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </article>
+              )
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      <section className={`bracket-builder ${bracketSpinning ? 'is-spinning' : ''}`}>
+        <div className="section-heading">
+          <div>
+            <span className="eyebrow">Gerador de chaveamento</span>
+            <h2>Sortear confrontos</h2>
+            <p>Use os times cadastrados, embaralhe como em sorteio e salve todos os jogos de uma vez.</p>
+          </div>
+          <span>{bracketPreviewGames.length} jogo(s) na previa</span>
+        </div>
+
+        <div className="bracket-controls">
+          <label>
+            Nome do torneio
+            <input
+              type="text"
+              value={bracketForm.tournamentName}
+              onChange={(event) => updateBracketField('tournamentName', event.target.value)}
+              placeholder="Ex.: Interclasses 2026"
+            />
+          </label>
+          <label>
+            Formato
+            <select value={bracketForm.formato} onChange={(event) => updateBracketField('formato', event.target.value)}>
+              {BRACKET_FORMATS.map((format) => (
+                <option value={format.value} key={format.value}>
+                  {format.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Fase padrao
+            <input
+              type="text"
+              value={bracketForm.fase}
+              onChange={(event) => updateBracketField('fase', event.target.value)}
+              placeholder="Ex.: Chaveamento"
+            />
+          </label>
+          <label>
+            Nome da rodada
+            <input
+              type="text"
+              value={bracketForm.rodadaPrefixo}
+              onChange={(event) => updateBracketField('rodadaPrefixo', event.target.value)}
+              placeholder="Ex.: Jogo"
+            />
+          </label>
+          <label>
+            Primeiro jogo
+            <input
+              type="datetime-local"
+              value={bracketForm.dataInicial}
+              onChange={(event) => updateBracketField('dataInicial', event.target.value)}
+            />
+          </label>
+          <label>
+            Intervalo entre jogos
+            <input
+              type="number"
+              min="0"
+              step="5"
+              value={bracketForm.intervaloMinutos}
+              onChange={(event) => updateBracketField('intervaloMinutos', event.target.value)}
+            />
+          </label>
+          <label>
+            Palpites fecham antes (h)
+            <input
+              type="number"
+              min="0"
+              step="0.5"
+              value={bracketForm.limiteHorasAntes}
+              onChange={(event) => updateBracketField('limiteHorasAntes', event.target.value)}
+            />
+          </label>
+          {bracketForm.formato === 'grupos-mata-mata' ? (
+            <>
+              <label>
+                Grupos
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={bracketForm.grupos}
+                  onChange={(event) => updateBracketField('grupos', event.target.value)}
+                />
+              </label>
+              <label>
+                Times por grupo
+                <input
+                  type="number"
+                  min="2"
+                  step="1"
+                  value={bracketForm.timesPorGrupo}
+                  onChange={(event) => updateBracketField('timesPorGrupo', event.target.value)}
+                />
+              </label>
+              <label>
+                Classificam por grupo
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={bracketForm.classificadosPorGrupo}
+                  onChange={(event) => updateBracketField('classificadosPorGrupo', event.target.value)}
+                />
+              </label>
+              <label>
+                Mata-mata comeca em
+                <select
+                  value={bracketForm.mataMataInicial}
+                  onChange={(event) => updateBracketField('mataMataInicial', event.target.value)}
+                >
+                  {KNOCKOUT_STARTS.map((round) => (
+                    <option value={round.value} key={round.value}>
+                      {round.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </>
+          ) : null}
+        </div>
+
+        {selectedSportTeams.length >= 2 && bracketGenerated ? (
+          <>
+            {tournamentPlan.groups.length ? (
+              <div className="tournament-groups-preview">
+                {tournamentPlan.groups.map((group) => (
+                  <article className="tournament-group-card" key={group.name}>
+                    <span>{group.name}</span>
+                    {group.teams.map((team) => (
+                      <label className="group-team-editor" key={team.id}>
+                        <small>Time</small>
+                        <select value={team.id} onChange={(event) => swapBracketTeam(team.id, event.target.value)}>
+                          {selectedSportTeams.map((option) => (
+                            <option value={option.id} key={option.id}>
+                              {option.nome}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ))}
+                  </article>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="bracket-wheel" aria-hidden="true">
+              {selectedSportTeams.map((team) => (
+                <span key={`wheel-${team.id}`}>{team.nome}</span>
+              ))}
+            </div>
+
+            <div className="bracket-preview">
+              {bracketPreviewGames.map((game, index) => (
+                <article className={`bracket-match ${game.stageType === 'group' ? 'is-group' : ''}`} key={`${game.id}-${index}`}>
+                  <span>{game.rodada}</span>
+                  <strong>
+                    {game.timeA} x {game.timeB}
+                  </strong>
+                  <small>
+                    {game.fase} | {game.dataHora ? formatDateTime(game.dataHora) : 'Defina a data inicial'}
+                  </small>
+                </article>
+              ))}
+              {tournamentPlan.byes.map((team) => (
+                <article className="bracket-match is-bye" key={`bye-${team}`}>
+                  <span>Sem adversario</span>
+                  <strong>{team}</strong>
+                  <small>Ficou fora da configuracao atual de grupos/confrontos.</small>
+                </article>
+              ))}
+            </div>
+          </>
+        ) : selectedSportTeams.length >= 2 ? (
+          <EmptyState
+            title="Chaveamento em branco"
+            description="Clique em Sortear grupos/confrontos para montar a previa antes de salvar os jogos."
+          />
+        ) : (
+          <EmptyState
+            title="Cadastre mais times"
+            description="O gerador precisa de pelo menos dois times no esporte selecionado."
+          />
+        )}
+
+        <div className="form-actions">
+          <button
+            className="btn btn-outline"
+            type="button"
+            disabled={saving || selectedSportTeams.length < 2}
+            onClick={handleShuffleBracket}
+          >
+            {bracketGenerated ? 'Sortear de novo' : 'Sortear grupos/confrontos'}
+          </button>
+          <button
+            className="btn btn-primary"
+            type="button"
+            disabled={saving || selectedSportTeams.length < 2 || !bracketGenerated}
+            onClick={handleGenerateBracket}
+          >
+            {saving ? 'Gerando...' : 'Salvar chaveamento'}
+          </button>
+        </div>
+      </section>
 
       <form className="admin-form" onSubmit={handleSubmit}>
         <div className="section-heading">
@@ -654,23 +1631,45 @@ export default function AdminPanel({ onNavigate }) {
           </label>
           <label>
             Time A
-            <input
-              type="text"
-              value={form.timeA}
-              onChange={(event) => updateField('timeA', event.target.value)}
-              placeholder="Ex.: SESI Vermelho"
-              required
-            />
+            {selectedSportTeams.length ? (
+              <select value={form.timeA} onChange={(event) => updateField('timeA', event.target.value)} required>
+                <option value="">Selecione</option>
+                {selectedSportTeams.map((team) => (
+                  <option value={team.nome} key={team.id}>
+                    {team.nome}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                value={form.timeA}
+                onChange={(event) => updateField('timeA', event.target.value)}
+                placeholder="Ex.: SESI Vermelho"
+                required
+              />
+            )}
           </label>
           <label>
             Time B
-            <input
-              type="text"
-              value={form.timeB}
-              onChange={(event) => updateField('timeB', event.target.value)}
-              placeholder="Ex.: SESI Branco"
-              required
-            />
+            {selectedSportTeams.length ? (
+              <select value={form.timeB} onChange={(event) => updateField('timeB', event.target.value)} required>
+                <option value="">Selecione</option>
+                {selectedSportTeams.map((team) => (
+                  <option value={team.nome} key={team.id}>
+                    {team.nome}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                value={form.timeB}
+                onChange={(event) => updateField('timeB', event.target.value)}
+                placeholder="Ex.: SESI Branco"
+                required
+              />
+            )}
           </label>
           <label>
             Data e horario
@@ -691,6 +1690,11 @@ export default function AdminPanel({ onNavigate }) {
             />
           </label>
         </div>
+        {!selectedSportTeams.length ? (
+          <div className="form-hint">
+            Cadastre times na aba Times para escolher Time A e Time B por lista, sem digitar tudo de novo.
+          </div>
+        ) : null}
         <datalist id="phase-options">
           {availablePhases.map((phase) => (
             <option value={phase} key={phase} />

@@ -17,6 +17,7 @@ export default function GameCard({ game, existingPrediction, existingGuess, comp
   const [draft, setDraft] = useState(null)
   const [message, setMessage] = useState('')
   const [saving, setSaving] = useState(false)
+  const [savedFeedback, setSavedFeedback] = useState(false)
   const [now, setNow] = useState(() => new Date())
 
   const prediction = existingPrediction || existingGuess
@@ -69,6 +70,8 @@ export default function GameCard({ game, existingPrediction, existingGuess, comp
       setSaving(true)
       await savePrediction({ user, profile, game, palpiteA, palpiteB })
       setMessage('Palpite salvo com sucesso.')
+      setSavedFeedback(true)
+      window.setTimeout(() => setSavedFeedback(false), 1200)
       onGuessSaved?.()
     } catch (error) {
       setMessage(error.message)
@@ -80,6 +83,11 @@ export default function GameCard({ game, existingPrediction, existingGuess, comp
   return (
     <article className={compact ? `game-card is-compact ${getSportVisualClass(game.esporteNome)}` : `game-card ${getSportVisualClass(game.esporteNome)}`}>
       <span className="sport-illustration" aria-hidden="true" />
+      {savedFeedback ? (
+        <div className="prediction-save-burst" role="status">
+          <span>Palpite salvo</span>
+        </div>
+      ) : null}
       <div className="game-card-header">
         <span className="sport-badge">{game.esporteNome}</span>
         <span>{getGameStageLabel(game)}</span>

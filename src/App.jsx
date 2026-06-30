@@ -1,18 +1,20 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import './App.css'
-import AdminPanel from './components/AdminPanel.jsx'
-import Cadastro from './components/Cadastro.jsx'
-import Classificacao from './components/Classificacao.jsx'
-import Dashboard from './components/Dashboard.jsx'
 import Footer from './components/Footer.jsx'
 import Header from './components/Header.jsx'
-import Home from './components/Home.jsx'
-import Jogos from './components/Jogos.jsx'
-import Login from './components/Login.jsx'
-import Palpites from './components/Palpites.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
 import { useAuth } from './context/useAuth.js'
 import { firebaseEnvNames, isFirebaseConfigured, missingFirebaseConfig } from './config/firebase.js'
+
+const AdminPanel = lazy(() => import('./components/AdminPanel.jsx'))
+const Cadastro = lazy(() => import('./components/Cadastro.jsx'))
+const Calendario = lazy(() => import('./components/Calendario.jsx'))
+const Classificacao = lazy(() => import('./components/Classificacao.jsx'))
+const Dashboard = lazy(() => import('./components/Dashboard.jsx'))
+const Home = lazy(() => import('./components/Home.jsx'))
+const Jogos = lazy(() => import('./components/Jogos.jsx'))
+const Login = lazy(() => import('./components/Login.jsx'))
+const Palpites = lazy(() => import('./components/Palpites.jsx'))
 
 const protectedViews = ['dashboard', 'jogos', 'palpites', 'classificacao', 'admin']
 
@@ -92,6 +94,10 @@ function AppShell() {
       return <Jogos onNavigate={navigate} />
     }
 
+    if (activeView === 'calendario') {
+      return <Calendario onNavigate={navigate} />
+    }
+
     if (activeView === 'palpites') {
       return <Palpites onNavigate={navigate} />
     }
@@ -111,7 +117,9 @@ function AppShell() {
     <div className="app">
       <Header activeView={activeView} onNavigate={navigate} theme={theme} onToggleTheme={toggleTheme} />
       <ConfigNotice />
-      <main>{renderView()}</main>
+      <main>
+        <Suspense fallback={<div className="route-loading">Carregando tela...</div>}>{renderView()}</Suspense>
+      </main>
       <Footer />
     </div>
   )
