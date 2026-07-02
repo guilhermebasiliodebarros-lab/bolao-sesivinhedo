@@ -1,14 +1,19 @@
 import { useEffect, useMemo, useState } from 'react'
-import { sortRanking, subscribeRanking, subscribeSports } from '../services/bolaoService.js'
+import { useAuth } from '../context/useAuth.js'
+import { canEditPrediction, sortRanking, subscribeGames, subscribeRanking, subscribeSports, subscribeUserPredictions } from '../services/bolaoService.js'
 import EmptyState from './EmptyState.jsx'
 import LoadingState from './LoadingState.jsx'
+import PendingGuessBanner from './PendingGuessBanner.jsx'
 import RankingTable from './RankingTable.jsx'
 
 const GENERAL_RANKING = 'geral'
 
 export default function Classificacao({ onNavigate }) {
+  const { user, isParticipant } = useAuth()
   const [ranking, setRanking] = useState([])
   const [sports, setSports] = useState([])
+  const [games, setGames] = useState([])
+  const [predictions, setPredictions] = useState([])
   const [activeRanking, setActiveRanking] = useState(GENERAL_RANKING)
   const [loadingState, setLoadingState] = useState({ ranking: true, sports: true })
   const [error, setError] = useState('')
@@ -28,12 +33,23 @@ export default function Classificacao({ onNavigate }) {
       },
       setError,
     )
+    const unsubscribeGames = subscribeGames(setGames, setError)
 
     return () => {
       unsubscribeRanking()
       unsubscribeSports()
+      unsubscribeGames()
     }
   }, [])
+
+  useEffect(() => {
+    if (!user || !isParticipant) {
+      setPredictions([])
+      return () => {}
+    }
+
+    return subscribeUserPredictions(user.uid, setPredictions, setError)
+  }, [isParticipant, user])
 
   const visibleRanking = useMemo(() => {
     if (activeRanking === GENERAL_RANKING) {
@@ -61,6 +77,11 @@ export default function Classificacao({ onNavigate }) {
       (participant.acertosExatos || 0) > 0 ||
       (participant.acertosResultado || 0) > 0,
   )
+  const leader = visibleRanking[0] || null
+  const runnerUp = visibleRanking[1] || null
+  const leaderGap = leader && runnerUp ? Math.max((leader.pontos || 0) - (runnerUp.pontos || 0), 0) : 0
+  const predictionsByGame = useMemo(() => new Map(predictions.map((prediction) => [prediction.gameId, prediction])), [predictions])
+  const pendingGuessCount = isParticipant ? games.filter((game) => canEditPrediction(game) && !predictionsByGame.has(game.id)).length : Number.NaN
   const loading = Object.values(loadingState).some(Boolean)
 
   if (loading) {
@@ -81,6 +102,8 @@ export default function Classificacao({ onNavigate }) {
       </div>
 
       {error ? <div className="alert alert-error">{error}</div> : null}
+
+      <PendingGuessBanner count={pendingGuessCount} onNavigate={onNavigate} />
 
       <div className="ranking-tabs segmented-control" aria-label="Tipo de ranking">
         <button
@@ -103,6 +126,29 @@ export default function Classificacao({ onNavigate }) {
           </button>
         ))}
       </div>
+
+      <section className="ranking-insight-panel" aria-label="Resumo da classificação">
+        <article>
+          <span className="eyebrow">Liderança</span>
+          <strong>{leader?.nome || 'Aguardando participantes'}</strong>
+          <small>{leader ? `${leader.pontos || 0} ponto(s)` : 'O ranking aparece assim que houver cadastro.'}</small>
+        </article>
+        <article>
+          <span className="eyebrow">Disputa</span>
+          <strong>{runnerUp ? `${leaderGap} ponto(s)` : '-'}</strong>
+          <small>{runnerUp ? `Diferença para ${runnerUp.nome}` : 'Sem segundo colocado ainda.'}</small>
+        </article>
+        <article>
+          <span className="eyebrow">Base ativa</span>
+          <strong>{visibleRanking.length}</strong>
+          <small>Participante(s) neste ranking</small>
+        </article>
+        <article>
+          <span className="eyebrow">Modalidades</span>
+          <strong>{sports.length}</strong>
+          <small>Esporte(s) com aba própria</small>
+        </article>
+      </section>
 
       {ranking.length ? (
         <>

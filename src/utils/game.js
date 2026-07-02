@@ -71,3 +71,33 @@ export function getSportVisualClass(sportName) {
 
   return 'sport-visual-generic'
 }
+
+export function getSportIcon(sportName) {
+  const normalized = normalizeFilterText(sportName)
+
+  if (normalized.includes('fut') || normalized.includes('soccer')) {
+    return '⚽'
+  }
+
+  if (normalized.includes('basquete') || normalized.includes('basket')) {
+    return '🏀'
+  }
+
+  if (normalized.includes('volei') || normalized.includes('volley')) {
+    return '🏐'
+  }
+
+  if (normalized.includes('hand')) {
+    return '🤾'
+  }
+
+  if (normalized.includes('tenis') || normalized.includes('ping') || normalized.includes('mesa')) {
+    return '🏓'
+  }
+
+  if (normalized.includes('queimada') || normalized.includes('dodge')) {
+    return '🔴'
+  }
+
+  return '🏆'
+}

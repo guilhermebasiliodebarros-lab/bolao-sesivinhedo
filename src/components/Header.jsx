@@ -6,6 +6,11 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
   const { user, profile, isMaster, isParticipant, logout } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
   const [logoLoaded, setLogoLoaded] = useState(true)
+  const avatarUrl = profile?.avatarUrl || user?.photoURL || ''
+  const avatarLabel = String(profile?.nome || user?.displayName || user?.email || 'U')
+    .trim()
+    .charAt(0)
+    .toLocaleUpperCase('pt-BR')
 
   let navItems = [
     { id: 'home', label: COPY.nav.home },
@@ -95,7 +100,8 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
           {user ? (
             <>
               <button className="user-pill" type="button" onClick={() => handleNavigate(isMaster ? 'admin' : 'dashboard')}>
-                {profile?.nome || user.displayName || user.email}
+                {avatarUrl ? <img src={avatarUrl} alt="" /> : <span aria-hidden="true">{avatarLabel}</span>}
+                <strong>{profile?.nome || user.displayName || user.email}</strong>
               </button>
               <button className="btn btn-outline" type="button" onClick={handleLogout}>
                 {COPY.actions.sair}

@@ -39,17 +39,18 @@ export function watchAuthState(callback) {
   return onAuthStateChanged(auth, callback)
 }
 
-export async function registerParticipant({ nome, name, email, password }) {
+export async function registerParticipant({ nome, name, email, password, avatarUrl }) {
   const firebaseAuth = ensureAuth()
   const displayName = String(nome || name || '').trim()
+  const photoURL = String(avatarUrl || '').trim()
 
   if (!displayName) {
     throw new Error('Informe seu nome para cadastrar.')
   }
 
   const credential = await createUserWithEmailAndPassword(firebaseAuth, email, password)
-  await updateProfile(credential.user, { displayName })
-  await createParticipantProfile(credential.user, displayName)
+  await updateProfile(credential.user, { displayName, ...(photoURL ? { photoURL } : {}) })
+  await createParticipantProfile(credential.user, displayName, photoURL)
 
   return {
     user: credential.user,

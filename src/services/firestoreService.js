@@ -177,6 +177,7 @@ export function normalizeUserProfile(id, data = {}) {
     uid: data.uid || id,
     nome: data.nome || data.name || data.displayName || data.email || 'Participante',
     email: data.email || '',
+    avatarUrl: data.avatarUrl || data.photoURL || data.fotoUrl || '',
     role,
     participaRanking: role === 'master' ? false : data.participaRanking !== false,
     pontos: numberOrZero(data.pontos ?? data.score),
@@ -397,7 +398,7 @@ function normalizeTeamInput(team) {
   return { sportId, esporteNome, nome, categoria }
 }
 
-export async function createParticipantProfile(user, nome) {
+export async function createParticipantProfile(user, nome, avatarUrl = '') {
   const firestore = ensureDb()
 
   await setDoc(
@@ -406,6 +407,7 @@ export async function createParticipantProfile(user, nome) {
       uid: user.uid,
       nome: nome.trim(),
       email: user.email,
+      avatarUrl: String(avatarUrl || '').trim(),
       role: 'user',
       pontos: 0,
       acertosExatos: 0,

@@ -54,11 +54,11 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  const register = async ({ nome, name, email, password }) => {
+  const register = async ({ nome, name, email, password, avatarUrl }) => {
     try {
       setError('')
       setLoading(true)
-      const result = await registerParticipant({ nome, name, email, password })
+      const result = await registerParticipant({ nome, name, email, password, avatarUrl })
       setUser(result.user)
       setProfile(result.profile)
       return result

@@ -1,7 +1,46 @@
+import { useEffect, useMemo, useState } from 'react'
 import heroImage from '../assets/bolao-hero.png'
 import { COPY } from '../content/copy.js'
+import { useAuth } from '../context/useAuth.js'
+import { canEditPrediction, subscribeGames, subscribeRanking, subscribeUserPredictions } from '../services/bolaoService.js'
+import { formatDateTime } from '../utils/format.js'
+import { getGameStageLabel, getSportIcon } from '../utils/game.js'
+import PendingGuessBanner from './PendingGuessBanner.jsx'
 
 export default function Home({ onNavigate }) {
+  const { user, isParticipant } = useAuth()
+  const [games, setGames] = useState([])
+  const [ranking, setRanking] = useState([])
+  const [predictions, setPredictions] = useState([])
+
+  useEffect(() => {
+    return subscribeGames(setGames)
+  }, [])
+
+  useEffect(() => {
+    if (!user) {
+      return () => {}
+    }
+
+    return subscribeRanking(setRanking)
+  }, [user])
+
+  useEffect(() => {
+    if (!user || !isParticipant) {
+      return () => {}
+    }
+
+    return subscribeUserPredictions(user.uid, setPredictions)
+  }, [isParticipant, user])
+
+  const openGames = useMemo(() => games.filter((game) => canEditPrediction(game)), [games])
+  const activeRanking = user ? ranking : []
+  const activePredictions = user && isParticipant ? predictions : []
+  const predictionsByGame = useMemo(() => new Map(activePredictions.map((prediction) => [prediction.gameId, prediction])), [activePredictions])
+  const pendingGuessCount = isParticipant ? openGames.filter((game) => !predictionsByGame.has(game.id)).length : Number.NaN
+  const nextGames = openGames.slice(0, 3)
+  const topRanking = activeRanking.slice(0, 3)
+
   return (
     <section className="home-page">
       <div className="hero-section" style={{ '--hero-image': `url(${heroImage})` }}>
@@ -27,6 +66,70 @@ export default function Home({ onNavigate }) {
           ))}
         </div>
       </div>
+
+      <section className="live-command-strip" aria-label="Destaques do bolão">
+        <article>
+          <span className="live-dot" aria-hidden="true" />
+          <small>Agora no bolão</small>
+          <strong>Palpites abertos com prazo visível</strong>
+        </article>
+        <article>
+          <span className="live-dot live-dot-cyan" aria-hidden="true" />
+          <small>Ranking</small>
+          <strong>Classificação recalculada ao finalizar placares</strong>
+        </article>
+        <article>
+          <span className="live-dot live-dot-dark" aria-hidden="true" />
+          <small>Master</small>
+          <strong>Chaveamentos e jogos em lote no mesmo painel</strong>
+        </article>
+      </section>
+
+      <PendingGuessBanner count={pendingGuessCount} onNavigate={onNavigate} />
+
+      <section className="home-event-panel" aria-label="Resumo do bolão">
+        <article className="home-next-games">
+          <span className="eyebrow">Próximos jogos</span>
+          {nextGames.length ? (
+            nextGames.map((game) => (
+              <button type="button" key={game.id} onClick={() => onNavigate(user ? 'jogos' : 'login')}>
+                <span aria-hidden="true">{getSportIcon(game.esporteNome)}</span>
+                <strong>{game.timeA} x {game.timeB}</strong>
+                <small>
+                  {getGameStageLabel(game)} | {formatDateTime(game.dataHora)}
+                </small>
+              </button>
+            ))
+          ) : (
+            <p>Nenhum jogo aberto no momento.</p>
+          )}
+        </article>
+        <article className="home-ranking-preview">
+          <span className="eyebrow">Top 3</span>
+          {topRanking.length ? (
+            topRanking.map((participant, index) => (
+              <span key={participant.id}>
+                <strong>
+                  {index + 1}º {participant.nome || participant.email}
+                </strong>
+                <small>{participant.pontos || 0} pts</small>
+              </span>
+            ))
+          ) : (
+            <p>{user ? 'Ranking ainda sem participantes.' : 'Entre para ver o ranking dos participantes.'}</p>
+          )}
+        </article>
+        <article className="home-metric-card">
+          <span>Participantes</span>
+          <strong>{user ? activeRanking.length : '-'}</strong>
+          <small>{user ? 'No ranking atual' : 'Disponível após login'}</small>
+        </article>
+        <article className="home-metric-card">
+          <span>Palpites abertos</span>
+          <strong>{openGames.length}</strong>
+          <small>Jogos disponíveis agora</small>
+        </article>
+      </section>
 
       <div className="home-grid">
         {COPY.home.cards.map((card) => (

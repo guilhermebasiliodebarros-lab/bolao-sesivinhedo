@@ -1,11 +1,30 @@
 import { useEffect, useRef, useState } from 'react'
 import { formatPoints } from '../utils/format.js'
 
+const PODIUM_MEDALS = ['🥇', '🥈', '🥉']
+
+function getAvatarLabel(participant) {
+  return String(participant.nome || participant.email || 'P').trim().charAt(0).toLocaleUpperCase('pt-BR') || 'P'
+}
+
+function ParticipantAvatar({ participant, podium = false }) {
+  const className = podium ? 'participant-avatar podium-avatar' : 'participant-avatar'
+
+  if (participant.avatarUrl) {
+    return <img className={className} src={participant.avatarUrl} alt="" loading="lazy" />
+  }
+
+  return (
+    <span className={className} aria-hidden="true">
+      {getAvatarLabel(participant)}
+    </span>
+  )
+}
+
 export default function RankingTable({ ranking }) {
   const [movingIds, setMovingIds] = useState(new Set())
   const previousPositionsRef = useRef(new Map())
   const topThree = ranking.slice(0, 3)
-  const medals = ['1º', '2º', '3º']
 
   useEffect(() => {
     const previousPositions = previousPositionsRef.current
@@ -56,7 +75,12 @@ export default function RankingTable({ ranking }) {
               }
               key={participant.id}
             >
-              <span>{medals[index]} lugar</span>
+              {index === 0 ? <div className="leader-ribbon">Líder atual</div> : null}
+              <span className="medal-badge">
+                <span aria-hidden="true">{PODIUM_MEDALS[index]}</span>
+                {index + 1}º lugar
+              </span>
+              <ParticipantAvatar participant={participant} podium />
               <strong>{participant.nome || participant.email}</strong>
               <small>{formatPoints(participant.pontos)} pts</small>
               <em>{getGapToNext(index)}</em>
@@ -86,7 +110,10 @@ export default function RankingTable({ ranking }) {
             key={participant.id}
           >
             <strong>{index + 1}º</strong>
-            <span>{participant.nome || participant.email}</span>
+            <span className="ranking-person">
+              <ParticipantAvatar participant={participant} />
+              <span>{participant.nome || participant.email}</span>
+            </span>
             <span>{formatPoints(participant.pontos)}</span>
             <span>{participant.acertosExatos || 0}</span>
             <span>{participant.acertosResultado || 0}</span>

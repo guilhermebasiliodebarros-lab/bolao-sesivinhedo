@@ -35,7 +35,7 @@ service cloud.firestore {
     }
 
     function userCannotChangeScoreOrRole() {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(["nome", "updatedAt"]);
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(["nome", "avatarUrl", "photoURL", "fotoUrl", "updatedAt"]);
     }
 
     function predictionCreatedByOwner() {

@@ -4,7 +4,7 @@ import { useAuth } from '../context/useAuth.js'
 
 export default function Cadastro({ onNavigate, onSuccess }) {
   const { register } = useAuth()
-  const [form, setForm] = useState({ nome: '', email: '', password: '' })
+  const [form, setForm] = useState({ nome: '', email: '', password: '', avatarUrl: '' })
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -65,6 +65,16 @@ export default function Cadastro({ onNavigate, onSuccess }) {
               placeholder={COPY.auth.cadastro.emailPlaceholder}
               autoComplete="email"
               required
+            />
+          </label>
+          <label>
+            Foto/avatar opcional
+            <input
+              type="url"
+              value={form.avatarUrl}
+              onChange={(event) => updateField('avatarUrl', event.target.value)}
+              placeholder="https://exemplo.com/sua-foto.jpg"
+              autoComplete="photo"
             />
           </label>
           <label>

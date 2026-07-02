@@ -1,9 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
-import { calculateGroupStandings, GAME_STATUS, STATUS_LABELS, subscribeGames } from '../services/bolaoService.js'
+import { useAuth } from '../context/useAuth.js'
+import {
+  calculateGroupStandings,
+  canEditPrediction,
+  GAME_STATUS,
+  STATUS_LABELS,
+  subscribeGames,
+  subscribeUserPredictions,
+} from '../services/bolaoService.js'
 import { formatDateTime } from '../utils/format.js'
 import { gameMatchesSearch, getGameStageLabel, getUniqueGamePhases, getUniqueGameSports } from '../utils/game.js'
 import EmptyState from './EmptyState.jsx'
 import LoadingState from './LoadingState.jsx'
+import PendingGuessBanner from './PendingGuessBanner.jsx'
 
 const ALL_ITEMS_FILTER = 'todos'
 
@@ -54,7 +63,9 @@ function getTournamentKnockoutGames(games) {
 }
 
 export default function Calendario({ onNavigate }) {
+  const { user, isParticipant } = useAuth()
   const [games, setGames] = useState([])
+  const [predictions, setPredictions] = useState([])
   const [sportFilter, setSportFilter] = useState(ALL_ITEMS_FILTER)
   const [phaseFilter, setPhaseFilter] = useState(ALL_ITEMS_FILTER)
   const [searchTerm, setSearchTerm] = useState('')
@@ -73,6 +84,14 @@ export default function Calendario({ onNavigate }) {
     return unsubscribe
   }, [])
 
+  useEffect(() => {
+    if (!user || !isParticipant) {
+      return () => {}
+    }
+
+    return subscribeUserPredictions(user.uid, setPredictions, setError)
+  }, [isParticipant, user])
+
   const sportOptions = useMemo(() => getUniqueGameSports(games), [games])
   const phaseOptions = useMemo(() => getUniqueGamePhases(games), [games])
   const visibleGames = useMemo(() => {
@@ -86,6 +105,18 @@ export default function Calendario({ onNavigate }) {
   }, [games, phaseFilter, searchTerm, sportFilter])
   const nextGames = visibleGames.filter((game) => game.status === GAME_STATUS.OPEN).slice(0, 3)
   const visibleTournaments = useMemo(() => groupGamesByTournament(visibleGames), [visibleGames])
+  const activePredictions = user && isParticipant ? predictions : []
+  const predictionsByGame = useMemo(() => new Map(activePredictions.map((prediction) => [prediction.gameId, prediction])), [activePredictions])
+  const pendingGuessCount = isParticipant ? games.filter((game) => canEditPrediction(game) && !predictionsByGame.has(game.id)).length : Number.NaN
+  const statusCounts = useMemo(
+    () => ({
+      total: visibleGames.length,
+      open: visibleGames.filter((game) => game.status === GAME_STATUS.OPEN).length,
+      closed: visibleGames.filter((game) => game.status === GAME_STATUS.CLOSED).length,
+      finished: visibleGames.filter((game) => game.status === GAME_STATUS.FINISHED).length,
+    }),
+    [visibleGames],
+  )
 
   if (loading) {
     return <LoadingState label="Montando calendário..." />
@@ -105,6 +136,27 @@ export default function Calendario({ onNavigate }) {
       </div>
 
       {error ? <div className="alert alert-error">{error}</div> : null}
+
+      <PendingGuessBanner count={pendingGuessCount} onNavigate={onNavigate} />
+
+      <section className="calendar-status-strip" aria-label="Resumo do calendário">
+        <span>
+          <strong>{statusCounts.total}</strong>
+          Jogos filtrados
+        </span>
+        <span>
+          <strong>{statusCounts.open}</strong>
+          Abertos
+        </span>
+        <span>
+          <strong>{statusCounts.closed}</strong>
+          Encerrados
+        </span>
+        <span>
+          <strong>{statusCounts.finished}</strong>
+          Finalizados
+        </span>
+      </section>
 
       {nextGames.length ? (
         <section className="calendar-highlight">
@@ -226,7 +278,7 @@ export default function Calendario({ onNavigate }) {
       {visibleGames.length ? (
         <div className="calendar-list">
           {visibleGames.map((game) => (
-            <article className="calendar-row" key={game.id}>
+            <article className={`calendar-row game-status-${game.status}`} key={game.id}>
               <div>
                 <span className={`status-badge status-${game.status}`}>{STATUS_LABELS[game.status] || game.status}</span>
                 <strong>{game.timeA} x {game.timeB}</strong>

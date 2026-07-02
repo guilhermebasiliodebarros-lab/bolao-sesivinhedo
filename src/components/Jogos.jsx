@@ -55,6 +55,17 @@ export default function Jogos({ onNavigate }) {
     [openGamesAll, predictionsByGame],
   )
   const allOpenGamesGuessed = Boolean(isParticipant && openGamesAll.length > 0 && pendingOpenGames.length === 0)
+  const gameCounts = useMemo(
+    () => ({
+      [ALL_ITEMS_FILTER]: games.length,
+      [GAME_STATUS.OPEN]: games.filter((game) => game.status === GAME_STATUS.OPEN).length,
+      [GAME_STATUS.CLOSED]: games.filter((game) => game.status === GAME_STATUS.CLOSED).length,
+      [GAME_STATUS.FINISHED]: games.filter((game) => game.status === GAME_STATUS.FINISHED).length,
+    }),
+    [games],
+  )
+  const guessedOpenGames = Math.max(openGamesAll.length - pendingOpenGames.length, 0)
+  const guessProgress = openGamesAll.length ? Math.round((guessedOpenGames / openGamesAll.length) * 100) : 0
 
   const sportOptions = useMemo(() => getUniqueGameSports(games), [games])
   const phaseOptions = useMemo(() => getUniqueGamePhases(games), [games])
@@ -114,6 +125,39 @@ export default function Jogos({ onNavigate }) {
 
       {error ? <div className="alert alert-error">{error}</div> : null}
 
+      <section className="match-center-panel" aria-label="Resumo dos jogos">
+        <div>
+          <span className="eyebrow">Central de jogos</span>
+          <h2>{pendingOpenGames.length ? `${pendingOpenGames.length} palpite(s) pendente(s)` : 'Nenhum palpite pendente'}</h2>
+          <p>
+            {openGamesAll.length
+              ? `${guessedOpenGames} de ${openGamesAll.length} jogo(s) aberto(s) já têm palpite.`
+              : 'Quando novos jogos abrirem, eles aparecem aqui com prazo e contagem regressiva.'}
+          </p>
+          <div className="progress-track" aria-label={`Progresso dos palpites ${guessProgress}%`}>
+            <span style={{ width: `${guessProgress}%` }} />
+          </div>
+        </div>
+        <div className="quick-stat-grid" aria-label="Contadores de jogos">
+          <span>
+            <strong>{games.length}</strong>
+            Total
+          </span>
+          <span>
+            <strong>{gameCounts[GAME_STATUS.OPEN]}</strong>
+            Abertos
+          </span>
+          <span>
+            <strong>{pendingOpenGames.length}</strong>
+            Faltam
+          </span>
+          <span>
+            <strong>{gameCounts[GAME_STATUS.FINISHED]}</strong>
+            Finalizados
+          </span>
+        </div>
+      </section>
+
       {allOpenGamesGuessed ? (
         <div className="completion-banner" role="status">
           <div>
@@ -136,7 +180,7 @@ export default function Jogos({ onNavigate }) {
             aria-pressed={activeFilter === filter.id}
             onClick={() => setActiveFilter(filter.id)}
           >
-            {filter.label}
+            {filter.label} ({gameCounts[filter.id] || 0})
           </button>
         ))}
       </div>

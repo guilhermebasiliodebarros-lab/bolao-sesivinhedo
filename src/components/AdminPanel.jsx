@@ -1822,12 +1822,12 @@ export default function AdminPanel({ onNavigate }) {
             {saving ? 'Salvando...' : form.id ? 'Salvar alterações' : 'Cadastrar jogo'}
           </button>
           <button
-            className="btn btn-outline"
+            className="btn btn-danger expired-action-button"
             type="button"
             disabled={saving || !expiredOpenGames.length}
             onClick={handleCloseExpiredGames}
           >
-            Encerrar vencidos
+            Encerrar todos vencidos ({expiredOpenGames.length})
           </button>
           <button
             className="btn btn-outline"

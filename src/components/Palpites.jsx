@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/useAuth.js'
-import { GAME_STATUS, subscribeGames, subscribeUserPredictions } from '../services/bolaoService.js'
+import { canEditPrediction, GAME_STATUS, subscribeGames, subscribeUserPredictions } from '../services/bolaoService.js'
 import { formatPoints } from '../utils/format.js'
 import { getGameStageLabel } from '../utils/game.js'
 import EmptyState from './EmptyState.jsx'
 import LoadingState from './LoadingState.jsx'
+import PendingGuessBanner from './PendingGuessBanner.jsx'
 
 export default function Palpites({ onNavigate }) {
   const { user, isParticipant } = useAuth()
@@ -36,6 +37,8 @@ export default function Palpites({ onNavigate }) {
   const gamesById = useMemo(() => {
     return new Map(games.map((game) => [game.id, game]))
   }, [games])
+  const predictionsByGame = useMemo(() => new Map(predictions.map((prediction) => [prediction.gameId, prediction])), [predictions])
+  const pendingGuessCount = games.filter((game) => canEditPrediction(game) && !predictionsByGame.has(game.id)).length
 
   if (!user) {
     return null
@@ -75,6 +78,8 @@ export default function Palpites({ onNavigate }) {
       </div>
 
       {error ? <div className="alert alert-error">{error}</div> : null}
+
+      <PendingGuessBanner count={pendingGuessCount} onNavigate={onNavigate} />
 
       {predictions.length ? (
         <div className="prediction-list">
