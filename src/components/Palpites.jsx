@@ -50,10 +50,10 @@ export default function Palpites({ onNavigate }) {
       <section className="page-shell">
         <EmptyState
           title="Area exclusiva de participantes"
-          description="Usuarios master administram o sistema e nao registram palpites."
+          description="Usuários master administram o sistema e não registram palpites."
           action={
             <button className="btn btn-primary" type="button" onClick={() => onNavigate('admin')}>
-              Ir para administracao
+              Ir para administração
             </button>
           }
         />
@@ -65,9 +65,9 @@ export default function Palpites({ onNavigate }) {
     <section className="page-shell">
       <div className="page-heading with-actions">
         <div>
-          <span className="eyebrow">Historico</span>
+          <span className="eyebrow">Histórico</span>
           <h1>Meus palpites</h1>
-          <p>Veja os placares enviados e a pontuacao recebida em jogos finalizados.</p>
+          <p>Veja os placares enviados e a pontuação recebida em jogos finalizados.</p>
         </div>
         <button className="btn btn-primary" type="button" onClick={() => onNavigate('jogos')}>
           Novo palpite
@@ -84,7 +84,7 @@ export default function Palpites({ onNavigate }) {
             return (
               <article className="prediction-row" key={prediction.id}>
                 <div>
-                  <span>{game ? `${game.timeA} x ${game.timeB}` : 'Jogo nao encontrado'}</span>
+                  <span>{game ? `${game.timeA} x ${game.timeB}` : 'Jogo não encontrado'}</span>
                   {game ? <span>{`${game.esporteNome} | ${getGameStageLabel(game)}`}</span> : null}
                   <strong>
                     Palpite: {prediction.palpiteA} x {prediction.palpiteB}

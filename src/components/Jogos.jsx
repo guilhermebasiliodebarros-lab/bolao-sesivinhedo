@@ -97,7 +97,7 @@ export default function Jogos({ onNavigate }) {
       <div className="page-heading with-actions">
         <div>
           <span className="eyebrow">Jogos e palpites</span>
-          <h1>Calendario de jogos</h1>
+          <h1>Calendário de jogos</h1>
           <p>Envie ou altere seus palpites enquanto o status estiver aberto.</p>
         </div>
         {!user ? (
@@ -105,11 +105,11 @@ export default function Jogos({ onNavigate }) {
             Entrar para palpitar
           </button>
         ) : null}
-        {isMaster ? <span className="master-route-note">Logado como usuario master</span> : null}
+        {isMaster ? <span className="master-route-note">Logado como usuário master</span> : null}
       </div>
 
       {user && !isParticipant && !isMaster ? (
-        <div className="alert alert-error">Seu perfil ainda nao esta liberado para palpites.</div>
+        <div className="alert alert-error">Seu perfil ainda não está liberado para palpites.</div>
       ) : null}
 
       {error ? <div className="alert alert-error">{error}</div> : null}
@@ -118,8 +118,8 @@ export default function Jogos({ onNavigate }) {
         <div className="completion-banner" role="status">
           <div>
             <span className="eyebrow">Tudo em dia</span>
-            <strong>Voce ja palpitou todos os jogos abertos.</strong>
-            <p>Agora e so acompanhar os resultados e esperar a organizacao liberar novos jogos.</p>
+            <strong>Você já palpitou todos os jogos abertos.</strong>
+            <p>Agora é só acompanhar os resultados e esperar a organização liberar novos jogos.</p>
           </div>
           <button className="btn btn-outline btn-small" type="button" onClick={() => onNavigate('palpites')}>
             Ver meus palpites
@@ -200,7 +200,7 @@ export default function Jogos({ onNavigate }) {
         <div className="game-grid">
           <EmptyState
             title="Nenhum jogo encontrado"
-            description="Quando o administrador cadastrar jogos, eles aparecem nesta pagina."
+            description="Quando o administrador cadastrar jogos, eles aparecem nesta página."
             action={
               <button className="btn btn-outline" type="button" onClick={() => onNavigate('classificacao')}>
                 Ver ranking

@@ -88,16 +88,16 @@ export default function Calendario({ onNavigate }) {
   const visibleTournaments = useMemo(() => groupGamesByTournament(visibleGames), [visibleGames])
 
   if (loading) {
-    return <LoadingState label="Montando calendario..." />
+    return <LoadingState label="Montando calendário..." />
   }
 
   return (
     <section className="page-shell calendar-page">
       <div className="page-heading with-actions">
         <div>
-          <span className="eyebrow">Calendario publico</span>
-          <h1>Jogos do bolao</h1>
-          <p>Acompanhe horarios, fases e confrontos antes de entrar para palpitar.</p>
+          <span className="eyebrow">Calendário público</span>
+          <h1>Jogos do bolão</h1>
+          <p>Acompanhe horários, fases e confrontos antes de entrar para palpitar.</p>
         </div>
         <button className="btn btn-primary" type="button" onClick={() => onNavigate('login')}>
           Entrar para palpitar
@@ -109,7 +109,7 @@ export default function Calendario({ onNavigate }) {
       {nextGames.length ? (
         <section className="calendar-highlight">
           <div>
-            <span className="eyebrow">Proximos jogos</span>
+            <span className="eyebrow">Próximos jogos</span>
             <strong>{nextGames[0].timeA} x {nextGames[0].timeB}</strong>
             <p>{nextGames[0].esporteNome} | {getGameStageLabel(nextGames[0])} | {formatDateTime(nextGames[0].dataHora)}</p>
           </div>
@@ -237,7 +237,7 @@ export default function Calendario({ onNavigate }) {
           ))}
         </div>
       ) : (
-        <EmptyState title="Sem jogos no calendario" description="Assim que o admin criar jogos, eles aparecem aqui." />
+        <EmptyState title="Sem jogos no calendário" description="Assim que o admin criar jogos, eles aparecem aqui." />
       )}
     </section>
   )

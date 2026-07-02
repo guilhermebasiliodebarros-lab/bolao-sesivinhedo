@@ -64,7 +64,7 @@ export default function Classificacao({ onNavigate }) {
   const loading = Object.values(loadingState).some(Boolean)
 
   if (loading) {
-    return <LoadingState label="Atualizando classificacao..." />
+    return <LoadingState label="Atualizando classificação..." />
   }
 
   return (
@@ -72,8 +72,8 @@ export default function Classificacao({ onNavigate }) {
       <div className="page-heading with-actions">
         <div>
           <span className="eyebrow">{rankingTitle}</span>
-          <h1>Classificacao</h1>
-          <p>Ordenada por maior pontuacao, com desempate por acertos exatos e acertos de resultado.</p>
+          <h1>Classificação</h1>
+          <p>Ordenada por maior pontuação, com desempate por acertos exatos e acertos de resultado.</p>
         </div>
         <button className="btn btn-primary" type="button" onClick={() => onNavigate('jogos')}>
           Ver jogos
@@ -107,7 +107,7 @@ export default function Classificacao({ onNavigate }) {
       {ranking.length ? (
         <>
           {activeRanking !== GENERAL_RANKING && !hasRankingData ? (
-            <div className="alert alert-error">Este esporte ainda nao tem jogos finalizados com pontuacao.</div>
+            <div className="alert alert-error">Este esporte ainda não tem jogos finalizados com pontuação.</div>
           ) : null}
           <RankingTable ranking={visibleRanking} />
         </>

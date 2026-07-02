@@ -1,11 +1,13 @@
+import { COPY } from '../content/copy.js'
+
 export default function Footer() {
   return (
     <footer className="site-footer">
       <div>
-        <strong>Bolao SESI Vinhedo</strong>
-        <span>Palpites, ranking e emocao em tempo real para o evento escolar.</span>
+        <strong>{COPY.brand.name}</strong>
+        <span>{COPY.footer.tagline}</span>
       </div>
-      <span>Resultado 3 pts | Gol parcial x1,2 | Placar exato x1,4</span>
+      <span>{COPY.footer.scoring}</span>
     </footer>
   )
 }

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { COPY } from '../content/copy.js'
 import { useAuth } from '../context/useAuth.js'
 
 export default function Login({ onNavigate, onSuccess }) {
@@ -16,7 +17,7 @@ export default function Login({ onNavigate, onSuccess }) {
     setMessage('')
 
     if (!form.email || !form.password) {
-      setMessage('Informe e-mail ou login e senha para entrar.')
+      setMessage(COPY.auth.login.missingFields)
       return
     }
 
@@ -34,29 +35,29 @@ export default function Login({ onNavigate, onSuccess }) {
   return (
     <section className="auth-page">
       <div className="auth-card">
-        <span className="eyebrow">Acesso seguro</span>
-        <h1>Entrar no bolao</h1>
-        <p>Participantes entram no painel do bolao. Usuarios master entram direto na administracao.</p>
+        <span className="eyebrow">{COPY.auth.login.eyebrow}</span>
+        <h1>{COPY.auth.login.title}</h1>
+        <p>{COPY.auth.login.description}</p>
 
         <form className="form-stack" onSubmit={handleSubmit}>
           <label>
-            E-mail ou login
+            {COPY.auth.login.emailLabel}
             <input
               type="text"
               value={form.email}
               onChange={(event) => updateField('email', event.target.value)}
-              placeholder="voce@email.com ou suporte"
+              placeholder={COPY.auth.login.emailPlaceholder}
               autoComplete="username"
               required
             />
           </label>
           <label>
-            Senha
+            {COPY.auth.login.passwordLabel}
             <input
               type="password"
               value={form.password}
               onChange={(event) => updateField('password', event.target.value)}
-              placeholder="Sua senha"
+              placeholder={COPY.auth.login.passwordPlaceholder}
               autoComplete="current-password"
               required
             />
@@ -65,14 +66,14 @@ export default function Login({ onNavigate, onSuccess }) {
           {message ? <div className="alert alert-error">{message}</div> : null}
 
           <button className="btn btn-primary btn-full" type="submit" disabled={loading}>
-            {loading ? 'Entrando...' : 'Entrar'}
+            {loading ? COPY.auth.login.loading : COPY.actions.entrar}
           </button>
         </form>
 
         <p className="auth-switch">
-          Ainda nao participa?
+          {COPY.auth.login.switchText}
           <button type="button" onClick={() => onNavigate('cadastro')}>
-            Criar cadastro
+            {COPY.actions.criarCadastro}
           </button>
         </p>
       </div>

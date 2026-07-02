@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "npm run check:copy",
     "build": "vite build",
+    "check:copy": "node scripts/check-copy-accents.js",
     "lint": "eslint .",
     "preview": "vite preview"
   },

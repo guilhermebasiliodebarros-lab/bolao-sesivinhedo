@@ -37,7 +37,7 @@ const LEGACY_STATUS = {
 
 function ensureDb() {
   if (!db) {
-    throw new Error('Configure o Firebase para usar autenticacao e Firestore.')
+    throw new Error('Configure o Firebase para usar autenticação e Firestore.')
   }
 
   return db
@@ -216,7 +216,7 @@ export function normalizeGame(id, data = {}) {
     id,
     sportId: data.sportId || data.esporteId || '',
     esporteNome: data.esporteNome || data.sportName || data.nomeEsporte || 'Geral',
-    fase: data.fase || data.phase || 'Fase unica',
+    fase: data.fase || data.phase || 'Fase única',
     rodada: data.rodada || data.round || '',
     timeA: data.timeA || data.teamA || '',
     timeB: data.timeB || data.teamB || '',
@@ -259,19 +259,19 @@ export function normalizePrediction(id, data = {}) {
 
 export function toFriendlyError(error) {
   if (!error?.code) {
-    return error?.message || 'Nao foi possivel concluir a acao.'
+    return error?.message || 'Não foi possível concluir a ação.'
   }
 
   const messages = {
-    'auth/email-already-in-use': 'Este e-mail ja esta cadastrado.',
-    'auth/invalid-email': 'Informe um e-mail valido.',
-    'auth/invalid-credential': 'E-mail ou senha invalidos.',
-    'auth/user-not-found': 'E-mail ou senha invalidos.',
-    'auth/wrong-password': 'E-mail ou senha invalidos.',
+    'auth/email-already-in-use': 'Este e-mail já está cadastrado.',
+    'auth/invalid-email': 'Informe um e-mail válido.',
+    'auth/invalid-credential': 'E-mail ou senha inválidos.',
+    'auth/user-not-found': 'E-mail ou senha inválidos.',
+    'auth/wrong-password': 'E-mail ou senha inválidos.',
     'auth/weak-password': 'Use uma senha com pelo menos 6 caracteres.',
-    'failed-precondition': 'Crie o indice solicitado pelo Firebase ou ajuste a consulta.',
-    'permission-denied': 'Sem permissao para acessar estes dados.',
-    unavailable: 'Sem conexao com o Firebase. Tente novamente em instantes.',
+    'failed-precondition': 'Crie o índice solicitado pelo Firebase ou ajuste a consulta.',
+    'permission-denied': 'Sem permissão para acessar estes dados.',
+    unavailable: 'Sem conexão com o Firebase. Tente novamente em instantes.',
   }
 
   return messages[error.code] || error.message || 'Ocorreu um erro inesperado.'
@@ -331,15 +331,15 @@ function normalizeGameInput(game) {
   }
 
   if (Number.isNaN(gameDate.getTime())) {
-    throw new Error('Informe uma data valida para o jogo.')
+    throw new Error('Informe uma data válida para o jogo.')
   }
 
   if (Number.isNaN(deadlineDate.getTime())) {
-    throw new Error('Informe uma data valida para o limite dos palpites.')
+    throw new Error('Informe uma data válida para o limite dos palpites.')
   }
 
   if (deadlineDate.getTime() > gameDate.getTime()) {
-    throw new Error('O limite dos palpites nao pode ser depois do horario do jogo.')
+    throw new Error('O limite dos palpites não pode ser depois do horário do jogo.')
   }
 
   if (placarA !== null && (!Number.isInteger(placarA) || placarA < 0)) {
@@ -705,7 +705,7 @@ export async function deleteSport(sportId) {
   const relatedGamesSnapshot = await getDocs(query(collection(firestore, 'games'), where('sportId', '==', sportId)))
 
   if (!relatedGamesSnapshot.empty) {
-    throw new Error('Este esporte tem jogos cadastrados e nao pode ser excluido.')
+    throw new Error('Este esporte tem jogos cadastrados e não pode ser excluído.')
   }
 
   await deleteDoc(doc(firestore, 'sports', sportId))
@@ -859,7 +859,7 @@ export async function deleteGame(gameId) {
   const predictionsSnapshot = await getDocs(query(collection(firestore, 'predictions'), where('gameId', '==', gameId)))
 
   if (!predictionsSnapshot.empty) {
-    throw new Error('Este jogo ja tem palpites e nao pode ser excluido.')
+    throw new Error('Este jogo já tem palpites e não pode ser excluído.')
   }
 
   await deleteDoc(doc(firestore, 'games', gameId))
@@ -875,15 +875,15 @@ export async function savePrediction({ user, profile, game, palpiteA, palpiteB, 
   }
 
   if (!isRankingProfile(profile)) {
-    throw new Error('Usuario master nao registra palpites.')
+    throw new Error('Usuário master não registra palpites.')
   }
 
   if (game.status !== GAME_STATUS.OPEN) {
-    throw new Error('Este jogo nao esta aberto para edicao de palpites.')
+    throw new Error('Este jogo não está aberto para edição de palpites.')
   }
 
   if (!isPredictionDeadlineOpen(game)) {
-    throw new Error('O prazo para palpites deste jogo ja encerrou.')
+    throw new Error('O prazo para palpites deste jogo já encerrou.')
   }
 
   const predictionRef = doc(firestore, 'predictions', `${user.uid}_${game.id}`)

@@ -5,7 +5,7 @@ export default function RankingTable({ ranking }) {
   const [movingIds, setMovingIds] = useState(new Set())
   const previousPositionsRef = useRef(new Map())
   const topThree = ranking.slice(0, 3)
-  const medals = ['1o', '2o', '3o']
+  const medals = ['1º', '2º', '3º']
 
   useEffect(() => {
     const previousPositions = previousPositionsRef.current
@@ -36,17 +36,17 @@ export default function RankingTable({ ranking }) {
     const next = Number(ranking[index + 1]?.pontos || 0)
 
     if (!ranking[index + 1]) {
-      return 'Ultimo listado'
+      return 'Último listado'
     }
 
     const gap = current - next
-    return gap > 0 ? `${formatPoints(gap)} pts a frente` : 'Empatado'
+    return gap > 0 ? `${formatPoints(gap)} pts à frente` : 'Empatado'
   }
 
   return (
     <div className="ranking-wrap">
       {topThree.length ? (
-        <div className="podium" aria-label="Podio dos tres primeiros colocados">
+        <div className="podium" aria-label="Pódio dos três primeiros colocados">
           {topThree.map((participant, index) => (
             <article
               className={
@@ -67,7 +67,7 @@ export default function RankingTable({ ranking }) {
 
       <div className="ranking-table">
         <div className="ranking-head">
-          <span>Posicao</span>
+          <span>Posição</span>
           <span>Nome</span>
           <span>Pontos</span>
           <span>Exatos</span>
@@ -85,7 +85,7 @@ export default function RankingTable({ ranking }) {
               .join(' ')}
             key={participant.id}
           >
-            <strong>{index + 1}o</strong>
+            <strong>{index + 1}º</strong>
             <span>{participant.nome || participant.email}</span>
             <span>{formatPoints(participant.pontos)}</span>
             <span>{participant.acertosExatos || 0}</span>

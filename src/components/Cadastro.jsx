@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { COPY } from '../content/copy.js'
 import { useAuth } from '../context/useAuth.js'
 
 export default function Cadastro({ onNavigate, onSuccess }) {
@@ -16,12 +17,12 @@ export default function Cadastro({ onNavigate, onSuccess }) {
     setMessage('')
 
     if (!form.nome.trim() || !form.email || !form.password) {
-      setMessage('Preencha nome, e-mail e senha.')
+      setMessage(COPY.auth.cadastro.missingFields)
       return
     }
 
     if (form.password.length < 6) {
-      setMessage('A senha precisa ter pelo menos 6 caracteres.')
+      setMessage(COPY.auth.cadastro.shortPassword)
       return
     }
 
@@ -39,40 +40,40 @@ export default function Cadastro({ onNavigate, onSuccess }) {
   return (
     <section className="auth-page">
       <div className="auth-card">
-        <span className="eyebrow">Novo participante</span>
-        <h1>Cadastrar conta</h1>
-        <p>Crie seu acesso para participar do Bolao SESI Vinhedo e acompanhar sua pontuacao.</p>
+        <span className="eyebrow">{COPY.auth.cadastro.eyebrow}</span>
+        <h1>{COPY.auth.cadastro.title}</h1>
+        <p>{COPY.auth.cadastro.description}</p>
 
         <form className="form-stack" onSubmit={handleSubmit}>
           <label>
-            Nome
+            {COPY.auth.cadastro.nameLabel}
             <input
               type="text"
               value={form.nome}
               onChange={(event) => updateField('nome', event.target.value)}
-              placeholder="Seu nome completo"
+              placeholder={COPY.auth.cadastro.namePlaceholder}
               autoComplete="name"
               required
             />
           </label>
           <label>
-            E-mail
+            {COPY.auth.cadastro.emailLabel}
             <input
               type="email"
               value={form.email}
               onChange={(event) => updateField('email', event.target.value)}
-              placeholder="voce@email.com"
+              placeholder={COPY.auth.cadastro.emailPlaceholder}
               autoComplete="email"
               required
             />
           </label>
           <label>
-            Senha
+            {COPY.auth.cadastro.passwordLabel}
             <input
               type="password"
               value={form.password}
               onChange={(event) => updateField('password', event.target.value)}
-              placeholder="Minimo de 6 caracteres"
+              placeholder={COPY.auth.cadastro.passwordPlaceholder}
               autoComplete="new-password"
               required
             />
@@ -81,14 +82,14 @@ export default function Cadastro({ onNavigate, onSuccess }) {
           {message ? <div className="alert alert-error">{message}</div> : null}
 
           <button className="btn btn-primary btn-full" type="submit" disabled={loading}>
-            {loading ? 'Cadastrando...' : 'Cadastrar'}
+            {loading ? COPY.auth.cadastro.loading : COPY.actions.cadastrar}
           </button>
         </form>
 
         <p className="auth-switch">
-          Ja tem conta?
+          {COPY.auth.cadastro.switchText}
           <button type="button" onClick={() => onNavigate('login')}>
-            Entrar
+            {COPY.actions.entrar}
           </button>
         </p>
       </div>

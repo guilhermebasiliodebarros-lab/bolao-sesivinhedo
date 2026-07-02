@@ -79,8 +79,8 @@ export default function Dashboard({ onNavigate }) {
     return (
       <section className="page-shell">
         <EmptyState
-          title="Perfil de participante nao encontrado"
-          description="Esta area e exclusiva para contas com role user e participaRanking true."
+          title="Perfil de participante não encontrado"
+          description="Esta área é exclusiva para contas com role user e participaRanking true."
         />
       </section>
     )
@@ -90,19 +90,42 @@ export default function Dashboard({ onNavigate }) {
     <section className="page-shell">
       <div className="page-heading">
         <span className="eyebrow">Painel do participante</span>
-        <h1>Ola, {profile?.nome || user.displayName || 'participante'}</h1>
-        <p>Acompanhe seus palpites, pontuacao e proximos jogos disponiveis.</p>
+        <h1>Olá, {profile?.nome || user.displayName || 'participante'}</h1>
+        <p>Acompanhe seus palpites, pontuação e próximos jogos disponíveis.</p>
       </div>
 
       {error ? <div className="alert alert-error">{error}</div> : null}
 
+      <section className={pendingOpenGames.length ? 'participant-home-callout' : 'participant-home-callout is-complete'}>
+        <div>
+          <span className="eyebrow">Sua rodada</span>
+          <h2>
+            {pendingOpenGames.length
+              ? `Faltam ${pendingOpenGames.length} palpite${pendingOpenGames.length === 1 ? '' : 's'}`
+              : 'Tudo em dia por aqui'}
+          </h2>
+          <p>
+            {pendingOpenGames.length
+              ? 'Complete seus palpites abertos para não perder pontos quando os jogos fecharem.'
+              : 'Você já enviou todos os palpites disponíveis no momento.'}
+          </p>
+        </div>
+        <button
+          className={pendingOpenGames.length ? 'btn btn-primary' : 'btn btn-outline'}
+          type="button"
+          onClick={() => onNavigate(pendingOpenGames.length ? 'jogos' : 'palpites')}
+        >
+          {pendingOpenGames.length ? 'Palpitar agora' : 'Ver palpites'}
+        </button>
+      </section>
+
       <div className="stats-grid">
         <article className="stat-card">
-          <span>Pontuacao atual</span>
+          <span>Pontuação atual</span>
           <strong>{formatPoints(profile?.pontos)}</strong>
         </article>
         <article className="stat-card">
-          <span>Posicao</span>
+          <span>Posição</span>
           <strong>{participantPosition || '-'}</strong>
         </article>
         <article className="stat-card">
@@ -125,10 +148,10 @@ export default function Dashboard({ onNavigate }) {
 
       <section className="dashboard-spotlight">
         <article>
-          <span className="eyebrow">{allOpenGamesGuessed ? 'Tudo em dia' : 'Proximo foco'}</span>
+          <span className="eyebrow">{allOpenGamesGuessed ? 'Tudo em dia' : 'Próximo foco'}</span>
           {allOpenGamesGuessed ? (
             <>
-              <strong>Voce ja palpitou todos os jogos abertos</strong>
+              <strong>Você já palpitou todos os jogos abertos</strong>
               <small>Quando novos jogos forem liberados, eles entram aqui automaticamente.</small>
               <button className="btn btn-outline btn-small" type="button" onClick={() => onNavigate('palpites')}>
                 Ver palpites
@@ -149,12 +172,12 @@ export default function Dashboard({ onNavigate }) {
           ) : (
             <>
               <strong>Nenhum jogo aberto agora</strong>
-              <small>Assim que a organizacao liberar novos jogos, eles aparecem aqui.</small>
+              <small>Assim que a organização liberar novos jogos, eles aparecem aqui.</small>
             </>
           )}
         </article>
         <article>
-          <span className="eyebrow">Ultimo ganho</span>
+          <span className="eyebrow">Último ganho</span>
           {latestScore ? (
             <>
               <strong>{formatPoints(latestScore.pontos)} ponto(s)</strong>
@@ -176,7 +199,7 @@ export default function Dashboard({ onNavigate }) {
       <div className="split-layout">
         <section>
           <div className="section-heading">
-            <h2>Proximos jogos</h2>
+            <h2>Próximos jogos</h2>
             <button className="link-button" type="button" onClick={() => onNavigate('jogos')}>
               Ver todos
             </button>
@@ -196,10 +219,10 @@ export default function Dashboard({ onNavigate }) {
             ) : (
               <EmptyState
                 title="Nenhum jogo aberto agora"
-                description="Assim que a organizacao liberar novos jogos, eles aparecem aqui."
+                description="Assim que a organização liberar novos jogos, eles aparecem aqui."
                 action={
                   <button className="btn btn-outline" type="button" onClick={() => onNavigate('classificacao')}>
-                    Ver classificacao
+                    Ver classificação
                   </button>
                 }
               />
@@ -235,7 +258,7 @@ export default function Dashboard({ onNavigate }) {
               })
             ) : (
               <EmptyState
-                title="Voce ainda nao palpitou"
+                title="Você ainda não palpitou"
                 description="Entre nos jogos abertos para enviar seu primeiro placar."
                 action={
                   <button className="btn btn-primary" type="button" onClick={() => onNavigate('jogos')}>
@@ -247,7 +270,7 @@ export default function Dashboard({ onNavigate }) {
           </div>
 
           <div className="section-heading dashboard-history-title">
-            <h2>Historico de pontuacao</h2>
+            <h2>Histórico de pontuação</h2>
           </div>
           <div className="mini-list">
             {scoredHistory.length ? (

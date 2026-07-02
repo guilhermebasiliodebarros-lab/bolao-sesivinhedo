@@ -25,7 +25,7 @@ function ConfigNotice() {
 
   return (
     <div className="config-notice" role="status">
-      <strong>Firebase pendente:</strong> configure as variaveis{' '}
+      <strong>Firebase pendente:</strong> configure as variáveis{' '}
       {missingFirebaseConfig.map((item) => firebaseEnvNames[item]).join(', ')}{' '}
       no ambiente para liberar login, cadastro, Firestore e ranking em tempo real.
     </div>

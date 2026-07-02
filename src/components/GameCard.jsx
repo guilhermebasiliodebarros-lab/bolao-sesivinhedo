@@ -10,7 +10,7 @@ import {
 } from '../services/bolaoService.js'
 import { formatDateTime, formatPoints, formatTimeRemaining, minutesUntil } from '../utils/format.js'
 import { getGameStageLabel, getSportVisualClass } from '../utils/game.js'
-import { calculateGuessScore, getScoreTypeLabel, hasFinalScore } from '../utils/scoring.js'
+import { POINTS, calculateGuessScore, getScoreTypeLabel, hasFinalScore } from '../utils/scoring.js'
 
 export default function GameCard({ game, existingPrediction, existingGuess, compact = false, onGuessSaved, onNavigate }) {
   const { user, profile, isParticipant, isMaster } = useAuth()
@@ -30,8 +30,22 @@ export default function GameCard({ game, existingPrediction, existingGuess, comp
   const result = prediction ? calculateGuessScore(game, prediction) : null
   const palpiteA = draft?.palpiteA ?? prediction?.palpiteA ?? ''
   const palpiteB = draft?.palpiteB ?? prediction?.palpiteB ?? ''
+  const predictionPreview = palpiteA !== '' && palpiteB !== '' ? `${palpiteA} x ${palpiteB}` : null
+  const scoringRuleText = `Resultado ${formatPoints(POINTS.RESULT)} pts | Gol parcial ${formatPoints(
+    POINTS.RESULT * POINTS.PARTIAL_SCORE_MULTIPLIER,
+  )} pts | Placar exato ${formatPoints(POINTS.RESULT * POINTS.EXACT_SCORE_MULTIPLIER)} pts`
+  const cardClassName = [
+    'game-card',
+    compact ? 'is-compact' : '',
+    getSportVisualClass(game.esporteNome),
+    `game-status-${game.status}`,
+    isDeadlineUrgent ? 'is-deadline-urgent' : '',
+    !deadlineOpen ? 'is-deadline-closed' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
   const lockedMessage = isMaster
-    ? 'Usuario master nao participa do bolao.'
+    ? 'Usuário master não participa do bolão.'
     : game.status === GAME_STATUS.OPEN && !deadlineOpen
       ? `Prazo encerrado em ${formatDateTime(deadline)}.`
       : user
@@ -62,7 +76,7 @@ export default function GameCard({ game, existingPrediction, existingGuess, comp
     }
 
     if (!isParticipant) {
-      setMessage('Usuario master nao registra palpites.')
+      setMessage('Usuário master não registra palpites.')
       return
     }
 
@@ -81,7 +95,7 @@ export default function GameCard({ game, existingPrediction, existingGuess, comp
   }
 
   return (
-    <article className={compact ? `game-card is-compact ${getSportVisualClass(game.esporteNome)}` : `game-card ${getSportVisualClass(game.esporteNome)}`}>
+    <article className={cardClassName}>
       <span className="sport-illustration" aria-hidden="true" />
       {savedFeedback ? (
         <div className="prediction-save-burst" role="status">
@@ -93,7 +107,7 @@ export default function GameCard({ game, existingPrediction, existingGuess, comp
         <span>{getGameStageLabel(game)}</span>
         <span className={`status-badge status-${game.status}`}>{STATUS_LABELS[game.status]}</span>
         <span>Jogo: {formatDateTime(game.dataHora)}</span>
-        <span>Palpites ate: {formatDateTime(deadline)}</span>
+        <span>Palpites até: {formatDateTime(deadline)}</span>
       </div>
 
       <div
@@ -105,7 +119,7 @@ export default function GameCard({ game, existingPrediction, existingGuess, comp
           .filter(Boolean)
           .join(' ')}
       >
-        <span>{deadlineOpen ? (isDeadlineUrgent ? 'Ultimos minutos' : 'Contagem regressiva') : 'Palpites encerrados'}</span>
+        <span>{deadlineOpen ? (isDeadlineUrgent ? 'Últimos minutos' : 'Contagem regressiva') : 'Palpites encerrados'}</span>
         <strong>{countdownLabel}</strong>
       </div>
 
@@ -130,7 +144,12 @@ export default function GameCard({ game, existingPrediction, existingGuess, comp
                 {formatPoints(result.points)} ponto{result.points === 1 ? '' : 's'}
               </strong>
             </small>
-          ) : null}
+          ) : (
+            <small className="score-detail score-preview">
+              <span>{predictionPreview ? `Previsão para ${predictionPreview}` : 'Regra de pontuação'}</span>
+              <strong>{scoringRuleText}</strong>
+            </small>
+          )}
         </div>
       ) : null}
 
@@ -173,6 +192,13 @@ export default function GameCard({ game, existingPrediction, existingGuess, comp
           ) : null}
         </div>
       )}
+
+      {canEdit && !prediction ? (
+        <div className="score-rule-preview">
+          <span>{predictionPreview ? `Previsão para ${predictionPreview}` : 'Regra de pontuação'}</span>
+          <strong>{scoringRuleText}</strong>
+        </div>
+      ) : null}
 
       {message ? (
         <div className={message.includes('sucesso') ? 'alert alert-success' : 'alert alert-error'}>{message}</div>

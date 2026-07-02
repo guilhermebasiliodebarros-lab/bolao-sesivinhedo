@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../context/useAuth.js'
 import {
   closeGame,
@@ -72,7 +72,7 @@ const ALL_GAMES_FILTER = 'todos'
 const ALL_PHASES_FILTER = 'todas'
 const EXPIRED_GAMES_FILTER = 'prazo-vencido'
 
-const PHASE_OPTIONS = ['Fase de grupos', 'Eliminatorias', 'Quartas de final', 'Semifinal', 'Final']
+const PHASE_OPTIONS = ['Fase de grupos', 'Eliminatórias', 'Quartas de final', 'Semifinal', 'Final']
 
 const BRACKET_FORMATS = [
   { value: 'grupos-mata-mata', label: 'Grupos + mata-mata' },
@@ -100,6 +100,11 @@ const ADMIN_TABS = [
   { id: 'jogos', label: 'Jogos' },
   { id: 'participantes', label: 'Participantes' },
   { id: 'palpites', label: 'Palpites' },
+]
+
+const GAME_TOOL_TABS = [
+  { id: 'bracket', label: 'Gerador de chaveamento' },
+  { id: 'manual', label: 'Criar jogo manual' },
 ]
 
 function createSeededRandom(seed) {
@@ -446,6 +451,7 @@ export default function AdminPanel({ onNavigate }) {
   const [gameFilter, setGameFilter] = useState(ALL_GAMES_FILTER)
   const [selectedSportId, setSelectedSportId] = useState('')
   const [activeAdminTab, setActiveAdminTab] = useState('esportes')
+  const [activeGameTool, setActiveGameTool] = useState('bracket')
   const [phaseFilter, setPhaseFilter] = useState(ALL_PHASES_FILTER)
   const [gameSearch, setGameSearch] = useState('')
   const [loadingState, setLoadingState] = useState({
@@ -457,7 +463,9 @@ export default function AdminPanel({ onNavigate }) {
   })
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+  const [bracketMessage, setBracketMessage] = useState('')
   const [confirmDialog, setConfirmDialog] = useState(null)
+  const bracketBuilderRef = useRef(null)
 
   useEffect(() => {
     const unsubscribeGames = subscribeGames(
@@ -633,8 +641,8 @@ export default function AdminPanel({ onNavigate }) {
     return (
       <section className="page-shell">
         <EmptyState
-          title="Area restrita"
-          description="Apenas usuarios master podem cadastrar jogos, finalizar placares e recalcular o ranking."
+          title="Área restrita"
+          description="Apenas usuários master podem cadastrar jogos, finalizar placares e recalcular o ranking."
           action={
             <button className="btn btn-primary" type="button" onClick={() => onNavigate('dashboard')}>
               Voltar ao painel
@@ -696,7 +704,7 @@ export default function AdminPanel({ onNavigate }) {
       id: game.id,
       sportId: game.sportId || '',
       esporteNome: game.esporteNome || sportNameById.get(game.sportId) || '',
-      fase: game.fase || 'Fase unica',
+      fase: game.fase || 'Fase única',
       rodada: game.rodada || '',
       timeA: game.timeA || '',
       timeB: game.timeB || '',
@@ -778,6 +786,54 @@ export default function AdminPanel({ onNavigate }) {
 
   const updateBracketField = (field, value) => {
     setBracketForm((current) => ({ ...current, [field]: value }))
+    setBracketMessage('')
+  }
+
+  const showBracketMessage = (nextMessage) => {
+    setMessage(nextMessage)
+    setBracketMessage(nextMessage)
+    window.setTimeout(() => {
+      bracketBuilderRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 0)
+  }
+
+  const shiftBracketSchedule = (minutes) => {
+    if (!bracketForm.dataInicial) {
+      showBracketMessage('Informe o horário do primeiro jogo antes de ajustar a agenda.')
+      return
+    }
+
+    setBracketForm((current) => ({
+      ...current,
+      dataInicial: addMinutesToDateTimeLocal(current.dataInicial, minutes),
+    }))
+    setBracketMessage('')
+  }
+
+  const setBracketStartTime = (time) => {
+    if (!time) {
+      return
+    }
+
+    const baseDate = bracketForm.dataInicial ? new Date(bracketForm.dataInicial) : new Date()
+
+    if (Number.isNaN(baseDate.getTime())) {
+      showBracketMessage('Informe uma data inicial válida antes de alterar o horário.')
+      return
+    }
+
+    const [hours, minutes] = time.split(':').map(Number)
+
+    baseDate.setHours(hours || 0, minutes || 0, 0, 0)
+    setBracketForm((current) => ({ ...current, dataInicial: toDateTimeLocalValue(baseDate) }))
+    setBracketMessage('')
+  }
+
+  const clearBracketPreview = () => {
+    setBracketGenerated(false)
+    setBracketTeamOrderIds([])
+    setBracketMessage('')
+    setMessage('')
   }
 
   const handleShuffleBracket = () => {
@@ -786,6 +842,7 @@ export default function AdminPanel({ onNavigate }) {
     setBracketSpinning(true)
     window.setTimeout(() => setBracketSpinning(false), 650)
     setMessage('')
+    setBracketMessage('')
   }
 
   const swapBracketTeam = (currentTeamId, nextTeamId) => {
@@ -807,6 +864,7 @@ export default function AdminPanel({ onNavigate }) {
       return order
     })
     setMessage('')
+    setBracketMessage('')
   }
 
   const runAdminAction = async (action, successMessage) => {
@@ -874,27 +932,27 @@ export default function AdminPanel({ onNavigate }) {
 
       await saveGame(gamePayload)
       resetForm()
-    }, 'Jogo salvo e classificacao recalculada.')
+    }, 'Jogo salvo e classificação recalculada.')
   }
 
   const handleGenerateBracket = async () => {
     if (!selectedSport) {
-      setMessage('Selecione um esporte antes de gerar chaveamento.')
+      showBracketMessage('Selecione um esporte antes de salvar o chaveamento.')
       return
     }
 
     if (selectedSportTeams.length < 2) {
-      setMessage('Cadastre pelo menos dois times para gerar confrontos.')
+      showBracketMessage('Cadastre pelo menos dois times para salvar o chaveamento.')
       return
     }
 
     if (!bracketForm.dataInicial) {
-      setMessage('Informe a data inicial dos jogos do chaveamento.')
+      showBracketMessage('Informe a data inicial dos jogos do chaveamento.')
       return
     }
 
     if (!bracketForm.tournamentName.trim()) {
-      setMessage('Informe o nome do torneio antes de salvar o chaveamento.')
+      showBracketMessage('Informe o nome do torneio antes de salvar o chaveamento.')
       return
     }
 
@@ -903,16 +961,20 @@ export default function AdminPanel({ onNavigate }) {
         (tournament) => tournament.nome.trim().toLocaleLowerCase('pt-BR') === bracketForm.tournamentName.trim().toLocaleLowerCase('pt-BR'),
       )
     ) {
-      setMessage('Ja existe um torneio com esse nome neste esporte.')
+      showBracketMessage('Já existe um torneio com esse nome neste esporte.')
       return
     }
 
     if (!bracketPreviewGames.length) {
-      setMessage('Nao ha confrontos para salvar com os times selecionados.')
+      showBracketMessage('Não há confrontos para salvar com os times selecionados.')
       return
     }
 
-    await runAdminAction(async () => {
+    setMessage('')
+    setBracketMessage('')
+
+    try {
+      setSaving(true)
       const tournamentId = `${selectedSport.id}-${Date.now()}`
 
       await saveGames(
@@ -940,7 +1002,12 @@ export default function AdminPanel({ onNavigate }) {
       setBracketGenerated(false)
       setBracketTeamOrderIds([])
       setBracketForm((current) => ({ ...current, tournamentName: '' }))
-    }, `${bracketPreviewGames.length} jogo(s) gerado(s) pelo chaveamento.`)
+      showBracketMessage(`${bracketPreviewGames.length} jogo(s) gerado(s) pelo chaveamento.`)
+    } catch (error) {
+      showBracketMessage(error.message || 'Não foi possível salvar o chaveamento.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleSportSubmit = async (event) => {
@@ -974,7 +1041,7 @@ export default function AdminPanel({ onNavigate }) {
   const handleDeleteSport = (sport) => {
     confirmAdminAction({
       title: 'Excluir esporte',
-      description: `Excluir ${sport.nome}? Esta acao so e permitida quando nao existem jogos cadastrados nesse esporte.`,
+      description: `Excluir ${sport.nome}? Esta ação só é permitida quando não existem jogos cadastrados nesse esporte.`,
       confirmLabel: 'Excluir esporte',
       action: async () => {
         await deleteSport(sport.id)
@@ -984,17 +1051,17 @@ export default function AdminPanel({ onNavigate }) {
           setForm(blankGame)
         }
       },
-      successMessage: 'Esporte excluido com sucesso.',
+      successMessage: 'Esporte excluído com sucesso.',
     })
   }
 
   const handleDeleteTeam = (team) => {
     confirmAdminAction({
       title: 'Excluir time',
-      description: `Excluir ${team.nome}? Jogos ja criados com esse nome continuam cadastrados.`,
+      description: `Excluir ${team.nome}? Jogos já criados com esse nome continuam cadastrados.`,
       confirmLabel: 'Excluir time',
       action: () => deleteTeam(team.id),
-      successMessage: 'Time excluido com sucesso.',
+      successMessage: 'Time excluído com sucesso.',
     })
   }
 
@@ -1010,7 +1077,7 @@ export default function AdminPanel({ onNavigate }) {
 
     confirmAdminAction({
       title: 'Finalizar jogo',
-      description: `Confirmar ${game.timeA} ${finalA} x ${finalB} ${game.timeB}? A pontuacao sera recalculada para todos os participantes.`,
+      description: `Confirmar ${game.timeA} ${finalA} x ${finalB} ${game.timeB}? A pontuação será recalculada para todos os participantes.`,
       confirmLabel: 'Finalizar jogo',
       action: () =>
         finalizeGame({
@@ -1019,19 +1086,19 @@ export default function AdminPanel({ onNavigate }) {
           placarB: finalB,
           user,
         }),
-      successMessage: 'Jogo finalizado e pontuacao recalculada.',
+      successMessage: 'Jogo finalizado e pontuação recalculada.',
     })
   }
 
   const handleCloseExpiredGames = () => {
     if (!expiredOpenGames.length) {
-      setMessage('Nao ha jogos abertos com prazo vencido.')
+      setMessage('Não há jogos abertos com prazo vencido.')
       return
     }
 
     confirmAdminAction({
       title: 'Encerrar jogos vencidos',
-      description: `Encerrar ${expiredOpenGames.length} jogo(s) aberto(s) cujo prazo de palpite ja passou? Participantes nao poderao mais editar esses palpites.`,
+      description: `Encerrar ${expiredOpenGames.length} jogo(s) aberto(s) cujo prazo de palpite já passou? Participantes não poderão mais editar esses palpites.`,
       confirmLabel: 'Encerrar vencidos',
       action: () => Promise.all(expiredOpenGames.map((game) => closeGame(game.id))),
       successMessage: `${expiredOpenGames.length} jogo(s) encerrado(s) com sucesso.`,
@@ -1039,10 +1106,10 @@ export default function AdminPanel({ onNavigate }) {
   }
 
   if (loading) {
-    return <LoadingState label="Carregando area administrativa..." />
+    return <LoadingState label="Carregando área administrativa..." />
   }
 
-  const isSuccessMessage = ['salvo', 'sucesso', 'recalculada', 'finalizado', 'encerrado', 'reaberto', 'excluido'].some(
+  const isSuccessMessage = ['salvo', 'sucesso', 'recalculada', 'finalizado', 'encerrado', 'reaberto', 'excluído'].some(
     (term) => message.toLowerCase().includes(term),
   )
 
@@ -1050,11 +1117,11 @@ export default function AdminPanel({ onNavigate }) {
     <section className="page-shell admin-page">
       <div className="page-heading with-actions">
         <div>
-          <span className="eyebrow">Administracao</span>
+          <span className="eyebrow">Administração</span>
           <h1>Painel master</h1>
-          <p>Crie jogos, encerre palpites, lance placares finais e acompanhe todos os dados do bolao.</p>
+          <p>Crie jogos, encerre palpites, lance placares finais e acompanhe todos os dados do bolão.</p>
         </div>
-        <span className="master-badge">Logado como usuario master</span>
+        <span className="master-badge">Logado como usuário master</span>
       </div>
 
       {message ? (
@@ -1284,7 +1351,7 @@ export default function AdminPanel({ onNavigate }) {
                         ))}
                       </div>
                     ) : (
-                      <EmptyState title="Sem times" description="Cadastre os times deste esporte para montar jogos mais rapido." />
+                      <EmptyState title="Sem times" description="Cadastre os times deste esporte para montar jogos mais rápido." />
                     )}
                   </section>
                 )
@@ -1304,9 +1371,29 @@ export default function AdminPanel({ onNavigate }) {
               <span className="eyebrow">Esporte selecionado</span>
               <strong>{selectedSport.nome}</strong>
             </div>
-            <button className="btn btn-outline btn-small" type="button" onClick={resetForm}>
+            <button
+              className="btn btn-outline btn-small"
+              type="button"
+              onClick={() => {
+                resetForm()
+                setActiveGameTool('manual')
+              }}
+            >
               Novo jogo em {selectedSport.nome}
             </button>
+          </div>
+
+          <div className="segmented-control admin-game-tool-tabs" aria-label="Modo de criação de jogos">
+            {GAME_TOOL_TABS.map((tab) => (
+              <button
+                className={activeGameTool === tab.id ? 'is-active' : ''}
+                type="button"
+                key={tab.id}
+                onClick={() => setActiveGameTool(tab.id)}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
 
       {selectedSportTournaments.length ? (
@@ -1317,7 +1404,7 @@ export default function AdminPanel({ onNavigate }) {
               <h2>{selectedSportTournaments.length} torneio(s) de {selectedSport.nome}</h2>
             </div>
             <button className="btn btn-outline btn-small" type="button" onClick={() => onNavigate('calendario')}>
-              Ver calendario publico
+              Ver calendário público
             </button>
           </div>
 
@@ -1377,15 +1464,20 @@ export default function AdminPanel({ onNavigate }) {
         </section>
       ) : null}
 
-      <section className={`bracket-builder ${bracketSpinning ? 'is-spinning' : ''}`}>
+      {activeGameTool === 'bracket' ? (
+      <section className={`bracket-builder ${bracketSpinning ? 'is-spinning' : ''}`} ref={bracketBuilderRef}>
         <div className="section-heading">
           <div>
             <span className="eyebrow">Gerador de chaveamento</span>
             <h2>Sortear confrontos</h2>
             <p>Use os times cadastrados, embaralhe como em sorteio e salve todos os jogos de uma vez.</p>
           </div>
-          <span>{bracketPreviewGames.length} jogo(s) na previa</span>
+          <span>{bracketPreviewGames.length} jogo(s) na prévia</span>
         </div>
+
+        {bracketMessage ? (
+          <div className={isSuccessMessage ? 'alert alert-success' : 'alert alert-error'}>{bracketMessage}</div>
+        ) : null}
 
         <div className="bracket-controls">
           <label>
@@ -1408,7 +1500,7 @@ export default function AdminPanel({ onNavigate }) {
             </select>
           </label>
           <label>
-            Fase padrao
+            Fase padrão
             <input
               type="text"
               value={bracketForm.fase}
@@ -1486,7 +1578,7 @@ export default function AdminPanel({ onNavigate }) {
                 />
               </label>
               <label>
-                Mata-mata comeca em
+                Mata-mata começa em
                 <select
                   value={bracketForm.mataMataInicial}
                   onChange={(event) => updateBracketField('mataMataInicial', event.target.value)}
@@ -1500,6 +1592,20 @@ export default function AdminPanel({ onNavigate }) {
               </label>
             </>
           ) : null}
+        </div>
+
+        <div className="bracket-bulk-actions" aria-label="Ajustes em lote da agenda">
+          <span>Ajustar datas em lote</span>
+          <button className="btn btn-outline btn-small" type="button" onClick={() => shiftBracketSchedule(-10)}>
+            -10 min em todos
+          </button>
+          <button className="btn btn-outline btn-small" type="button" onClick={() => shiftBracketSchedule(10)}>
+            +10 min em todos
+          </button>
+          <label>
+            Começar às
+            <input type="time" onChange={(event) => setBracketStartTime(event.target.value)} />
+          </label>
         </div>
 
         {selectedSportTeams.length >= 2 && bracketGenerated ? (
@@ -1546,9 +1652,9 @@ export default function AdminPanel({ onNavigate }) {
               ))}
               {tournamentPlan.byes.map((team) => (
                 <article className="bracket-match is-bye" key={`bye-${team}`}>
-                  <span>Sem adversario</span>
+                  <span>Sem adversário</span>
                   <strong>{team}</strong>
-                  <small>Ficou fora da configuracao atual de grupos/confrontos.</small>
+                  <small>Ficou fora da configuração atual de grupos/confrontos.</small>
                 </article>
               ))}
             </div>
@@ -1556,7 +1662,7 @@ export default function AdminPanel({ onNavigate }) {
         ) : selectedSportTeams.length >= 2 ? (
           <EmptyState
             title="Chaveamento em branco"
-            description="Clique em Sortear grupos/confrontos para montar a previa antes de salvar os jogos."
+            description="Clique em Sortear grupos/confrontos para montar a prévia antes de salvar os jogos."
           />
         ) : (
           <EmptyState
@@ -1565,7 +1671,7 @@ export default function AdminPanel({ onNavigate }) {
           />
         )}
 
-        <div className="form-actions">
+        <div className="form-actions bracket-action-bar">
           <button
             className="btn btn-outline"
             type="button"
@@ -1573,6 +1679,14 @@ export default function AdminPanel({ onNavigate }) {
             onClick={handleShuffleBracket}
           >
             {bracketGenerated ? 'Sortear de novo' : 'Sortear grupos/confrontos'}
+          </button>
+          <button
+            className="btn btn-outline"
+            type="button"
+            disabled={saving || !bracketGenerated}
+            onClick={clearBracketPreview}
+          >
+            Limpar
           </button>
           <button
             className="btn btn-primary"
@@ -1584,7 +1698,9 @@ export default function AdminPanel({ onNavigate }) {
           </button>
         </div>
       </section>
+      ) : null}
 
+      {activeGameTool === 'manual' ? (
       <form className="admin-form" onSubmit={handleSubmit}>
         <div className="section-heading">
           <h2>{form.id ? 'Editar jogo' : 'Criar novo jogo'}</h2>
@@ -1616,7 +1732,7 @@ export default function AdminPanel({ onNavigate }) {
               list="phase-options"
               value={form.fase}
               onChange={(event) => updateField('fase', event.target.value)}
-              placeholder="Ex.: Eliminatorias"
+              placeholder="Ex.: Eliminatórias"
               required
             />
           </label>
@@ -1672,7 +1788,7 @@ export default function AdminPanel({ onNavigate }) {
             )}
           </label>
           <label>
-            Data e horario
+            Data e horário
             <input
               type="datetime-local"
               value={form.dataHora}
@@ -1681,7 +1797,7 @@ export default function AdminPanel({ onNavigate }) {
             />
           </label>
           <label>
-            Palpites ate
+            Palpites até
             <input
               type="datetime-local"
               value={form.limitePalpites}
@@ -1703,7 +1819,7 @@ export default function AdminPanel({ onNavigate }) {
 
         <div className="form-actions">
           <button className="btn btn-primary" type="submit" disabled={saving}>
-            {saving ? 'Salvando...' : form.id ? 'Salvar alteracoes' : 'Cadastrar jogo'}
+            {saving ? 'Salvando...' : form.id ? 'Salvar alterações' : 'Cadastrar jogo'}
           </button>
           <button
             className="btn btn-outline"
@@ -1717,12 +1833,13 @@ export default function AdminPanel({ onNavigate }) {
             className="btn btn-outline"
             type="button"
             disabled={saving}
-            onClick={() => runAdminAction(recalculateScores, 'Pontuacao recalculada com sucesso.')}
+            onClick={() => runAdminAction(recalculateScores, 'Pontuação recalculada com sucesso.')}
           >
-            Recalcular pontuacao
+            Recalcular pontuação
           </button>
         </div>
       </form>
+      ) : null}
 
       <div className="admin-layout">
         <section className="admin-list">
@@ -1756,7 +1873,7 @@ export default function AdminPanel({ onNavigate }) {
             </label>
           </div>
 
-          <div className="admin-filter-bar" aria-label="Filtrar jogos por situacao">
+          <div className="admin-filter-bar" aria-label="Filtrar jogos por situação">
             <div className="segmented-control admin-segmented">
               {GAME_FILTERS.map((filter) => (
                 <button
@@ -1783,7 +1900,17 @@ export default function AdminPanel({ onNavigate }) {
                 const canSetFinalScore = game.status !== GAME_STATUS.OPEN
 
                 return (
-                  <article className="admin-game-row admin-game-row-detailed" key={game.id}>
+                  <article
+                    className={[
+                      'admin-game-row',
+                      'admin-game-row-detailed',
+                      `game-status-${game.status}`,
+                      deadlineExpired ? 'is-deadline-expired' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    key={game.id}
+                  >
                     <div>
                       <strong>
                         {game.timeA} x {game.timeB}
@@ -1791,7 +1918,7 @@ export default function AdminPanel({ onNavigate }) {
                       <span>{game.esporteNome}</span>
                       <span>{getGameStageLabel(game)}</span>
                       <span>{formatDateTime(game.dataHora)}</span>
-                      <span>Palpites ate {formatDateTime(game.limitePalpites)}</span>
+                      <span>Palpites até {formatDateTime(game.limitePalpites)}</span>
                       <span className={`status-badge status-${game.status}`}>{STATUS_LABELS[game.status]}</span>
                       {deadlineExpired ? <span className="status-badge status-expired">Prazo vencido</span> : null}
                     </div>
@@ -1861,7 +1988,7 @@ export default function AdminPanel({ onNavigate }) {
                         className="btn btn-ghost btn-small"
                         type="button"
                         disabled={saving || gamePredictions.length > 0}
-                        onClick={() => runAdminAction(() => deleteGame(game.id), 'Jogo excluido com sucesso.')}
+                        onClick={() => runAdminAction(() => deleteGame(game.id), 'Jogo excluído com sucesso.')}
                       >
                         Excluir
                       </button>
@@ -1880,7 +2007,7 @@ export default function AdminPanel({ onNavigate }) {
           ) : (
             <EmptyState
               title="Nenhum jogo neste esporte"
-              description="Use o formulario acima para criar o primeiro jogo deste esporte."
+              description="Use o formulário acima para criar o primeiro jogo deste esporte."
             />
           )}
         </section>
@@ -1917,7 +2044,7 @@ export default function AdminPanel({ onNavigate }) {
                 </article>
               ))
             ) : (
-              <EmptyState title="Sem participantes" description="Usuarios cadastrados aparecem aqui." />
+              <EmptyState title="Sem participantes" description="Usuários cadastrados aparecem aqui." />
             )}
           </div>
         </section>
@@ -1995,7 +2122,7 @@ export default function AdminPanel({ onNavigate }) {
           >
             <div className="confirm-modal-mark" aria-hidden="true" />
             <div className="confirm-modal-content">
-              <span className="eyebrow">Confirmacao</span>
+              <span className="eyebrow">Confirmação</span>
               <h2 id="confirm-modal-title">{confirmDialog.title}</h2>
               <p>{confirmDialog.description}</p>
             </div>
