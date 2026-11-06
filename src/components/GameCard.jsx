@@ -11,6 +11,8 @@ import {
 import { formatDateTime, formatPoints, formatTimeRemaining, minutesUntil } from '../utils/format.js'
 import { getGameStageLabel, getSportIcon, getSportVisualClass } from '../utils/game.js'
 import { POINTS, calculateGuessScore, getScoreTypeLabel, hasFinalScore } from '../utils/scoring.js'
+import { getMatchScore, getMatchState, MATCH_STATE } from '../utils/match.js'
+import MatchBadge from './MatchBadge.jsx'
 
 export default function GameCard({ game, existingPrediction, existingGuess, compact = false, onGuessSaved, onNavigate }) {
   const { user, profile, isParticipant, isMaster } = useAuth()
@@ -110,6 +112,7 @@ export default function GameCard({ game, existingPrediction, existingGuess, comp
           {game.esporteNome}
         </span>
         <span>{getGameStageLabel(game)}</span>
+        {getMatchState(game) === MATCH_STATE.LIVE ? <MatchBadge game={game} /> : null}
         <span className={`status-badge status-${game.status}`}>{STATUS_LABELS[game.status]}</span>
         <span>Jogo: {formatDateTime(game.dataHora)}</span>
         <span>Palpites até: {formatDateTime(deadline)}</span>
@@ -131,7 +134,7 @@ export default function GameCard({ game, existingPrediction, existingGuess, comp
       <div className="scoreboard">
         <strong>{game.timeA}</strong>
         <span className="score-display">
-          {game.status === GAME_STATUS.FINISHED && hasFinalScore(game) ? `${game.placarA} x ${game.placarB}` : 'x'}
+          {game.status === GAME_STATUS.FINISHED && hasFinalScore(game) ? `${game.placarA} x ${game.placarB}` : getMatchState(game) === MATCH_STATE.LIVE ? getMatchScore(game).join(' x ') : 'x'}
         </span>
         <strong>{game.timeB}</strong>
       </div>

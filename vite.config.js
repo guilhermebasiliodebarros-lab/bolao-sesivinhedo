@@ -3,7 +3,29 @@ import react from '@vitejs/plugin-react'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      name: 'validate-firebase-config',
+      configResolved(config) {
+        if (config.command !== 'build') return
+
+        const requiredFirebaseEnv = [
+          'VITE_FIREBASE_API_KEY',
+          'VITE_FIREBASE_AUTH_DOMAIN',
+          'VITE_FIREBASE_PROJECT_ID',
+          'VITE_FIREBASE_STORAGE_BUCKET',
+          'VITE_FIREBASE_MESSAGING_SENDER_ID',
+          'VITE_FIREBASE_APP_ID',
+        ]
+        const missing = requiredFirebaseEnv.filter((name) => !config.env[name]?.trim())
+
+        if (missing.length) {
+          throw new Error(`Configure o Firebase em .env.local antes de publicar. Faltam: ${missing.join(', ')}`)
+        }
+      },
+    },
+  ],
   build: {
     rollupOptions: {
       output: {

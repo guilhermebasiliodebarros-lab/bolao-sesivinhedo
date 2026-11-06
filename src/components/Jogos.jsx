@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/useAuth.js'
 import { canEditPrediction, GAME_STATUS, subscribeGames, subscribeUserPredictions } from '../services/bolaoService.js'
-import { gameMatchesSearch, getGameStageLabel, getUniqueGamePhases, getUniqueGameSports } from '../utils/game.js'
+import { gameMatchesSearch, getGameStageLabel, getUniqueGamePhases } from '../utils/game.js'
+import SportFilter from './SportFilter.jsx'
+import { getMatchState, MATCH_STATE } from '../utils/match.js'
 import EmptyState from './EmptyState.jsx'
 import GameCard from './GameCard.jsx'
 import LoadingState from './LoadingState.jsx'
@@ -10,8 +12,9 @@ const ALL_ITEMS_FILTER = 'all'
 
 const filters = [
   { id: ALL_ITEMS_FILTER, label: 'Todos' },
+  { id: 'ao-vivo', label: 'Ao vivo' },
   { id: GAME_STATUS.OPEN, label: 'Abertos' },
-  { id: GAME_STATUS.CLOSED, label: 'Encerrados' },
+  { id: GAME_STATUS.CLOSED, label: 'Palpites fechados' },
   { id: GAME_STATUS.FINISHED, label: 'Finalizados' },
 ]
 
@@ -55,23 +58,24 @@ export default function Jogos({ onNavigate }) {
     [openGamesAll, predictionsByGame],
   )
   const allOpenGamesGuessed = Boolean(isParticipant && openGamesAll.length > 0 && pendingOpenGames.length === 0)
+  const sportGames = useMemo(() => games.filter((game) => sportFilter === ALL_ITEMS_FILTER || game.sportId === sportFilter || game.esporteNome === sportFilter), [games, sportFilter])
   const gameCounts = useMemo(
     () => ({
-      [ALL_ITEMS_FILTER]: games.length,
-      [GAME_STATUS.OPEN]: games.filter((game) => game.status === GAME_STATUS.OPEN).length,
-      [GAME_STATUS.CLOSED]: games.filter((game) => game.status === GAME_STATUS.CLOSED).length,
-      [GAME_STATUS.FINISHED]: games.filter((game) => game.status === GAME_STATUS.FINISHED).length,
+      [ALL_ITEMS_FILTER]: sportGames.length,
+      'ao-vivo': sportGames.filter((game) => getMatchState(game) === MATCH_STATE.LIVE).length,
+      [GAME_STATUS.OPEN]: sportGames.filter((game) => game.status === GAME_STATUS.OPEN).length,
+      [GAME_STATUS.CLOSED]: sportGames.filter((game) => game.status === GAME_STATUS.CLOSED).length,
+      [GAME_STATUS.FINISHED]: sportGames.filter((game) => game.status === GAME_STATUS.FINISHED).length,
     }),
-    [games],
+    [sportGames],
   )
   const guessedOpenGames = Math.max(openGamesAll.length - pendingOpenGames.length, 0)
   const guessProgress = openGamesAll.length ? Math.round((guessedOpenGames / openGamesAll.length) * 100) : 0
 
-  const sportOptions = useMemo(() => getUniqueGameSports(games), [games])
   const phaseOptions = useMemo(() => getUniqueGamePhases(games), [games])
   const visibleGames = useMemo(() => {
     return games.filter((game) => {
-      const matchesStatus = activeFilter === ALL_ITEMS_FILTER || game.status === activeFilter
+      const matchesStatus = activeFilter === ALL_ITEMS_FILTER || (activeFilter === 'ao-vivo' ? getMatchState(game) === MATCH_STATE.LIVE : game.status === activeFilter)
       const matchesSport =
         sportFilter === ALL_ITEMS_FILTER || game.sportId === sportFilter || game.esporteNome === sportFilter
       const matchesPhase = phaseFilter === ALL_ITEMS_FILTER || game.fase === phaseFilter
@@ -144,7 +148,7 @@ export default function Jogos({ onNavigate }) {
             Total
           </span>
           <span>
-            <strong>{gameCounts[GAME_STATUS.OPEN]}</strong>
+            <strong>{games.filter((game) => game.status === GAME_STATUS.OPEN).length}</strong>
             Abertos
           </span>
           <span>
@@ -152,7 +156,7 @@ export default function Jogos({ onNavigate }) {
             Faltam
           </span>
           <span>
-            <strong>{gameCounts[GAME_STATUS.FINISHED]}</strong>
+            <strong>{games.filter((game) => game.status === GAME_STATUS.FINISHED).length}</strong>
             Finalizados
           </span>
         </div>
@@ -171,6 +175,8 @@ export default function Jogos({ onNavigate }) {
         </div>
       ) : null}
 
+      <SportFilter games={games} value={sportFilter} onChange={setSportFilter} allValue={ALL_ITEMS_FILTER} />
+
       <div className="segmented-control" role="tablist" aria-label="Filtro de jogos">
         {filters.map((filter) => (
           <button
@@ -185,7 +191,7 @@ export default function Jogos({ onNavigate }) {
         ))}
       </div>
 
-      <div className="public-filter-panel">
+      <div className="public-filter-panel public-filter-panel-compact">
         <label>
           Buscar
           <input
@@ -194,17 +200,6 @@ export default function Jogos({ onNavigate }) {
             onChange={(event) => setSearchTerm(event.target.value)}
             placeholder="Time, esporte, fase..."
           />
-        </label>
-        <label>
-          Esporte
-          <select value={sportFilter} onChange={(event) => setSportFilter(event.target.value)}>
-            <option value={ALL_ITEMS_FILTER}>Todos</option>
-            {sportOptions.map((sport) => (
-              <option value={sport.id} key={sport.id}>
-                {sport.nome}
-              </option>
-            ))}
-          </select>
         </label>
         <label>
           Fase

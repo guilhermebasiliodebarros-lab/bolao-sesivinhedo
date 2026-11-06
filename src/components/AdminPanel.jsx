@@ -15,6 +15,8 @@ import {
   saveGames,
   saveSport,
   saveTeam,
+  startGame,
+  updateLiveScore,
   STATUS_LABELS,
   subscribeAllPredictions,
   subscribeGames,
@@ -26,6 +28,9 @@ import { formatDateTime, formatPoints, toDateTimeLocalValue } from '../utils/for
 import { gameMatchesSearch, getGameStageLabel, getSportVisualClass, getUniqueGamePhases } from '../utils/game.js'
 import EmptyState from './EmptyState.jsx'
 import LoadingState from './LoadingState.jsx'
+import LiveControlPanel from './LiveControlPanel.jsx'
+import MatchBadge from './MatchBadge.jsx'
+import { getMatchState, MATCH_STATE } from '../utils/match.js'
 
 const blankGame = {
   sportId: '',
@@ -88,6 +93,7 @@ const KNOCKOUT_STARTS = [
 
 const GAME_FILTERS = [
   { value: ALL_GAMES_FILTER, label: 'Todos' },
+  { value: 'ao-vivo', label: 'Ao vivo' },
   { value: GAME_STATUS.OPEN, label: 'Abertos' },
   { value: EXPIRED_GAMES_FILTER, label: 'Prazo vencido' },
   { value: GAME_STATUS.CLOSED, label: 'Encerrados' },
@@ -98,6 +104,7 @@ const ADMIN_TABS = [
   { id: 'esportes', label: 'Esportes' },
   { id: 'times', label: 'Times' },
   { id: 'jogos', label: 'Jogos' },
+  { id: 'ao-vivo', label: 'Ao vivo / TV' },
   { id: 'participantes', label: 'Participantes' },
   { id: 'palpites', label: 'Palpites' },
 ]
@@ -465,7 +472,28 @@ export default function AdminPanel({ onNavigate }) {
   const [message, setMessage] = useState('')
   const [bracketMessage, setBracketMessage] = useState('')
   const [confirmDialog, setConfirmDialog] = useState(null)
+  const [editFocusRequest, setEditFocusRequest] = useState(null)
   const bracketBuilderRef = useRef(null)
+  const gameFormRef = useRef(null)
+  const sportFormRef = useRef(null)
+  const teamFormRef = useRef(null)
+
+  useEffect(() => {
+    if (!editFocusRequest) return
+
+    const frame = window.requestAnimationFrame(() => {
+      const editor = {
+        game: gameFormRef,
+        sport: sportFormRef,
+        team: teamFormRef,
+      }[editFocusRequest.section]?.current
+
+      editor?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      editor?.querySelector('input, select')?.focus({ preventScroll: true })
+    })
+
+    return () => window.cancelAnimationFrame(frame)
+  }, [editFocusRequest])
 
   useEffect(() => {
     const unsubscribeGames = subscribeGames(
@@ -589,7 +617,9 @@ export default function AdminPanel({ onNavigate }) {
   const filteredGames = useMemo(() => {
     let statusFilteredGames = selectedSportGames
 
-    if (gameFilter === EXPIRED_GAMES_FILTER) {
+    if (gameFilter === 'ao-vivo') {
+      statusFilteredGames = selectedSportGames.filter((game) => getMatchState(game) === MATCH_STATE.LIVE)
+    } else if (gameFilter === EXPIRED_GAMES_FILTER) {
       statusFilteredGames = expiredOpenGames
     } else if (gameFilter !== ALL_GAMES_FILTER) {
       statusFilteredGames = selectedSportGames.filter((game) => game.status === gameFilter)
@@ -604,6 +634,7 @@ export default function AdminPanel({ onNavigate }) {
   const gameFilterCounts = useMemo(
     () => ({
       [ALL_GAMES_FILTER]: selectedSportGames.length,
+      'ao-vivo': selectedSportGames.filter((game) => getMatchState(game) === MATCH_STATE.LIVE).length,
       [GAME_STATUS.OPEN]: selectedSportGames.filter((game) => game.status === GAME_STATUS.OPEN).length,
       [EXPIRED_GAMES_FILTER]: expiredOpenGames.length,
       [GAME_STATUS.CLOSED]: selectedSportGames.filter((game) => game.status === GAME_STATUS.CLOSED).length,
@@ -666,9 +697,9 @@ export default function AdminPanel({ onNavigate }) {
     }))
   }
 
-  const selectSport = (sport) => {
+  const selectSport = (sport, openTeams = true) => {
     setSelectedSportId(sport.id)
-    setActiveAdminTab('times')
+    if (openTeams) setActiveAdminTab('times')
     setGameFilter(ALL_GAMES_FILTER)
     setPhaseFilter(ALL_PHASES_FILTER)
     setGameSearch('')
@@ -698,24 +729,28 @@ export default function AdminPanel({ onNavigate }) {
   }
 
   const editGame = (game) => {
-    setSelectedSportId(game.sportId || '')
+    const sportId = game.sportId || sports.find((sport) => sport.nome === game.esporteNome)?.id || ''
+
+    setSelectedSportId(sportId)
     setActiveAdminTab('jogos')
+    setActiveGameTool('manual')
     setForm({
+      ...game,
       id: game.id,
-      sportId: game.sportId || '',
-      esporteNome: game.esporteNome || sportNameById.get(game.sportId) || '',
+      sportId,
+      esporteNome: game.esporteNome || sportNameById.get(sportId) || '',
       fase: game.fase || 'Fase única',
       rodada: game.rodada || '',
       timeA: game.timeA || '',
       timeB: game.timeB || '',
-      dataHora: game.dataHora || '',
-      limitePalpites: game.limitePalpites || game.dataHora || '',
+      dataHora: toDateTimeLocalValue(game.dataHora),
+      limitePalpites: toDateTimeLocalValue(game.limitePalpites || game.dataHora),
       placarA: game.placarA ?? '',
       placarB: game.placarB ?? '',
       status: game.status || GAME_STATUS.OPEN,
     })
     setMessage('')
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    setEditFocusRequest({ section: 'game' })
   }
 
   const resetForm = () => {
@@ -738,6 +773,7 @@ export default function AdminPanel({ onNavigate }) {
       nome: sport.nome,
     })
     setMessage('')
+    setEditFocusRequest({ section: 'sport' })
   }
 
   const resetSportForm = () => {
@@ -769,6 +805,7 @@ export default function AdminPanel({ onNavigate }) {
       categoria: team.categoria || '',
     })
     setMessage('')
+    setEditFocusRequest({ section: 'team' })
   }
 
   const resetTeamForm = () => {
@@ -1065,10 +1102,11 @@ export default function AdminPanel({ onNavigate }) {
     })
   }
 
-  const handleFinalize = async (game) => {
-    const draft = finalScores[game.id] || {}
-    const finalA = draft.placarA ?? game.placarA ?? ''
-    const finalB = draft.placarB ?? game.placarB ?? ''
+  const handleFinalize = async (game, scores) => {
+    const draft = scores || finalScores[game.id] || {}
+    const live = getMatchState(game) === MATCH_STATE.LIVE
+    const finalA = draft.placarA ?? (live ? game.liveScoreA : game.placarA) ?? ''
+    const finalB = draft.placarB ?? (live ? game.liveScoreB : game.placarB) ?? ''
 
     if (finalA === '' || finalB === '') {
       setMessage('Informe os dois placares antes de finalizar o jogo.')
@@ -1076,9 +1114,9 @@ export default function AdminPanel({ onNavigate }) {
     }
 
     confirmAdminAction({
-      title: 'Finalizar jogo',
+      title: live ? 'Encerrar partida' : 'Finalizar jogo',
       description: `Confirmar ${game.timeA} ${finalA} x ${finalB} ${game.timeB}? A pontuação será recalculada para todos os participantes.`,
-      confirmLabel: 'Finalizar jogo',
+      confirmLabel: live ? 'Encerrar e publicar resultado' : 'Finalizar jogo',
       action: () =>
         finalizeGame({
           gameId: game.id,
@@ -1121,7 +1159,7 @@ export default function AdminPanel({ onNavigate }) {
           <h1>Painel master</h1>
           <p>Crie jogos, encerre palpites, lance placares finais e acompanhe todos os dados do bolão.</p>
         </div>
-        <span className="master-badge">Logado como usuário master</span>
+        <div className="form-actions"><button className="btn btn-outline" type="button" onClick={() => onNavigate('tv')}>Abrir modo TV</button><span className="master-badge">Logado como usuário master</span></div>
       </div>
 
       {message ? (
@@ -1169,32 +1207,58 @@ export default function AdminPanel({ onNavigate }) {
         </article>
       </div>
 
-      <div className="admin-tabs segmented-control" aria-label="Areas do painel master">
+      <div className="admin-workspace">
+      <aside className="admin-navigation">
+        <div className="admin-navigation-heading">
+          <span className="eyebrow">Administração</span>
+          <h2>Gerenciar bolão</h2>
+        </div>
+      <nav className="admin-section-links" aria-label="Seções do painel master">
         {ADMIN_TABS.map((tab) => {
           const tabCount = {
             esportes: sports.length,
             times: selectedSport ? selectedSportTeams.length : teams.length,
             jogos: selectedSport ? selectedSportGames.length : games.length,
+            'ao-vivo': games.filter((game) => getMatchState(game) === MATCH_STATE.LIVE).length,
             participantes: participants.length,
             palpites: predictions.length,
           }[tab.id]
 
           return (
             <button
-              className={activeAdminTab === tab.id ? 'is-active' : ''}
+              className={activeAdminTab === tab.id ? 'admin-section-link is-active' : 'admin-section-link'}
               type="button"
               key={tab.id}
               aria-pressed={activeAdminTab === tab.id}
               onClick={() => setActiveAdminTab(tab.id)}
             >
-              {tab.label} ({tabCount})
+              <span>{tab.label}</span>
+              <span className="admin-section-count">{tabCount}</span>
+              <span className="navigation-chevron" aria-hidden="true">›</span>
             </button>
           )
         })}
-      </div>
+      </nav>
+      {selectedSport ? <p className="admin-navigation-context">Esporte selecionado<strong>{selectedSport.nome}</strong></p> : null}
+      </aside>
+      <div className="admin-workspace-content">
+
+      {['times', 'jogos', 'palpites'].includes(activeAdminTab) && sports.length ? (
+        <div className="admin-sport-switcher">
+          <label>Esporte para gerenciar
+            <select value={selectedSportId} onChange={(event) => { const sport = sports.find((item) => item.id === event.target.value); if (sport) selectSport(sport, false) }}>
+              <option value="" disabled>Escolha um esporte</option>
+              {sports.map((sport) => <option value={sport.id} key={sport.id}>{sport.nome} · {gameCountBySport.get(sport.id) || 0} jogo(s)</option>)}
+            </select>
+          </label>
+          <p>Cada esporte tem sua própria lista de times, torneios e jogos.</p>
+        </div>
+      ) : null}
+
+      {activeAdminTab === 'ao-vivo' ? <LiveControlPanel games={games} sports={sports} onFinish={handleFinalize} onNavigate={onNavigate} saving={saving} /> : null}
 
       {activeAdminTab === 'esportes' ? (
-      <form className="admin-form admin-sport-form" onSubmit={handleSportSubmit}>
+      <form className="admin-form admin-sport-form" ref={sportFormRef} onSubmit={handleSportSubmit}>
         <div className="section-heading">
           <h2>{sportForm.id ? 'Editar esporte' : 'Esportes'}</h2>
           <button className="btn btn-outline btn-small" type="button" onClick={resetSportForm}>
@@ -1258,7 +1322,7 @@ export default function AdminPanel({ onNavigate }) {
 
       {activeAdminTab === 'times' ? (
         <section className="admin-tab-panel">
-          <form className="admin-form admin-team-form" onSubmit={handleTeamSubmit}>
+          <form className="admin-form admin-team-form" ref={teamFormRef} onSubmit={handleTeamSubmit}>
             <div className="section-heading">
               <div>
                 <h2>{teamForm.id ? 'Editar time' : 'Times por esporte'}</h2>
@@ -1391,7 +1455,7 @@ export default function AdminPanel({ onNavigate }) {
                 key={tab.id}
                 onClick={() => setActiveGameTool(tab.id)}
               >
-                {tab.label}
+                {tab.id === 'manual' && form.id ? 'Editar jogo' : tab.label}
               </button>
             ))}
           </div>
@@ -1701,11 +1765,11 @@ export default function AdminPanel({ onNavigate }) {
       ) : null}
 
       {activeGameTool === 'manual' ? (
-      <form className="admin-form" onSubmit={handleSubmit}>
+      <form className="admin-form" ref={gameFormRef} onSubmit={handleSubmit}>
         <div className="section-heading">
           <h2>{form.id ? 'Editar jogo' : 'Criar novo jogo'}</h2>
           <button className="btn btn-outline btn-small" type="button" onClick={resetForm}>
-            Novo jogo
+            {form.id ? 'Cancelar edição' : 'Novo jogo'}
           </button>
         </div>
 
@@ -1750,6 +1814,9 @@ export default function AdminPanel({ onNavigate }) {
             {selectedSportTeams.length ? (
               <select value={form.timeA} onChange={(event) => updateField('timeA', event.target.value)} required>
                 <option value="">Selecione</option>
+                {form.timeA && !selectedSportTeams.some((team) => team.nome === form.timeA) ? (
+                  <option value={form.timeA}>{form.timeA}</option>
+                ) : null}
                 {selectedSportTeams.map((team) => (
                   <option value={team.nome} key={team.id}>
                     {team.nome}
@@ -1771,6 +1838,9 @@ export default function AdminPanel({ onNavigate }) {
             {selectedSportTeams.length ? (
               <select value={form.timeB} onChange={(event) => updateField('timeB', event.target.value)} required>
                 <option value="">Selecione</option>
+                {form.timeB && !selectedSportTeams.some((team) => team.nome === form.timeB) ? (
+                  <option value={form.timeB}>{form.timeB}</option>
+                ) : null}
                 {selectedSportTeams.map((team) => (
                   <option value={team.nome} key={team.id}>
                     {team.nome}
@@ -1898,6 +1968,8 @@ export default function AdminPanel({ onNavigate }) {
                 const draft = finalScores[game.id] || {}
                 const deadlineExpired = game.status === GAME_STATUS.OPEN && !isPredictionDeadlineOpen(game)
                 const canSetFinalScore = game.status !== GAME_STATUS.OPEN
+                const matchState = getMatchState(game)
+                const isLive = matchState === MATCH_STATE.LIVE
 
                 return (
                   <article
@@ -1919,6 +1991,7 @@ export default function AdminPanel({ onNavigate }) {
                       <span>{getGameStageLabel(game)}</span>
                       <span>{formatDateTime(game.dataHora)}</span>
                       <span>Palpites até {formatDateTime(game.limitePalpites)}</span>
+                      <MatchBadge game={game} />
                       <span className={`status-badge status-${game.status}`}>{STATUS_LABELS[game.status]}</span>
                       {deadlineExpired ? <span className="status-badge status-expired">Prazo vencido</span> : null}
                     </div>
@@ -1930,7 +2003,7 @@ export default function AdminPanel({ onNavigate }) {
                             type="number"
                             min="0"
                             step="1"
-                            value={draft.placarA ?? game.placarA ?? ''}
+                            value={draft.placarA ?? (isLive ? game.liveScoreA : game.placarA) ?? ''}
                             onChange={(event) => updateFinalScore(game.id, 'placarA', event.target.value)}
                           />
                         </label>
@@ -1940,7 +2013,7 @@ export default function AdminPanel({ onNavigate }) {
                             type="number"
                             min="0"
                             step="1"
-                            value={draft.placarB ?? game.placarB ?? ''}
+                            value={draft.placarB ?? (isLive ? game.liveScoreB : game.placarB) ?? ''}
                             onChange={(event) => updateFinalScore(game.id, 'placarB', event.target.value)}
                           />
                         </label>
@@ -1955,6 +2028,8 @@ export default function AdminPanel({ onNavigate }) {
                       <button className="btn btn-outline btn-small" type="button" onClick={() => editGame(game)}>
                         Editar
                       </button>
+                      {matchState === MATCH_STATE.SCHEDULED ? <button className="btn btn-primary btn-small" type="button" disabled={saving || Boolean(game.seedLabelA || game.seedLabelB)} onClick={() => runAdminAction(() => startGame(game.id), 'Partida iniciada ao vivo. Palpites bloqueados.')}>Iniciar jogo</button> : null}
+                      {isLive ? <button className="btn btn-outline btn-small" type="button" disabled={saving} onClick={() => runAdminAction(() => updateLiveScore({ gameId: game.id, placarA: draft.placarA ?? game.liveScoreA, placarB: draft.placarB ?? game.liveScoreB }), 'Placar ao vivo atualizado com sucesso.')}>Atualizar placar</button> : null}
                       {game.status === GAME_STATUS.OPEN ? (
                         <button
                           className="btn btn-outline btn-small"
@@ -1962,18 +2037,18 @@ export default function AdminPanel({ onNavigate }) {
                           disabled={saving}
                           onClick={() => runAdminAction(() => closeGame(game.id), 'Jogo encerrado para palpites.')}
                         >
-                          Encerrar
+                          Fechar palpites
                         </button>
-                      ) : (
+                      ) : !isLive ? (
                         <button
                           className="btn btn-outline btn-small"
                           type="button"
                           disabled={saving}
                           onClick={() => runAdminAction(() => reopenGame(game.id), 'Jogo reaberto para palpites.')}
                         >
-                          Reabrir
+                          Reabrir palpites
                         </button>
-                      )}
+                      ) : null}
                       {canSetFinalScore ? (
                         <button
                           className="btn btn-primary btn-small"
@@ -1981,13 +2056,14 @@ export default function AdminPanel({ onNavigate }) {
                           disabled={saving}
                           onClick={() => handleFinalize(game)}
                         >
-                          Finalizar
+                          {isLive ? 'Encerrar partida' : 'Finalizar'}
                         </button>
                       ) : null}
                       <button
                         className="btn btn-ghost btn-small"
                         type="button"
-                        disabled={saving || gamePredictions.length > 0}
+                        disabled={saving || gamePredictions.length > 0 || isLive}
+                        title={isLive ? 'Encerre a partida antes de excluir.' : undefined}
                         onClick={() => runAdminAction(() => deleteGame(game.id), 'Jogo excluído com sucesso.')}
                       >
                         Excluir
@@ -2110,6 +2186,9 @@ export default function AdminPanel({ onNavigate }) {
           </div>
         </section>
       ) : null}
+
+      </div>
+      </div>
 
       {confirmDialog ? (
         <div className="modal-backdrop" role="presentation" onClick={closeConfirmDialog}>

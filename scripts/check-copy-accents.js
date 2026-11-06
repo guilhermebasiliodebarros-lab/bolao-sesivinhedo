@@ -5,6 +5,7 @@ import process from 'node:process'
 const roots = ['README.md', 'index.html', 'src']
 const allowedExtensions = new Set(['.js', '.jsx', '.md', '.html'])
 const ignoredSnippets = [
+  /https?:\/\/[^\s"'<>`]+/g,
   /voce@email\.com/gi,
   /onNavigate\('[^']+'\)/g,
   /id: '[^']+'/g,

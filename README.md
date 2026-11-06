@@ -21,6 +21,8 @@ VITE_FIREBASE_APP_ID=
 
 As chaves reais ficam somente em `.env.local`; não coloque credenciais diretamente no código.
 
+O build exige todas essas variáveis e interrompe a publicação se alguma estiver ausente. O deploy do Hosting executa o build automaticamente para publicar a configuração atual.
+
 ## Primeiro usuário master
 
 1. Crie o usuário normalmente pela tela de cadastro ou pelo Firebase Authentication.
@@ -45,6 +47,22 @@ Status de jogo:
 - `encerrado`: palpites bloqueados, placar ainda não finalizado.
 - `finalizado`: placar lançado, palpites pontuados e ranking atualizado.
 
+## Esportes e partidas ao vivo
+
+O calendário e a página Jogos têm filtros por modalidade. No painel master, use **Esporte para gerenciar** para alternar entre as listas de jogos.
+
+Na aba **Ao vivo / TV**:
+
+1. Selecione uma partida e clique em **Iniciar jogo**. Os palpites desse jogo são fechados imediatamente.
+2. Use **Atualizar placar** para transmitir o placar parcial. Várias partidas podem acontecer ao mesmo tempo.
+3. Use **Encerrar partida** e confirme o placar final para publicar o resultado, avançar o chaveamento e recalcular o ranking.
+
+O início é controlado pela organização; o horário programado sozinho não marca uma partida como ao vivo. Jogos antigos continuam agendados até serem iniciados, ou aparecem como resultado se já estavam finalizados.
+
+## Modo TV
+
+Abra `https://bolao-sesivinhedo.web.app/#tv` ou use **Modo TV** no menu. A tela é pública e recebe os dados em tempo real, com partidas ao vivo, próximos horários e últimos resultados. O filtro por esporte, a rotação de páginas a cada 12 segundos e o botão **Tela cheia** ajudam na exibição em televisores. Sem conexão, a tela identifica que está exibindo os últimos dados recebidos.
+
 ## Regras do Firestore
 
 O arquivo `firestore.rules.example` traz uma base de segurança para impedir que participantes alterem `role`, pontuação ou dados de outros usuários. Revise no Firebase Console antes de publicar como `firestore.rules`.
@@ -56,6 +74,8 @@ npm install
 npm run dev
 npm run build
 ```
+
+Os testes de partidas usam um banco isolado em memória e não alteram o Firebase de produção. Para executá-los, use Node.js 24 e `npm test`.
 
 ## Publicação
 

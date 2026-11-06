@@ -6,6 +6,7 @@ import {
   getDocs,
   onSnapshot,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   Timestamp,
@@ -16,6 +17,7 @@ import {
 import { db } from './firebase.js'
 import { asNumberOrNull, toDate, toDateTimeLocalValue } from '../utils/format.js'
 import { calcularPontuacao, hasFinalScore } from '../utils/scoring.js'
+import { getMatchState, MATCH_STATE } from '../utils/match.js'
 
 export const GAME_STATUS = {
   OPEN: 'aberto',
@@ -25,7 +27,7 @@ export const GAME_STATUS = {
 
 export const STATUS_LABELS = {
   [GAME_STATUS.OPEN]: 'Aberto para palpites',
-  [GAME_STATUS.CLOSED]: 'Encerrado',
+  [GAME_STATUS.CLOSED]: 'Palpites encerrados',
   [GAME_STATUS.FINISHED]: 'Finalizado',
 }
 
@@ -226,6 +228,11 @@ export function normalizeGame(id, data = {}) {
     placarA: asNumberOrNull(data.placarA ?? data.finalScoreA),
     placarB: asNumberOrNull(data.placarB ?? data.finalScoreB),
     status: normalizeStatus(data.status),
+    liveStatus: getMatchState({ status: normalizeStatus(data.status), liveStatus: data.liveStatus }),
+    liveScoreA: asNumberOrNull(data.liveScoreA) ?? 0,
+    liveScoreB: asNumberOrNull(data.liveScoreB) ?? 0,
+    startedAt: data.startedAt || null,
+    endedAt: data.endedAt || null,
     tournamentId: data.tournamentId || '',
     tournamentName: data.tournamentName || data.nomeTorneio || '',
     groupName: data.groupName || '',
@@ -465,7 +472,7 @@ export function subscribeUserProfile(userId, onData, onError) {
   )
 }
 
-export function subscribeGames(onData, onError) {
+export function subscribeGames(onData, onError, onSync) {
   if (!db) {
     onData([])
     return () => {}
@@ -473,10 +480,12 @@ export function subscribeGames(onData, onError) {
 
   return onSnapshot(
     collection(db, 'games'),
+    { includeMetadataChanges: true },
     (snapshot) => {
       const games = snapshot.docs.map((item) => normalizeGame(item.id, item.data())).sort(sortByDate)
 
       onData(games)
+      onSync?.(!snapshot.metadata.fromCache)
     },
     (error) => onError?.(toFriendlyError(error)),
   )
@@ -596,9 +605,18 @@ export async function saveGame(game) {
   const payload = normalizeGameInput(game)
 
   if (game.id) {
-    await updateDoc(doc(firestore, 'games', game.id), {
-      ...payload,
-      updatedAt: serverTimestamp(),
+    const gameRef = doc(firestore, 'games', game.id)
+    await runTransaction(firestore, async (transaction) => {
+      const snapshot = await transaction.get(gameRef)
+      if (!snapshot.exists()) throw new Error('Jogo não encontrado.')
+      const current = normalizeGame(snapshot.id, snapshot.data())
+      transaction.update(gameRef, {
+        ...payload,
+        status: current.status,
+        placarA: current.placarA,
+        placarB: current.placarB,
+        updatedAt: serverTimestamp(),
+      })
     })
   } else {
     const gameRef = doc(collection(firestore, 'games'))
@@ -715,10 +733,12 @@ export async function deleteSport(sportId) {
 
 export async function closeGame(gameId) {
   const firestore = ensureDb()
-
-  await updateDoc(doc(firestore, 'games', gameId), {
-    status: GAME_STATUS.CLOSED,
-    updatedAt: serverTimestamp(),
+  const gameRef = doc(firestore, 'games', gameId)
+  await runTransaction(firestore, async (transaction) => {
+    const snapshot = await transaction.get(gameRef)
+    if (!snapshot.exists()) throw new Error('Jogo não encontrado.')
+    if (normalizeStatus(snapshot.data().status) === GAME_STATUS.FINISHED) throw new Error('Este jogo já foi finalizado.')
+    transaction.update(gameRef, { status: GAME_STATUS.CLOSED, updatedAt: serverTimestamp() })
   })
 
   await recalculateScores()
@@ -726,16 +746,64 @@ export async function closeGame(gameId) {
 
 export async function reopenGame(gameId) {
   const firestore = ensureDb()
-
-  await updateDoc(doc(firestore, 'games', gameId), {
-    status: GAME_STATUS.OPEN,
-    placarA: null,
-    placarB: null,
-    finalizadoPor: null,
-    updatedAt: serverTimestamp(),
+  const gameRef = doc(firestore, 'games', gameId)
+  await runTransaction(firestore, async (transaction) => {
+    const snapshot = await transaction.get(gameRef)
+    if (!snapshot.exists()) throw new Error('Jogo não encontrado.')
+    if (getMatchState(snapshot.data()) === MATCH_STATE.LIVE) {
+      throw new Error('Encerre a partida ao vivo antes de reabrir os palpites.')
+    }
+    transaction.update(gameRef, {
+      status: GAME_STATUS.OPEN,
+      liveStatus: MATCH_STATE.SCHEDULED,
+      liveScoreA: 0,
+      liveScoreB: 0,
+      startedAt: null,
+      endedAt: null,
+      placarA: null,
+      placarB: null,
+      finalizadoPor: null,
+      updatedAt: serverTimestamp(),
+    })
   })
 
   await recalculateScores()
+}
+
+export async function startGame(gameId) {
+  const firestore = ensureDb()
+  const gameRef = doc(firestore, 'games', gameId)
+  await runTransaction(firestore, async (transaction) => {
+    const snapshot = await transaction.get(gameRef)
+    if (!snapshot.exists()) throw new Error('Jogo não encontrado.')
+    const game = normalizeGame(snapshot.id, snapshot.data())
+    if (getMatchState(game) !== MATCH_STATE.SCHEDULED) throw new Error('Este jogo já foi iniciado ou finalizado.')
+    if (!game.timeA || !game.timeB) throw new Error('Defina os dois participantes antes de iniciar a partida.')
+    if (game.seedLabelA || game.seedLabelB) throw new Error('Defina os dois participantes antes de iniciar a partida.')
+    transaction.update(gameRef, {
+      status: GAME_STATUS.CLOSED,
+      liveStatus: MATCH_STATE.LIVE,
+      liveScoreA: 0,
+      liveScoreB: 0,
+      startedAt: serverTimestamp(),
+      endedAt: null,
+      updatedAt: serverTimestamp(),
+    })
+  })
+}
+
+export async function updateLiveScore({ gameId, placarA, placarB }) {
+  const firestore = ensureDb()
+  const liveScoreA = validateScore(placarA, 'o placar do Time A')
+  const liveScoreB = validateScore(placarB, 'o placar do Time B')
+  const gameRef = doc(firestore, 'games', gameId)
+  await runTransaction(firestore, async (transaction) => {
+    const snapshot = await transaction.get(gameRef)
+    if (!snapshot.exists() || getMatchState(snapshot.data()) !== MATCH_STATE.LIVE) {
+      throw new Error('Só é possível atualizar o placar de uma partida ao vivo.')
+    }
+    transaction.update(gameRef, { liveScoreA, liveScoreB, updatedAt: serverTimestamp() })
+  })
 }
 
 async function advanceGroupQualifiers(firestore, game) {
@@ -806,17 +874,25 @@ export async function finalizeGame({ gameId, placarA, placarB, user }) {
   const finalA = validateScore(placarA, 'o placar final do Time A')
   const finalB = validateScore(placarB, 'o placar final do Time B')
   const gameRef = doc(firestore, 'games', gameId)
-  const gameSnapshot = await getDoc(gameRef)
-  const game = gameSnapshot.exists() ? normalizeGame(gameSnapshot.id, gameSnapshot.data()) : null
-  const winner = finalA === finalB ? '' : finalA > finalB ? game?.timeA : game?.timeB
-
-  await updateDoc(gameRef, {
-    placarA: finalA,
-    placarB: finalB,
-    status: GAME_STATUS.FINISHED,
-    finalizadoPor: user?.uid || null,
-    updatedAt: serverTimestamp(),
+  const game = await runTransaction(firestore, async (transaction) => {
+    const snapshot = await transaction.get(gameRef)
+    if (!snapshot.exists()) throw new Error('Jogo não encontrado.')
+    const current = normalizeGame(snapshot.id, snapshot.data())
+    if (current.status === GAME_STATUS.OPEN) throw new Error('Inicie a partida ou encerre os palpites antes de finalizar.')
+    transaction.update(gameRef, {
+      placarA: finalA,
+      placarB: finalB,
+      liveScoreA: finalA,
+      liveScoreB: finalB,
+      liveStatus: MATCH_STATE.FINISHED,
+      endedAt: serverTimestamp(),
+      status: GAME_STATUS.FINISHED,
+      finalizadoPor: user?.uid || null,
+      updatedAt: serverTimestamp(),
+    })
+    return current
   })
+  const winner = finalA === finalB ? '' : finalA > finalB ? game?.timeA : game?.timeB
 
   if (winner) {
     const [slotASnapshot, slotBSnapshot] = await Promise.all([

@@ -15,8 +15,14 @@ const Home = lazy(() => import('./components/Home.jsx'))
 const Jogos = lazy(() => import('./components/Jogos.jsx'))
 const Login = lazy(() => import('./components/Login.jsx'))
 const Palpites = lazy(() => import('./components/Palpites.jsx'))
+const TVMode = lazy(() => import('./components/TVMode.jsx'))
 
 const protectedViews = ['dashboard', 'jogos', 'palpites', 'classificacao', 'admin']
+const allViews = ['home', 'calendario', 'login', 'cadastro', 'tv', ...protectedViews]
+const viewFromHash = () => {
+  const requested = window.location.hash.slice(1)
+  return allViews.includes(requested) ? requested : 'home'
+}
 
 function ConfigNotice() {
   if (isFirebaseConfigured) {
@@ -33,7 +39,7 @@ function ConfigNotice() {
 }
 
 function AppShell() {
-  const [view, setView] = useState('home')
+  const [view, setView] = useState(viewFromHash)
   const [theme, setTheme] = useState(() => {
     const storedTheme = window.localStorage.getItem('theme')
 
@@ -65,8 +71,15 @@ function AppShell() {
 
   const navigate = (nextView) => {
     setView(nextView)
+    window.location.hash = nextView
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
+
+  useEffect(() => {
+    const onHashChange = () => setView(viewFromHash())
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -111,6 +124,10 @@ function AppShell() {
     }
 
     return <Home onNavigate={navigate} />
+  }
+
+  if (activeView === 'tv') {
+    return <Suspense fallback={<div className="route-loading">Abrindo modo TV…</div>}><TVMode onNavigate={navigate} /></Suspense>
   }
 
   return (

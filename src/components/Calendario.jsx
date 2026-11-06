@@ -4,12 +4,14 @@ import {
   calculateGroupStandings,
   canEditPrediction,
   GAME_STATUS,
-  STATUS_LABELS,
   subscribeGames,
   subscribeUserPredictions,
 } from '../services/bolaoService.js'
 import { formatDateTime } from '../utils/format.js'
-import { gameMatchesSearch, getGameStageLabel, getUniqueGamePhases, getUniqueGameSports } from '../utils/game.js'
+import { gameMatchesSearch, getGameStageLabel, getUniqueGamePhases, groupGamesBySport } from '../utils/game.js'
+import { getMatchState, getMatchScore, MATCH_STATE } from '../utils/match.js'
+import MatchBadge from './MatchBadge.jsx'
+import SportFilter from './SportFilter.jsx'
 import EmptyState from './EmptyState.jsx'
 import LoadingState from './LoadingState.jsx'
 import PendingGuessBanner from './PendingGuessBanner.jsx'
@@ -92,7 +94,6 @@ export default function Calendario({ onNavigate }) {
     return subscribeUserPredictions(user.uid, setPredictions, setError)
   }, [isParticipant, user])
 
-  const sportOptions = useMemo(() => getUniqueGameSports(games), [games])
   const phaseOptions = useMemo(() => getUniqueGamePhases(games), [games])
   const visibleGames = useMemo(() => {
     return games.filter((game) => {
@@ -103,16 +104,16 @@ export default function Calendario({ onNavigate }) {
       return matchesSport && matchesPhase && gameMatchesSearch(game, searchTerm)
     })
   }, [games, phaseFilter, searchTerm, sportFilter])
-  const nextGames = visibleGames.filter((game) => game.status === GAME_STATUS.OPEN).slice(0, 3)
+  const sportGroups = useMemo(() => groupGamesBySport(visibleGames), [visibleGames])
+  const nextGames = visibleGames.filter((game) => getMatchState(game) === MATCH_STATE.SCHEDULED).slice(0, 3)
   const visibleTournaments = useMemo(() => groupGamesByTournament(visibleGames), [visibleGames])
-  const activePredictions = user && isParticipant ? predictions : []
-  const predictionsByGame = useMemo(() => new Map(activePredictions.map((prediction) => [prediction.gameId, prediction])), [activePredictions])
+  const predictionsByGame = useMemo(() => new Map((user && isParticipant ? predictions : []).map((prediction) => [prediction.gameId, prediction])), [isParticipant, predictions, user])
   const pendingGuessCount = isParticipant ? games.filter((game) => canEditPrediction(game) && !predictionsByGame.has(game.id)).length : Number.NaN
   const statusCounts = useMemo(
     () => ({
       total: visibleGames.length,
-      open: visibleGames.filter((game) => game.status === GAME_STATUS.OPEN).length,
-      closed: visibleGames.filter((game) => game.status === GAME_STATUS.CLOSED).length,
+      scheduled: visibleGames.filter((game) => getMatchState(game) === MATCH_STATE.SCHEDULED).length,
+      live: visibleGames.filter((game) => getMatchState(game) === MATCH_STATE.LIVE).length,
       finished: visibleGames.filter((game) => game.status === GAME_STATUS.FINISHED).length,
     }),
     [visibleGames],
@@ -130,14 +131,17 @@ export default function Calendario({ onNavigate }) {
           <h1>Jogos do bolão</h1>
           <p>Acompanhe horários, fases e confrontos antes de entrar para palpitar.</p>
         </div>
-        <button className="btn btn-primary" type="button" onClick={() => onNavigate('login')}>
-          Entrar para palpitar
-        </button>
+        <div className="form-actions">
+          <button className="btn btn-outline" type="button" onClick={() => onNavigate('tv')}>Abrir modo TV</button>
+          <button className="btn btn-primary" type="button" onClick={() => onNavigate('login')}>Entrar para palpitar</button>
+        </div>
       </div>
 
       {error ? <div className="alert alert-error">{error}</div> : null}
 
       <PendingGuessBanner count={pendingGuessCount} onNavigate={onNavigate} />
+
+      <SportFilter games={games} value={sportFilter} onChange={setSportFilter} allValue={ALL_ITEMS_FILTER} />
 
       <section className="calendar-status-strip" aria-label="Resumo do calendário">
         <span>
@@ -145,12 +149,12 @@ export default function Calendario({ onNavigate }) {
           Jogos filtrados
         </span>
         <span>
-          <strong>{statusCounts.open}</strong>
-          Abertos
+          <strong>{statusCounts.scheduled}</strong>
+          Agendados
         </span>
         <span>
-          <strong>{statusCounts.closed}</strong>
-          Encerrados
+          <strong>{statusCounts.live}</strong>
+          Ao vivo
         </span>
         <span>
           <strong>{statusCounts.finished}</strong>
@@ -175,7 +179,7 @@ export default function Calendario({ onNavigate }) {
         </section>
       ) : null}
 
-      <div className="public-filter-panel">
+      <div className="public-filter-panel public-filter-panel-compact">
         <label>
           Buscar
           <input
@@ -184,17 +188,6 @@ export default function Calendario({ onNavigate }) {
             onChange={(event) => setSearchTerm(event.target.value)}
             placeholder="Time, esporte, fase..."
           />
-        </label>
-        <label>
-          Esporte
-          <select value={sportFilter} onChange={(event) => setSportFilter(event.target.value)}>
-            <option value={ALL_ITEMS_FILTER}>Todos</option>
-            {sportOptions.map((sport) => (
-              <option value={sport.id} key={sport.id}>
-                {sport.nome}
-              </option>
-            ))}
-          </select>
         </label>
         <label>
           Fase
@@ -277,15 +270,21 @@ export default function Calendario({ onNavigate }) {
 
       {visibleGames.length ? (
         <div className="calendar-list">
-          {visibleGames.map((game) => (
-            <article className={`calendar-row game-status-${game.status}`} key={game.id}>
-              <div>
-                <span className={`status-badge status-${game.status}`}>{STATUS_LABELS[game.status] || game.status}</span>
-                <strong>{game.timeA} x {game.timeB}</strong>
-                <small>{game.esporteNome} | {getGameStageLabel(game)}</small>
-              </div>
-              <time>{formatDateTime(game.dataHora)}</time>
-            </article>
+          {sportGroups.map((group) => (
+            <section className="calendar-sport-group" key={group.id}>
+              <div className="section-heading"><h2>{group.nome}</h2><span>{group.games.length} jogo(s)</span></div>
+              {group.games.map((game) => (
+                <article className={`calendar-row game-status-${game.status}`} key={game.id}>
+                  <div>
+                    <MatchBadge game={game} />
+                    <strong>{game.timeA} x {game.timeB}</strong>
+                    <small>{getGameStageLabel(game)}</small>
+                  </div>
+                  {getMatchState(game) !== MATCH_STATE.SCHEDULED ? <strong className="calendar-score">{getMatchScore(game).join(' × ')}</strong> : null}
+                  <time>{formatDateTime(game.dataHora)}</time>
+                </article>
+              ))}
+            </section>
           ))}
         </div>
       ) : (

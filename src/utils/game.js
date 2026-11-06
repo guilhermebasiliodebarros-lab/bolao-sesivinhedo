@@ -42,6 +42,21 @@ export function getUniqueGameSports(games) {
   return [...sports.values()].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
 }
 
+export function matchesSport(game, sportId) {
+  return !sportId || game.sportId === sportId || game.esporteNome === sportId
+}
+
+export function groupGamesBySport(games) {
+  const groups = new Map()
+  games.forEach((game) => {
+    const id = game.sportId || game.esporteNome || 'geral'
+    const group = groups.get(id) || { id, nome: game.esporteNome || 'Geral', games: [] }
+    group.games.push(game)
+    groups.set(id, group)
+  })
+  return [...groups.values()].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+}
+
 export function getSportVisualClass(sportName) {
   const normalized = normalizeFilterText(sportName)
 
