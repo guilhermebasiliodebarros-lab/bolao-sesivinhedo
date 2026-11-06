@@ -2482,6 +2482,12 @@ select:focus {
 .schedule-preview-table th, .schedule-preview-table td { padding: 10px; border: 1px solid var(--border); text-align: left; vertical-align: top; white-space: pre-line; }
 .schedule-preview-table th { background: var(--gray); }
 .schedule-preview-table caption { padding: 10px 0; font-weight: 700; text-align: left; }
+.tournament-schedule-dialog { width: min(1050px, calc(100vw - 24px)); }
+.schedule-rest-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 16px 0; }
+.schedule-rest-summary > div { display: grid; gap: 6px; padding: 14px; background: var(--gray); border-radius: 8px; }
+.schedule-rest-summary span { color: var(--muted); font-size: .85rem; }
+.schedule-rest-summary strong { font-size: 1.3rem; }
+@media (max-width: 600px) { .schedule-rest-summary { grid-template-columns: 1fr; } }
 .regulations-page, .regulations-admin label, .regulation-editor label { display: grid; gap: 8px; }
 .regulation-editor textarea { white-space: pre-wrap; }
 .sport-regulation { display: grid; gap: 16px; margin: 16px 0; padding: 20px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
@@ -2493,6 +2499,52 @@ select:focus {
 .regulation-guidance > div { margin-top: 16px; }
 .regulation-preview { padding: 12px; border: 1px solid var(--border); border-radius: 8px; }
 .regulation-preview summary { cursor: pointer; font-weight: 700; }
+.regulation-draft-status { margin: 0; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); overflow-wrap: anywhere; }
+.regulation-pdf { min-width: 0; }
+.regulation-pdf p { font-size: .85rem; overflow-wrap: anywhere; }
+.match-management-dialog.referee-dialog { width: 100%; max-width: none; height: 100dvh; max-height: 100dvh; margin: 0; padding: clamp(12px, 3vw, 32px); border: 0; border-radius: 0; overscroll-behavior: contain; }
+.referee-dialog > .match-management-heading, .referee-panel { width: min(1100px, 100%); margin-inline: auto; }
+.referee-dialog > .match-management-heading { align-items: center; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+.referee-dialog .match-management-heading h2 { font-size: clamp(1.2rem, 3vw, 2rem); overflow-wrap: anywhere; }
+.referee-dialog .match-management-heading > div { min-width: 0; }
+.referee-panel { padding-top: 16px; }
+.referee-toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.referee-toolbar > span:nth-child(2) { color: var(--muted); font-size: .9rem; }
+.referee-toolbar > button { margin-left: auto; }
+.referee-scoreboard { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 12px; align-items: center; text-align: center; margin: 20px 0 0; padding: 20px 12px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); }
+.referee-scoreboard > div { display: grid; gap: 8px; min-width: 0; }
+.referee-scoreboard > div > span { font-size: clamp(1.2rem, 3.5vw, 2rem); font-weight: 800; overflow-wrap: anywhere; }
+.referee-scoreboard strong { font-size: clamp(3.5rem, 12vw, 7rem); line-height: 1.05; font-variant-numeric: tabular-nums; }
+.referee-scoreboard > span { color: var(--muted); font-size: 2rem; }
+.referee-score-caption, .referee-partials { text-align: center; font-weight: 700; }
+.referee-panel > .match-details { justify-content: center; }
+.referee-controls { padding: 0; border: 0; margin: 20px 0 0; min-width: 0; }
+.referee-controls > legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.referee-panel .match-clock-control { flex-wrap: wrap; justify-content: center; }
+.referee-panel .match-clock strong { font-size: clamp(1.8rem, 4vw, 2.6rem); }
+.referee-panel button { min-height: 48px; touch-action: manipulation; }
+.referee-panel .quick-scoring { margin-block: 20px; padding: clamp(12px, 2vw, 22px); }
+.referee-panel .quick-team h4 { font-size: clamp(1.1rem, 3vw, 1.6rem); overflow-wrap: anywhere; }
+.referee-panel .quick-score-button { min-height: 100px; font-size: clamp(1.5rem, 4vw, 2.2rem); }
+.referee-panel .quick-score-button small { font-size: .85rem; }
+.referee-panel .quick-player-buttons { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); }
+.referee-panel .quick-player-buttons button { text-align: left; font-size: 1.05rem; overflow-wrap: anywhere; }
+.referee-panel .quick-point-values button { min-width: 80px; font-size: 1.1rem; }
+.referee-panel .match-score-form > .form-actions { justify-content: flex-end; }
+.referee-panel .score-manual-editor { padding: 14px; border: 1px solid var(--border); border-radius: 10px; }
+.referee-panel fieldset:disabled { opacity: .65; }
+@media (max-width: 600px) {
+  .referee-dialog .match-management-heading { align-items: flex-start; }
+  .referee-dialog .match-management-heading > button { max-width: 130px; white-space: normal; }
+  .referee-toolbar { gap: 8px; }
+  .referee-toolbar > span:nth-child(2) { flex-basis: 55%; }
+  .referee-scoreboard { gap: 8px; padding-inline: 8px; }
+  .referee-panel .quick-team-columns { gap: 10px; }
+  .referee-panel .quick-player-buttons { grid-template-columns: 1fr; }
+  .referee-panel .quick-player-buttons button { padding: 10px 8px; }
+  .referee-panel .match-score-form > .form-actions { flex-direction: column; }
+  .sport-regulation > .section-heading { align-items: flex-start; flex-direction: column; }
+}
 .athlete-statistics-panel { display: grid; gap: 18px; min-width: 0; }
 .athlete-statistics-filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .athlete-statistics-filters label { display: grid; gap: 6px; font-weight: 700; }
@@ -2503,6 +2555,17 @@ select:focus {
 .athlete-statistics-total, .athlete-statistics-sync { color: var(--muted); font-size: .85rem; }
 .athlete-statistics-note { margin: 0; color: var(--muted); font-size: .85rem; line-height: 1.7; }
 .athlete-statistics-panel > .match-checkbox { display: flex; align-items: center; gap: 10px; }
+.school-shift-switcher { padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); margin-bottom: 16px; }
+.school-shift-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.school-shift-tabs button { min-height: 46px; font-weight: 800; }
+.school-shift-tabs button > span { font-size: .8rem; font-weight: 500; }
+.school-shift-switcher .school-shift-tabs { padding: 4px; border-radius: 10px; background: var(--gray); }
+.school-shift-switcher .school-shift-tabs button { color: var(--text); background: transparent; border: 1px solid transparent; border-radius: 8px; box-shadow: none; opacity: 1; }
+.school-shift-switcher .school-shift-tabs button.is-active { color: #fff; background: #c8130d; border-color: #c8130d; }
+.school-shift-switcher .school-shift-tabs button > span { color: inherit; opacity: .95; }
+.school-shift-switcher p { color: var(--muted); margin: 10px 0 0; font-size: .85rem; }
+.school-shift-filter { margin: 12px 0; max-width: 340px; }
+.school-shift-filter label { display: grid; gap: 6px; font-weight: 700; }
 .athlete-statistics-table { width: 100%; min-width: 580px; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .athlete-statistics-table caption { padding: 10px 0; color: var(--muted); font-size: .8rem; text-align: left; }
 .athlete-statistics-table th, .athlete-statistics-table td { padding: 12px; border-bottom: 1px solid var(--border); text-align: left; }

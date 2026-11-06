@@ -1,6 +1,7 @@
 import { getSportProfile } from './sportRules.js'
 import { normalizeFilterText } from './game.js'
 import { getMatchOutcome } from './match.js'
+import { getGameShift } from './schoolShifts.js'
 
 export function buildInterclassStandings(games, teams = [], sports = []) {
   const tables = new Map()
@@ -11,10 +12,11 @@ export function buildInterclassStandings(games, teams = [], sports = []) {
     if (!groupName || game.stageType === 'knockout') return
     const sportId = game.sportId || game.esporteNome || 'geral'
     const tournamentKey = game.tournamentId || key(game.tournamentName) || 'sem-torneio'
-    const competitionId = JSON.stringify([sportId, tournamentKey])
-    const id = JSON.stringify([sportId, tournamentKey, key(groupName)])
+    const turno = getGameShift(game)
+    const competitionId = JSON.stringify([sportId, turno, tournamentKey])
+    const id = JSON.stringify([sportId, turno, tournamentKey, key(groupName)])
     if (!tables.has(id)) tables.set(id, {
-      id, competitionId, sportId, sportName: game.esporteNome || sportById.get(sportId)?.nome || 'Esporte',
+      id, competitionId, sportId, turno, sportName: game.esporteNome || sportById.get(sportId)?.nome || 'Esporte',
       tournamentId: game.tournamentId || '', tournamentName: game.tournamentName || 'Torneio sem nome', groupName,
       ...getSportProfile({ ...sportById.get(sportId), ...game }), entries: new Map(),
     })

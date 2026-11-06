@@ -4,6 +4,8 @@ import { getUniqueGameSports } from '../utils/game.js'
 import { getMatchScore } from '../utils/match.js'
 import { buildTVSchedule, eventDate, schoolDay, SCHOOL_TIMEZONE, TV_SECTIONS } from '../utils/tvSchedule.js'
 import TVMatchCard from './TVMatchCard.jsx'
+import ShiftSelector from './ShiftSelector.jsx'
+import { getGameShift } from '../utils/schoolShifts.js'
 import { formatSportScore } from '../utils/sportRules.js'
 import { toDate } from '../utils/format.js'
 import './TVMode.css'
@@ -22,6 +24,7 @@ export default function TVMode({ onNavigate }) {
   const [online, setOnline] = useState(() => navigator.onLine)
   const [now, setNow] = useState(() => new Date())
   const [sport, setSport] = useState('')
+  const [turno, setTurno] = useState(() => ['manha', 'tarde'].includes(localStorage.getItem('tv-turno')) ? localStorage.getItem('tv-turno') : '')
   const [cursor, setCursor] = useState('')
   const [duration, setDuration] = useState(() => {
     const stored = Number(window.localStorage.getItem('tv-interval'))
@@ -89,14 +92,14 @@ export default function TVMode({ onNavigate }) {
 
   const sports = useMemo(() => getUniqueGameSports(games), [games])
   const day = schoolDay(now)
-  const schedule = useMemo(() => buildTVSchedule(games, { day, sport, livePageSize: compactLive ? 2 : density, agendaPageSize: compactLive ? 4 : 6 }), [day, games, sport, compactLive, density])
+  const schedule = useMemo(() => buildTVSchedule(games, { day, sport, turno, livePageSize: compactLive ? 2 : density, agendaPageSize: compactLive ? 4 : 6 }), [day, games, sport, turno, compactLive, density])
   const { pages, counts, live } = schedule
   const pageKeys = JSON.stringify(pages.map((item) => item.id))
   const pageIndex = Math.max(0, pages.findIndex((item) => item.id === cursor))
   const page = pages[pageIndex]
   const tickerStart = (pageIndex % Math.max(1, Math.ceil(live.length / 3))) * 3
   const ticker = live.slice(tickerStart, tickerStart + 3)
-  const activeAnnouncements = [...announcements.filter((item) => item.active && toDate(item.expiresAt).getTime() > now.getTime()), ...buildAutomaticCalls(sport ? games.filter((game) => game.sportId === sport || game.esporteNome === sport) : games, broadcastSettings, now)]
+  const activeAnnouncements = [...announcements.filter((item) => item.active && toDate(item.expiresAt).getTime() > now.getTime()), ...buildAutomaticCalls(games.filter((game) => (!sport || game.sportId === sport || game.esporteNome === sport) && (!turno || getGameShift(game) === turno)), broadcastSettings, now)]
   const announcement = activeAnnouncements[Math.floor(now.getTime() / 10000) % activeAnnouncements.length]
 
   useEffect(() => {
@@ -134,6 +137,7 @@ export default function TVMode({ onNavigate }) {
         <div className="tv-clock"><time>{clockFormat.format(now)}</time><span>{new Intl.DateTimeFormat('pt-BR', { dateStyle: 'full', timeZone: SCHOOL_TIMEZONE }).format(now)}</span></div>
       <button type="button" className="tv-settings-toggle" aria-expanded={settingsOpen} onClick={() => setSettingsOpen((value) => !value)}>{settingsOpen ? 'Fechar ajustes' : 'Ajustes da TV'}</button></header>
       <div className="tv-toolbar" hidden={!settingsOpen}>
+        <ShiftSelector value={turno} onChange={(value) => { setTurno(value); localStorage.setItem('tv-turno', value); setCursor('') }} />
         <div className={online && synced && !error ? 'tv-connection' : 'tv-connection is-offline'} role="status"><span />{error ? 'Atualização indisponível' : !online ? 'Sem conexão · exibindo últimos dados' : synced ? 'Atualizado em tempo real' : 'Aguardando sincronização'}</div>
         <label className="tv-sport-select">Esporte<select value={sport} onChange={(event) => { setSport(event.target.value); setCursor('') }}><option value="">Todos os esportes</option>{sports.map((item) => <option value={item.id} key={item.id}>{item.nome}</option>)}</select></label>
         <label className="tv-interval-select">Intervalo<select value={duration} onChange={(event) => { const seconds = Number(event.target.value); setDuration(seconds); window.localStorage.setItem('tv-interval', String(seconds)) }}>{[8, 12, 20, 30].map((seconds) => <option key={seconds} value={seconds}>{seconds} s</option>)}</select></label>

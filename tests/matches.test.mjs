@@ -4,6 +4,8 @@ import assert from 'node:assert/strict'
 import { getMatchScore, getMatchState, MATCH_STATE } from '../src/utils/match.js'
 import { attendanceTeamKey } from '../src/utils/attendance.js'
 import { isMatchPrepared } from '../src/utils/matchStart.js'
+import { resolveCompetitionShifts } from '../src/utils/schoolShifts.js'
+import { scheduleFingerprint, buildScheduleRedistribution, schedulePlanFingerprint } from '../src/utils/tournamentSchedule.js'
 
 // Exercise the service against an isolated store, never the production Firebase project.
 const documents = new Map()
@@ -36,7 +38,7 @@ const sdk = {
   updateDoc: async (ref, fields) => apply(ref, fields),
   writeBatch: () => {
     const changes = []
-    return { update: (ref, fields) => changes.push(() => apply(ref, fields)), delete: (ref) => changes.push(() => documents.delete(ref.path)), commit: async () => changes.forEach((commit) => commit()) }
+    return { set: (ref, fields) => changes.push(() => documents.set(ref.path, structuredClone(fields))), update: (ref, fields) => changes.push(() => apply(ref, fields)), delete: (ref) => changes.push(() => documents.delete(ref.path)), commit: async () => changes.forEach((commit) => commit()) }
   },
   serverTimestamp: () => useCurrentTimestamp ? new Date() : new Date('2026-11-06T12:00:00Z'),
   Timestamp: { fromDate: (date) => date },
@@ -57,7 +59,7 @@ registerHooks({
     return next(url, context)
   },
 })
-const { normalizeGame, startGame, updateLiveScore, finalizeGame, reopenGame, closeGame, saveGame, canEditPrediction, savePlayer, deletePlayer, deleteTeam, importPlayers, saveAnnouncement, changeMatchCondition, saveMatchReport, loadMatchReport, calculateGroupStandings, saveMatchAttendance, saveBroadcastSettings, saveGamePreparation, startPreparedGames, controlMatchClock, saveSportRegulation, saveSport, recordLiveEvent, undoLiveEvent } = await import('../src/services/firestoreService.js')
+const { normalizeGame, startGame, updateLiveScore, finalizeGame, reopenGame, closeGame, saveGame, canEditPrediction, savePlayer, deletePlayer, deleteTeam, importPlayers, saveAnnouncement, changeMatchCondition, saveMatchReport, loadMatchReport, calculateGroupStandings, saveMatchAttendance, saveBroadcastSettings, saveGamePreparation, startPreparedGames, controlMatchClock, saveSportRegulation, saveSport, recordLiveEvent, undoLiveEvent, redistributeTournamentSchedule, saveTeam, saveGames } = await import('../src/services/firestoreService.js')
 const original = {
   sportId: 'football', esporteNome: 'Futebol', fase: 'Fase de grupos', rodada: 'Rodada 1',
   timeA: 'Azul', timeB: 'Branco', status: 'aberto', dataHora: '2099-11-06T12:00', limitePalpites: '2099-11-06T11:00',
@@ -135,6 +137,53 @@ test('public regulations save independently of scoring settings and reject concu
   await saveSport({ id: 'football', nome: 'Futebol', winPoints: 4 })
   assert.equal(documents.get('sports/football').regulation.walkover, 'Orientações da escola')
   await assert.rejects(saveSportRegulation('missing', {}, 0), /não encontrada/)
+})
+
+test('new teams and tournaments persist a shift and cannot mix morning and afternoon squads', async () => {
+  await saveTeam({ sportId: 'football', esporteNome: 'Futebol', nome: '6ºA', turno: 'tarde' })
+  assert([...documents.values()].some((team) => team.nome === '6ºA' && team.turno === 'tarde'))
+  await assert.rejects(saveTeam({ sportId: 'football', esporteNome: 'Futebol', nome: '6ºB', turno: 'manha' }), /pertence ao turno/)
+  const match = { ...original, id: 'morning-match', timeA: '9ºA', timeB: '9ºB', turno: 'manha', tournamentId: 'morning-cup', tournamentName: 'Interclasse 2026', stageType: 'group' }
+  await saveGames([match])
+  assert.equal(documents.get('games/morning-match').turno, 'manha')
+  await assert.rejects(saveGames([{ ...match, id: 'mixed', timeB: '6ºA' }]), /não podem disputar/)
+  assert.equal(documents.has('games/mixed'), false)
+  await assert.rejects(saveGames([{ ...match, id: 'bad-cup', timeA: '6ºA', timeB: '6ºB', turno: 'tarde' }]), /torneio pertence a outro turno/)
+  await saveGames([{ ...match, id: 'afternoon-match', timeA: '6ºA', timeB: '6ºB', turno: 'tarde', tournamentId: 'afternoon-cup' }, { ...match, id: 'afternoon-final', timeA: '1o Grupo A', timeB: '2o Grupo B', seedLabelA: '1o Grupo A', seedLabelB: '2o Grupo B', turno: 'tarde', tournamentId: 'afternoon-cup', stageType: 'knockout' }])
+  assert.equal(documents.get('games/afternoon-match').turno, 'tarde')
+  assert.equal(documents.get('games/afternoon-final').turno, 'tarde')
+  await assert.rejects(saveGames([{ ...match, id: 'unassigned', turno: '', timeA: 'Azul', timeB: 'Branco', tournamentId: 'unassigned' }]), /Selecione Manhã ou Tarde/)
+})
+
+test('redistributing existing games preserves IDs, predictions, match metadata and knockout dates atomically', async () => {
+  const groups = [['9ºA', '9ºB', '1ºA', '1ºB'], ['2ºA', '2ºB', '3ºA', '3ºB']]
+  let index = 0
+  groups.forEach((teams, group) => teams.forEach((timeA, first) => teams.slice(first + 1).forEach((timeB) => {
+    const date = new Date(Date.UTC(2099, 10, 30, 10, index * 12))
+    documents.set(`games/order-${index}`, { ...original, timeA, timeB, tournamentId: 'cup', stageType: 'group', groupName: `Grupo ${group}`, dataHora: date.toISOString(), limitePalpites: new Date(date.getTime() - 3600000), preparation: { key: 'old' } })
+    index += 1
+  })))
+  documents.set('games/semi', { ...original, tournamentId: 'cup', stageType: 'knockout', seedLabelA: '1o Grupo A' })
+  documents.set('predictions/guess', { gameId: 'order-1', palpiteA: 2, palpiteB: 1, userId: 'teacher' })
+  const selected = resolveCompetitionShifts([...documents].filter(([path, data]) => path.startsWith('games/') && data.tournamentId === 'cup').map(([path]) => game(path.split('/')[1])))
+  const expectedGames = selected.map((match) => ({ id: match.id, fingerprint: scheduleFingerprint(match) }))
+  const before = structuredClone(Object.fromEntries(documents))
+  documents.set('games/order-1', { ...documents.get('games/order-1'), timeA: 'Changed' })
+  await assert.rejects(redistributeTournamentSchedule({ tournamentId: 'cup', expectedGames }), /partida mudaram/)
+  assert.deepEqual(documents.get('games/order-5'), before['games/order-5'])
+  documents.set('games/order-1', before['games/order-1'])
+  const plan = buildScheduleRedistribution(selected, new Date())
+  await assert.rejects(redistributeTournamentSchedule({ tournamentId: 'cup', expectedGames, expectedPlan: 'expired-preview' }), /horários disponíveis mudaram/)
+  const count = await redistributeTournamentSchedule({ tournamentId: 'cup', expectedGames, expectedPlan: schedulePlanFingerprint(plan) })
+  assert.equal(count, plan.changes.length)
+  assert.deepEqual(documents.get('predictions/guess'), before['predictions/guess'])
+  assert.deepEqual(documents.get('games/semi'), before['games/semi'])
+  for (const match of selected.filter((item) => item.stageType === 'group')) {
+    const saved = documents.get(`games/${match.id}`)
+    for (const field of ['timeA', 'timeB', 'tournamentId', 'groupName', 'stageType', 'status', 'venue', 'vestA', 'vestB']) assert.equal(saved[field], before[`games/${match.id}`][field])
+    assert.equal(new Date(saved.dataHora) - saved.limitePalpites, 3600000)
+    if (plan.changes.some((change) => change.id === match.id)) assert.equal(saved.preparation, null)
+  }
 })
 
 test('live events publish only the first name, increment atomically, deduplicate retries and undo safely', async () => {

@@ -42,5 +42,6 @@ test('regulations start blank and keep only the text entered by the organization
   assert.equal(notes.walkover, 'Tolerância definida pela escola.')
   assert.equal(notes.participation, '')
   assert.equal(notes.ignored, undefined)
-  assert.throws(() => normalizeRegulation({ notes: 'a'.repeat(3001) }), /3.000/)
+  assert.equal(normalizeRegulation({ notes: 'a'.repeat(10000) }).notes.length, 10000)
+  assert.throws(() => normalizeRegulation({ notes: 'a'.repeat(10001) }), /10.000/)
 })

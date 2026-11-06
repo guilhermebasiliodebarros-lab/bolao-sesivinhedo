@@ -9,6 +9,7 @@ import { findScheduleConflicts } from '../utils/scheduleConflicts.js'
 import MatchAttendanceForm from './MatchAttendanceForm.jsx'
 import { attendanceTeamKey } from '../utils/attendance.js'
 import MatchScoreForm from './MatchScoreForm.jsx'
+import RefereePanel from './RefereePanel.jsx'
 
 function MatchReportForm({ game, teams, user }) {
   const [source] = useState(() => ({ game, teams }))
@@ -101,10 +102,11 @@ export default function MatchManagementDialog({ game, games, teams, user, initia
   const titleId = useId()
   const [tab, setTab] = useState(initialTab)
   useEffect(() => { const dialog = ref.current; dialog.showModal(); return () => dialog.close() }, [])
-  return <dialog ref={ref} className="match-management-dialog" aria-labelledby={titleId} onCancel={(event) => { event.preventDefault(); onClose() }}>
-    <div className="match-management-heading"><div><span className="eyebrow">{game.esporteNome} · {game.tournamentName || game.fase}</span><h2 id={titleId}>{game.timeA} × {game.timeB}</h2><p>{formatDateTime(game.dataHora)}{game.venue ? ` · ${game.venue}` : ''}</p><MatchBadge game={game} /></div><button className="btn btn-outline btn-small" type="button" onClick={onClose}>Fechar</button></div>
+  const referee = tab === 'referee'
+  return <dialog ref={ref} className={`match-management-dialog${referee ? ' referee-dialog' : ''}`} aria-labelledby={titleId} onCancel={(event) => { event.preventDefault(); onClose() }}>
+    <div className="match-management-heading"><div><span className="eyebrow">{referee ? 'Modo árbitro · ' : ''}{game.esporteNome} · {game.tournamentName || game.fase}</span><h2 id={titleId}>{game.timeA} × {game.timeB}</h2>{!referee ? <><p>{formatDateTime(game.dataHora)}{game.venue ? ` · ${game.venue}` : ''}</p><MatchBadge game={game} /></> : null}</div><button className="btn btn-outline btn-small" type="button" onClick={onClose}>{referee ? 'Sair do modo árbitro' : 'Fechar'}</button></div>
     <MatchNotice game={game} />
-    <nav className="segmented-control" aria-label="Gerenciar partida"><button type="button" className={tab === 'score' ? 'is-active' : ''} onClick={() => setTab('score')}>Placar</button><button type="button" className={tab === 'condition' ? 'is-active' : ''} onClick={() => setTab('condition')}>Situação da partida</button><button type="button" className={tab === 'attendance' ? 'is-active' : ''} onClick={() => setTab('attendance')}>Presença</button><button type="button" className={tab === 'report' ? 'is-active' : ''} onClick={() => setTab('report')}>Súmula / PDF</button></nav>
-    {tab === 'score' ? <MatchScoreForm game={game} teams={teams} user={user} onSaved={onSaved} /> : tab === 'condition' ? <MatchConditionForm game={game} games={games} teams={teams} user={user} onSaved={onSaved} /> : tab === 'attendance' ? <MatchAttendanceForm key={attendanceTeamKey(game)} game={game} teams={teams} user={user} /> : <MatchReportForm key={attendanceTeamKey(game)} game={game} teams={teams} user={user} />}
+    {!referee ? <nav className="segmented-control" aria-label="Gerenciar partida"><button type="button" className={tab === 'score' ? 'is-active' : ''} onClick={() => setTab('score')}>Placar</button>{getMatchState(game) === MATCH_STATE.LIVE ? <button type="button" onClick={() => setTab('referee')}>Modo árbitro</button> : null}<button type="button" className={tab === 'condition' ? 'is-active' : ''} onClick={() => setTab('condition')}>Situação da partida</button><button type="button" className={tab === 'attendance' ? 'is-active' : ''} onClick={() => setTab('attendance')}>Presença</button><button type="button" className={tab === 'report' ? 'is-active' : ''} onClick={() => setTab('report')}>Súmula / PDF</button></nav> : null}
+    {referee ? <RefereePanel game={game} teams={teams} user={user} onSaved={onSaved} /> : tab === 'score' ? <MatchScoreForm game={game} teams={teams} user={user} onSaved={onSaved} /> : tab === 'condition' ? <MatchConditionForm game={game} games={games} teams={teams} user={user} onSaved={onSaved} /> : tab === 'attendance' ? <MatchAttendanceForm key={attendanceTeamKey(game)} game={game} teams={teams} user={user} /> : <MatchReportForm key={attendanceTeamKey(game)} game={game} teams={teams} user={user} />}
   </dialog>
 }

@@ -1,3 +1,5 @@
+export const REGULATION_MAX_LENGTH = 10000
+
 export const REGULATION_SECTIONS = [
   { id: 'participation', label: 'Participação e organização' },
   { id: 'classification', label: 'Classificação e vagas' },
@@ -9,7 +11,7 @@ export const REGULATION_SECTIONS = [
 export function normalizeRegulation(value = {}) {
   return Object.fromEntries(REGULATION_SECTIONS.map(({ id }) => {
     const text = String(value[id] || '').trim()
-    if (text.length > 3000) throw new Error('Use até 3.000 caracteres em cada seção do regulamento.')
+    if (text.length > REGULATION_MAX_LENGTH) throw new Error(`Use até ${REGULATION_MAX_LENGTH.toLocaleString('pt-BR')} caracteres em cada seção do regulamento.`)
     return [id, text]
   }))
 }

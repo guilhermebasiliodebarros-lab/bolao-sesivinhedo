@@ -1,3 +1,4 @@
+import { shiftLabel } from '../utils/schoolShifts.js'
 import { useMemo, useState } from 'react'
 import { buildInterclassStandings } from '../utils/interclassStandings.js'
 
@@ -22,7 +23,7 @@ export default function InterclassStandingsPanel({ games, teams, sports }) {
       <label>Filtrar modalidade<select value={sport} onChange={(event) => { setSport(event.target.value); setCompetition('') }}><option value="">Todos os esportes</option>{modalities.map((item) => <option value={item.id} key={item.id}>{item.nome}</option>)}</select></label>
       <label>Filtrar torneio<select value={competition} onChange={(event) => setCompetition(event.target.value)}><option value="">Todos os torneios</option>{competitions.map((item) => <option value={item.id} key={item.id}>{item.sportName} · {item.nome}</option>)}</select></label>
     </div>
-    {visible.map((table) => <article key={table.id}><span className="eyebrow">{table.sportName} · {table.tournamentName}</span><h3>{table.groupName}</h3><StandingsTable table={table} /></article>)}
+    {visible.map((table) => <article key={table.id}><span className="eyebrow">{table.sportName}{table.turno ? ` · ${shiftLabel(table.turno)}` : ''} · {table.tournamentName}</span><h3>{table.groupName}</h3><StandingsTable table={table} /></article>)}
     {!visible.length ? <div className="live-control-empty"><strong>Nenhum grupo cadastrado neste filtro.</strong><p>Os grupos aparecem quando suas partidas são criadas no gerador de chaveamento.</p></div> : null}
     <p className="form-hint">Equipes com jogos agendados aparecem com zero partidas disputadas. Os resultados do mata-mata ficam separados desta classificação.</p>
   </section>

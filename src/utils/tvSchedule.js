@@ -1,6 +1,7 @@
 import { toDate } from './format.js'
 import { getMatchState, MATCH_STATE } from './match.js'
 import { groupGamesBySport, matchesSport } from './game.js'
+import { getGameShift, shiftLabel } from './schoolShifts.js'
 
 export const SCHOOL_TIMEZONE = 'America/Sao_Paulo'
 const dayFormat = new Intl.DateTimeFormat('en-CA', { timeZone: SCHOOL_TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit' })
@@ -43,10 +44,10 @@ function interleave(groups) {
   return result
 }
 
-export function buildTVSchedule(games, { day = schoolDay(new Date()), sport = '', livePageSize = 4, agendaPageSize = 6 } = {}) {
+export function buildTVSchedule(games, { day = schoolDay(new Date()), sport = '', turno = '', livePageSize = 4, agendaPageSize = 6 } = {}) {
   const tomorrow = nextSchoolDay(day)
   const buckets = Object.fromEntries(TV_SECTIONS.map((section) => [section.id, []]))
-  games.filter((game) => matchesSport(game, sport)).forEach((game) => {
+  games.filter((game) => matchesSport(game, sport) && (!turno || getGameShift(game) === turno)).forEach((game) => {
     const state = getMatchState(game)
     const date = schoolDay(game.dataHora)
     const kind = [MATCH_STATE.POSTPONED, MATCH_STATE.CANCELLED].includes(state) ? 'changes' : state === MATCH_STATE.LIVE ? 'live' : state === MATCH_STATE.FINISHED ? 'results'
@@ -65,7 +66,8 @@ export function buildTVSchedule(games, { day = schoolDay(new Date()), sport = ''
     if (section.id === 'live') {
       return [section.id, chunks(balancedLive, livePageSize === 2 ? 2 : 4).map((matches, index, all) => ({ ...section, key: `live-${index}`, games: matches, part: index + 1, parts: all.length, sportName: 'Todos os esportes' }))]
     }
-    const groups = groupGamesBySport(items).map((group) => chunks(group.games, section.id === 'changes' || agendaPageSize === 4 ? 4 : 6).map((matches, index, all) => ({ ...section, key: `${section.id}-${group.id}-${index}`, games: matches, part: index + 1, parts: all.length, sportName: group.nome })))
+    const separated = groupGamesBySport(items).flatMap((group) => [...new Set(group.games.map((game) => getGameShift(game)))].map((shift) => ({ id: `${group.id}-${shift}`, nome: shift ? `${group.nome} · ${shiftLabel(shift)}` : group.nome, games: group.games.filter((game) => getGameShift(game) === shift) })))
+    const groups = separated.map((group) => chunks(group.games, section.id === 'changes' || agendaPageSize === 4 ? 4 : 6).map((matches, index, all) => ({ ...section, key: `${section.id}-${group.id}-${index}`, games: matches, part: index + 1, parts: all.length, sportName: group.nome })))
     return [section.id, interleave(groups)]
   }))
   // Rotate across categories and sports; bring live matches back between agenda pages.

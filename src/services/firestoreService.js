@@ -23,6 +23,8 @@ import { eventDate } from '../utils/tvSchedule.js'
 import { clockRevision, matchClockValue, stoppedMatchClock } from '../utils/matchClock.js'
 import { applyLiveEvent, scoreRevision } from '../utils/liveEvents.js'
 import { normalizeRegulation } from '../utils/regulations.js'
+import { buildScheduleRedistribution, scheduleFingerprint, schedulePlanFingerprint } from '../utils/tournamentSchedule.js'
+import { getTeamShift, getGameShift, resolveCompetitionShifts, validateTeamShift, validateGameShift } from '../utils/schoolShifts.js'
 import { normalizeTieBreak } from '../utils/tieBreak.js'
 import { attendanceTeamKey, currentAttendance, normalizeAttendanceSide } from '../utils/attendance.js'
 import { normalizeBroadcastSettings } from '../utils/automaticCalls.js'
@@ -226,6 +228,7 @@ export function normalizeTeam(id, data = {}) {
     sportId: data.sportId || data.esporteId || '',
     esporteNome: data.esporteNome || data.sportName || data.nomeEsporte || 'Geral',
     nome: data.nome || data.name || data.teamName || 'Time',
+    turno: getTeamShift({ ...data, nome: data.nome || data.name || data.teamName }),
     categoria: data.categoria || data.category || '',
     turma: data.turma || '',
     playerCount: numberOrZero(data.playerCount),
@@ -240,6 +243,7 @@ export function normalizeGame(id, data = {}) {
   return {
     id,
     sportId: data.sportId || data.esporteId || '',
+    turno: getGameShift({ ...data, timeA: data.timeA || data.teamA, timeB: data.timeB || data.teamB }),
     esporteNome: data.esporteNome || data.sportName || data.nomeEsporte || 'Geral',
     fase: data.fase || data.phase || 'Fase única',
     rodada: data.rodada || data.round || '',
@@ -395,6 +399,7 @@ function normalizeGameInput(game) {
   return {
     sportId,
     esporteNome,
+    turno: validateGameShift(game),
     fase,
     rodada,
     timeA,
@@ -435,7 +440,7 @@ function normalizeTeamInput(team) {
   }
 
   const turma = String(team?.turma || '').trim().slice(0, 80)
-  return { sportId, esporteNome, nome, categoria, turma }
+  return { sportId, esporteNome, nome, categoria, turma, turno: validateTeamShift({ ...team, nome, turma }) }
 }
 
 export async function createParticipantProfile(user, nome, avatarUrl = '') {
@@ -515,7 +520,7 @@ export function subscribeGames(onData, onError, onSync) {
     collection(db, 'games'),
     { includeMetadataChanges: true },
     (snapshot) => {
-      const games = snapshot.docs.map((item) => normalizeGame(item.id, item.data())).sort(sortByDate)
+      const games = resolveCompetitionShifts(snapshot.docs.map((item) => normalizeGame(item.id, item.data()))).sort(sortByDate)
 
       onData(games)
       onSync?.(!snapshot.metadata.fromCache)
@@ -633,9 +638,31 @@ export function subscribeRanking(onData, onError) {
   )
 }
 
+async function validateShiftForSavedGames(firestore, games) {
+  const candidates = await getDocs(collection(firestore, 'teams'))
+  const teams = candidates.docs.map((team) => normalizeTeam(team.id, team.data()))
+  const competitions = new Map()
+  const prepared = games.map((game) => {
+    const turno = validateGameShift(game, teams)
+    if (!turno && !game.id) throw new Error('Selecione o turno da partida antes de salvar.')
+    if (game.tournamentId && turno) {
+      const previous = competitions.get(game.tournamentId)
+      if (previous && previous !== turno) throw new Error('Crie torneios separados para manhã e tarde.')
+      competitions.set(game.tournamentId, turno)
+    }
+    return { ...game, turno }
+  })
+  for (const [id, turno] of competitions) {
+    const existing = await getDocs(query(collection(firestore, 'games'), where('tournamentId', '==', id)))
+    if (existing.docs.some((doc) => { const current = getGameShift(doc.data(), teams); return current && current !== turno })) throw new Error('Este torneio pertence a outro turno. Crie um torneio separado para manhã ou tarde.')
+  }
+  return prepared
+}
+
 export async function saveGame(game) {
   const firestore = ensureDb()
-  const payload = normalizeGameInput(game)
+  const [prepared] = await validateShiftForSavedGames(firestore, [game])
+  const payload = normalizeGameInput(prepared)
 
   if (game.id) {
     const gameRef = doc(firestore, 'games', game.id)
@@ -665,9 +692,38 @@ export async function saveGame(game) {
   await recalculateScores()
 }
 
+export async function redistributeTournamentSchedule({ tournamentId, expectedGames, expectedPlan }) {
+  if (!tournamentId || !Array.isArray(expectedGames) || !expectedGames.length || expectedGames.length > 450) throw new Error('Selecione um torneio com até 450 partidas para reorganizar.')
+  const firestore = ensureDb()
+  const current = await getDocs(query(collection(firestore, 'games'), where('tournamentId', '==', tournamentId)))
+  if (current.size !== expectedGames.length || current.docs.some((game) => !expectedGames.some((expected) => expected.id === game.id))) throw new Error('A lista de jogos mudou. Reabra a prévia da reorganização.')
+  return runTransaction(firestore, async (transaction) => {
+    const snapshots = await Promise.all(current.docs.map((game) => transaction.get(game.ref)))
+    const games = resolveCompetitionShifts(snapshots.map((snapshot) => {
+      if (!snapshot.exists()) throw new Error('Um jogo foi removido. Reabra a prévia.')
+      return normalizeGame(snapshot.id, snapshot.data())
+    }))
+    games.forEach((game) => {
+      if (scheduleFingerprint(game) !== expectedGames.find((expected) => expected.id === game.id)?.fingerprint) throw new Error('Os dados de uma partida mudaram. Reabra a prévia antes de aplicar a nova ordem.')
+    })
+    const plan = buildScheduleRedistribution(games, new Date())
+    if (expectedPlan && expectedPlan !== schedulePlanFingerprint(plan)) throw new Error('Os horários disponíveis mudaram. Reabra a prévia antes de aplicar a nova ordem.')
+    for (const change of plan.changes) {
+      const game = games.find((item) => item.id === change.id)
+      const raw = snapshots.find((item) => item.id === game.id).data()
+      const deadline = eventDate(raw.limitePalpites || raw.dataHora)
+      const delta = eventDate(change.dataHora).getTime() - eventDate(game.dataHora).getTime()
+      transaction.update(doc(firestore, 'games', change.id), { dataHora: change.dataHora, limitePalpites: Timestamp.fromDate(new Date(deadline.getTime() + delta)), preparation: null, updatedAt: serverTimestamp() })
+    }
+    return plan.changes.length
+  })
+}
+
 export async function saveGames(games) {
   const firestore = ensureDb()
-  const normalizedGames = games.map((game) => ({
+  const prepared = await validateShiftForSavedGames(firestore, games)
+  if (prepared.some((game) => !game.turno)) throw new Error('Selecione Manhã ou Tarde para gerar as partidas.')
+  const normalizedGames = prepared.map((game) => ({
     id: String(game?.id ?? '').trim(),
     payload: normalizeGameInput(game),
   }))
@@ -748,6 +804,10 @@ export async function saveTeam(team) {
   const payload = normalizeTeamInput(team)
 
   if (team.id) {
+    const previous = await getDoc(doc(firestore, 'teams', team.id))
+    const previousName = previous.exists() ? previous.data().nome : ''
+    const existing = await getDocs(query(collection(firestore, 'games'), where('sportId', '==', payload.sportId)))
+    if (existing.docs.some((item) => { const match = item.data(); const linked = ['A', 'B'].some((side) => match[`teamId${side}`] === team.id || [previousName, payload.nome].includes(match[`time${side}`])); const turno = getGameShift(match); return linked && turno && turno !== payload.turno })) throw new Error('Esta equipe já tem jogos em outro turno. Cadastre uma equipe separada para o novo turno.')
     await updateDoc(doc(firestore, 'teams', team.id), {
       ...payload,
       updatedAt: serverTimestamp(),
@@ -1065,6 +1125,7 @@ async function readPreparedGame(transaction, firestore, gameId, candidates, subm
   const previous = currentAttendance(game, saved.exists() ? saved.data() : null)
   const validSummary = game.attendanceSummary?.teamKey === attendanceTeamKey(game) ? game.attendanceSummary : null
   const teams = candidates.docs.map((item) => normalizeTeam(item.id, item.data()))
+  game = { ...game, turno: validateGameShift(game, teams) }
   if (!submitted && ((requirePrepared && !isMatchPrepared(game, teams)) || (game.preparation && game.preparation.key !== preparationKey(game)))) throw new Error('A conferência desta partida mudou. Prepare e salve novamente antes de iniciar.')
   if (submitted && submitted.expectedTeamKey !== attendanceTeamKey(game)) throw new Error('As equipes mudaram. Reabra a preparação da partida.')
   const details = normalizeMatchDetails(submitted ? { ...game, venue: submitted.venue, venueArea: submitted.venueArea, vestA: submitted.vestA, vestB: submitted.vestB, durationMinutes: submitted.durationMinutes ?? game.durationMinutes } : game)
@@ -1085,7 +1146,7 @@ async function readPreparedGame(transaction, firestore, gameId, candidates, subm
   const missing = matchStartChecklist(game, { attendance }).filter((check) => check.id !== 'conflicts' && !check.done)
   if (missing.length) throw new Error(`Antes de iniciar: ${missing.map((check) => check.label).join('; ')}.`)
   const preparation = { key: preparationKey(game), playerCountA: rosters[0].length, playerCountB: rosters[1].length, preparedAt: serverTimestamp(), preparedBy: submitted?.user?.uid || game.preparation?.preparedBy || null }
-  return { raw, game: { ...game, preparation }, attendance, fields: { ...details, requireAttendance: true, attendanceSummary: game.attendanceSummary, preparation, updatedAt: serverTimestamp() } }
+  return { raw, game: { ...game, preparation }, attendance, fields: { ...details, turno: game.turno, requireAttendance: true, attendanceSummary: game.attendanceSummary, preparation, updatedAt: serverTimestamp() } }
 }
 
 export async function saveGamePreparation(gameId, preparation) {

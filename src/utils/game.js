@@ -6,7 +6,7 @@ export function normalizeFilterText(value) {
 }
 
 export function getGameStageLabel(game) {
-  return [game?.fase, game?.rodada].filter(Boolean).join(' - ') || 'Fase única'
+  return [game?.fase, game?.rodada, { manha: 'Manhã', tarde: 'Tarde' }[game?.turno]].filter(Boolean).join(' - ') || 'Fase única'
 }
 
 export function gameMatchesSearch(game, searchTerm) {

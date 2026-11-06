@@ -1,25 +1,26 @@
 import { getMatchCondition, getMatchState, MATCH_STATE } from './match.js'
 import { getSportProfile } from './sportRules.js'
 import { normalizeFilterText } from './game.js'
+import { getGameShift } from './schoolShifts.js'
 
 const key = (value) => normalizeFilterText(value).trim()
 export const statisticsSportKey = (game) => game.sportId || key(game.esporteNome) || 'geral'
-export const statisticsTournamentKey = (game) => JSON.stringify([statisticsSportKey(game), game.tournamentId || key(game.tournamentName) || 'sem-torneio'])
-export const statisticsTeamKey = (game, side, aliases = new Map()) => JSON.stringify([statisticsSportKey(game), game[`teamId${side}`] || aliases.get(JSON.stringify([statisticsSportKey(game), key(game[`time${side}`])])) || key(game[`time${side}`])])
+export const statisticsTournamentKey = (game) => JSON.stringify([statisticsSportKey(game), getGameShift(game), game.tournamentId || key(game.tournamentName) || 'sem-torneio'])
+export const statisticsTeamKey = (game, side, aliases = new Map()) => JSON.stringify([statisticsSportKey(game), getGameShift(game), game[`teamId${side}`] || aliases.get(JSON.stringify([statisticsSportKey(game), getGameShift(game), key(game[`time${side}`])])) || key(game[`time${side}`])])
 export const hasIndividualScoring = (game) => getSportProfile(game).scoringMode !== 'chess'
 
 export function buildStatisticsTeamAliases(games) {
   const ids = new Map()
   games.forEach((game) => ['A', 'B'].forEach((side) => {
     if (!game[`teamId${side}`] || !game[`time${side}`] || game[`seedLabel${side}`]) return
-    const name = JSON.stringify([statisticsSportKey(game), key(game[`time${side}`])])
+    const name = JSON.stringify([statisticsSportKey(game), getGameShift(game), key(game[`time${side}`])])
     if (!ids.has(name)) ids.set(name, new Set())
     ids.get(name).add(game[`teamId${side}`])
   }))
   return new Map([...ids].filter(([, values]) => values.size === 1).map(([name, values]) => [name, [...values][0]]))
 }
 
-export function buildAthleteStatistics(games, { sport = '', tournament = '', team = '', finishedOnly = false, search = '' } = {}) {
+export function buildAthleteStatistics(games, { sport = '', turno = '', tournament = '', team = '', finishedOnly = false, search = '' } = {}) {
   const groups = new Map()
   const aliases = buildStatisticsTeamAliases(games)
   const query = key(search)
@@ -27,9 +28,10 @@ export function buildAthleteStatistics(games, { sport = '', tournament = '', tea
     const state = getMatchState(game)
     if (!hasIndividualScoring(game) || getMatchCondition(game) !== 'normal' || ![MATCH_STATE.LIVE, MATCH_STATE.FINISHED].includes(state) || (finishedOnly && state !== MATCH_STATE.FINISHED)) return
     if ((sport && statisticsSportKey(game) !== sport) || (tournament && statisticsTournamentKey(game) !== tournament)) return
+    if (turno && getGameShift(game) !== turno) return
     const profile = getSportProfile(game)
-    const groupId = JSON.stringify([statisticsSportKey(game), profile.scoringMode])
-    const group = groups.get(groupId) || { id: groupId, sportId: statisticsSportKey(game), sportName: game.esporteNome || 'Modalidade', scoringMode: profile.scoringMode, unit: profile.scoringMode === 'goals' ? 'Gols' : 'Pontos', players: new Map(), gameIds: new Set(), adjustedGameIds: new Set() }
+    const groupId = JSON.stringify([statisticsSportKey(game), getGameShift(game), profile.scoringMode])
+    const group = groups.get(groupId) || { id: groupId, sportId: statisticsSportKey(game), turno: getGameShift(game), sportName: game.esporteNome || 'Modalidade', scoringMode: profile.scoringMode, unit: profile.scoringMode === 'goals' ? 'Gols' : 'Pontos', players: new Map(), gameIds: new Set(), adjustedGameIds: new Set() }
     const seen = new Set()
     ;(game.scorerStats || []).forEach((stat) => {
       if (!['A', 'B'].includes(stat.side) || !stat.playerId || !String(stat.playerName || '').trim() || !Number.isInteger(stat.total) || stat.total <= 0) return

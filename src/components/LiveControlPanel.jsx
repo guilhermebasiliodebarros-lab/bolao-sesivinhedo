@@ -14,7 +14,7 @@ import { hasConfirmedTeams } from '../utils/attendance.js'
 import PreparedMatches from './PreparedMatches.jsx'
 import { liveStartConflicts } from '../utils/matchStart.js'
 
-export default function LiveControlPanel({ games, teams, sports, onFinish, onNavigate, saving, onManage, onStart }) {
+export default function LiveControlPanel({ games, conflictGames = games, teams, sports, onFinish, onNavigate, saving, onManage, onStart }) {
   const [sport, setSport] = useState('')
   const [selectedGame, setSelectedGame] = useState('')
   const [drafts, setDrafts] = useState({})
@@ -51,7 +51,7 @@ export default function LiveControlPanel({ games, teams, sports, onFinish, onNav
         <button className="btn btn-primary" type="button" disabled={!selected || disabled} onClick={() => onStart(selected)}>Preparar partida</button>
         <p>Várias partidas podem ficar ao vivo ao mesmo tempo. O início bloqueia os palpites apenas do jogo selecionado.</p>
       </div>
-      {selected ? <div className="selected-match-details"><MatchDetails game={selected} /><div className={hasConfirmedTeams(selected) ? 'alert alert-success' : 'schedule-warning'}>{hasConfirmedTeams(selected) ? 'Presença das duas equipes confirmada.' : 'Confira a presença, os coletes e a área ao preparar a partida.'}</div>{liveStartConflicts(selected, games).length ? <p className="schedule-warning" role="status">Há uma partida ao vivo nesta área ou com uma destas equipes. Você pode preparar agora e iniciar quando liberar.</p> : null}</div> : null}
+      {selected ? <div className="selected-match-details"><MatchDetails game={selected} /><div className={hasConfirmedTeams(selected) ? 'alert alert-success' : 'schedule-warning'}>{hasConfirmedTeams(selected) ? 'Presença das duas equipes confirmada.' : 'Confira a presença, os coletes e a área ao preparar a partida.'}</div>{liveStartConflicts(selected, conflictGames).length ? <p className="schedule-warning" role="status">Há uma partida ao vivo nesta área ou com uma destas equipes. Você pode preparar agora e iniciar quando liberar.</p> : null}</div> : null}
       {message ? <div className={failed ? 'alert alert-error' : 'alert alert-success'} role={failed ? 'alert' : 'status'}>{message}</div> : null}
       <div className="section-heading"><h3>Partidas acontecendo agora</h3><span>{live.length} ao vivo</span></div>
       {live.length ? <div className="live-control-grid">{live.map((game) => (
@@ -59,6 +59,7 @@ export default function LiveControlPanel({ games, teams, sports, onFinish, onNav
           <div className="section-heading"><span className="eyebrow">{game.esporteNome}</span><MatchBadge game={game} /></div>
           <h3>{game.timeA} × {game.timeB}</h3><p>{game.tournamentName || game.fase}</p>
           <MatchDetails game={game} />
+          <button type="button" className="btn btn-primary referee-open-button" disabled={disabled} onClick={() => onManage(game, 'referee')}>Abrir modo árbitro</button>
           <MatchClockControl game={game} disabled={disabled} />
           <QuickScoring game={game} teams={teams} disabled={disabled} />
           {scores(game).expectedScoreRevision !== scoreRevision(game) ? <p className="schedule-warning">O placar mudou. <button type="button" className="btn btn-outline btn-small" onClick={() => setDrafts((current) => { const next = { ...current }; delete next[game.id]; return next })}>Usar placar atual</button></p> : null}

@@ -120,7 +120,21 @@ O arquivo `firestore.rules.example` traz uma base de segurança para impedir que
 
 O painel abre na **Central de pendências**, com filtros por modalidade, programação, busca e situação, além de páginas de até 12 partidas. Cada jogo aparece uma única vez: resultado a conferir, início atrasado, adiado, pronto, conferência pendente ou equipes a definir. Os atalhos abrem a preparação, o início validado, o placar ou o reagendamento existentes. O atalho **Iniciar partidas juntas / Ao vivo** abre a seleção de partidas preparadas. Jogos concluídos e cancelados saem da central; jogos ao vivo dentro da duração prevista ficam em **Ao vivo / TV**. Após a duração prevista, a central pede que o responsável confira o andamento ou resultado, sem encerrar automaticamente. Os avisos se atualizam a cada 30 segundos e usam o fuso de São Paulo. A central é somente da organização e não aparece na TV.
 
-## Lances ao vivo e TV
+## Manhã e tarde
+
+As abas **Manhã** e **Tarde** separam o cadastro de equipes por esporte e a operação dos torneios. **Manhã** reúne 9º A/B e 1º, 2º e 3º A/B do Ensino Médio (oito equipes); **Tarde** reúne 6º, 7º e 8º A/B do Fundamental II (seis equipes quando cadastradas). A aba Tarde começa vazia: o sistema não cria essas equipes automaticamente. Cadastre cada equipe na aba do turno correspondente, em cada modalidade.
+
+Ao trocar de turno, a seleção de equipes e a prévia do chaveamento são limpas. O gerador usa somente as equipes do turno selecionado e inicia com dois grupos de quatro pela manhã ou dois grupos de três à tarde. Cada turno recebe um torneio independente, mesmo que os nomes dos torneios sejam iguais. Partidas e equipes novas salvam `turno: manha|tarde`; a gravação rejeita equipes de turnos diferentes na mesma partida e jogos de outro turno no mesmo torneio. A preparação verifica novamente as equipes. Jogos, jogadores, pendências, classificação por grupo, estatísticas e programação diária no painel seguem a aba selecionada. O controle de ocupação do local continua considerando todas as partidas ao vivo.
+
+Os cadastros antigos reconhecem o turno pela turma ou pelo nome da equipe; semifinais e finais herdam o turno identificado no restante do torneio. Essa compatibilidade mantém IDs, elencos, palpites e horários existentes. O turno não é deduzido pelo horário do jogo. No calendário, na lista de jogos, nas estatísticas públicas e nos ajustes da TV, é possível filtrar o turno. As páginas de agenda da TV e as tabelas de classificação/estatísticas são separadas por turno; os rótulos das partidas e dos PDFs identificam manhã ou tarde.
+
+## Distribuição dos jogos
+
+O gerador distribui confrontos de grupos e todos contra todos em rodadas: uma equipe participa uma vez por rodada, e as rodadas dos grupos são combinadas na agenda. Isso evita concentrar todos os jogos de uma equipe em sequência. Os grupos e confrontos do sorteio continuam os mesmos. Com poucas equipes, podem existir jogos seguidos inevitáveis; o sistema apresenta esse aviso na reorganização.
+
+Para um torneio já salvo, use **Jogos → Torneios criados → Reorganizar ordem dos jogos**. A prévia mostra horários atuais e novos, jogos seguidos e quantidade de outras partidas entre participações. **Aplicar nova ordem** reorganiza apenas partidas futuras de grupos/liga que ainda não começaram, usando os horários já existentes no mesmo dia, local e área. Mata-mata e partidas iniciadas não são movidos. A alteração preserva IDs, confrontos, grupos, palpites e demais dados; move o prazo de palpites pelo mesmo deslocamento de cada jogo e invalida a preparação quando o horário muda. A gravação é uma transação que confere novamente a versão das partidas e a prévia aprovada. Intervalo em quantidade de partidas não equivale a minutos de descanso: a duração efetiva de cada partida deve ser considerada pela organização.
+
+## Registro dos lances
 
 Em **Ao vivo / TV** e **Abrir placar**, o lançamento rápido registra gols e pontos sem editar o placar inteiro. Expanda **Marcar por jogador** e toque no jogador presente da conferência. O painel mostra o nome cadastrado; o lance público e a TV recebem somente o primeiro nome. **Sem autor** atende pontos coletivos, erros do adversário e partidas sem elenco. Futebol e handebol somam gols; basquete oferece 1, 2 ou 3 pontos. No vôlei, os pontos pertencem ao set atual, separados do placar de sets. **Encerrar set** pede confirmação, registra a parcial e zera os pontos do próximo set. A decisão de encerrar segue o regulamento da escola; não existe encerramento automático aos 25 ou 15 pontos. Xadrez mantém o lançamento do resultado da partida.
 
@@ -146,7 +160,17 @@ Os totais vêm de `scorerStats`, acumulados pelo lançamento **Marcar por jogado
 
 ## Cadastro de regulamentos
 
-Em **Painel master → Regulamentos**, a organização cadastra o regulamento de cada modalidade em cinco campos opcionais: participação, classificação/vagas, desempate, W.O./ausências e outras informações (até 3.000 caracteres por seção). Todos começam em branco, sem exemplos preenchidos ou regras automáticas. O menu público **Regulamentos** (`/#regulamentos`) mostra somente o texto salvo pela organização, sem exigir login. Antes do cadastro, informa **Regulamento ainda não cadastrado pela organização**. Campos vazios não são exibidos. A gravação verifica a versão para evitar sobrescrever edições concorrentes. O cadastro é para consulta; pontuação, formato dos placares e cálculos continuam configurados nas áreas próprias do sistema. Alterar o nome ou a pontuação de um esporte preserva o texto salvo.
+O editor guarda automaticamente um rascunho local por usuário e modalidade. Reabrir a modalidade ou recarregar o mesmo navegador recupera o texto e a versão original; somente **Salvar regulamento** publica o conteúdo. Rascunhos antigos não sobrescrevem versões mais recentes sem revisão explícita. **Recarregar dados salvos** pede confirmação antes de descartar alterações. Se o armazenamento do navegador falhar, o editor avisa. Limpar os dados do navegador remove os rascunhos locais.
+
+Na administração e na consulta pública, **Baixar regulamento em PDF** exporta o conteúdo salvo da modalidade. Também é possível baixar todos os regulamentos cadastrados em um arquivo, com logo Interclasse, versão, páginas numeradas e suporte a seções de 10.000 caracteres. Campos vazios e modalidades sem regulamento são omitidos. O arquivo pode ser aberto e impresso pelo navegador.
+
+## Modo árbitro
+
+Em **Ao vivo / TV → Abrir modo árbitro**, ou em **Jogos → Mais opções → Modo árbitro**, o master abre uma única partida com placar grande, cronômetro, coletes, local e botões ampliados. O painel também está disponível em **Abrir placar → Modo árbitro**. Cada partida simultânea tem seus próprios controles. O navegador tenta manter a tela ligada e oferece tela cheia; o painel continua utilizável quando o aparelho não permite essas funções.
+
+Os jogadores presentes ficam expandidos para registrar gols e pontos com autor, mantendo somente o primeiro nome na TV. Basquete usa 1, 2 ou 3 pontos; vôlei separa os pontos do set, sets ganhos e parciais, com confirmação para encerrar o set. Xadrez oferece o resultado por seleção. O painel reutiliza as transações, verificações de versão, desfazer lance, correções e confirmação do resultado existentes. Sem internet, bloqueia os lançamentos; encerrar ou adiar a partida em outro dispositivo remove os controles ao receber a atualização. Sair do modo árbitro mantém a partida e o cronômetro em andamento.
+
+Em **Painel master → Regulamentos**, a organização cadastra o regulamento de cada modalidade em cinco campos opcionais: participação, classificação/vagas, desempate, W.O./ausências e outras informações (até 10.000 caracteres por seção). Todos começam em branco, sem exemplos preenchidos ou regras automáticas. O menu público **Regulamentos** (`/#regulamentos`) mostra somente o texto salvo pela organização, sem exigir login. Antes do cadastro, informa **Regulamento ainda não cadastrado pela organização**. Campos vazios não são exibidos. A gravação verifica a versão para evitar sobrescrever edições concorrentes. O cadastro é para consulta; pontuação, formato dos placares e cálculos continuam configurados nas áreas próprias do sistema. Alterar o nome ou a pontuação de um esporte preserva o texto salvo.
 
 ## Rodar localmente
 

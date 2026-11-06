@@ -1,3 +1,5 @@
+import ShiftSelector from './ShiftSelector.jsx'
+import { getGameShift } from '../utils/schoolShifts.js'
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/useAuth.js'
 import { canEditPrediction, GAME_STATUS, subscribeGames, subscribeUserPredictions } from '../services/bolaoService.js'
@@ -27,6 +29,7 @@ export default function Jogos({ onNavigate }) {
   const [predictions, setPredictions] = useState([])
   const [activeFilter, setActiveFilter] = useState(ALL_ITEMS_FILTER)
   const [sportFilter, setSportFilter] = useState(ALL_ITEMS_FILTER)
+  const [turno, setTurno] = useState('')
   const [phaseFilter, setPhaseFilter] = useState(ALL_ITEMS_FILTER)
   const [searchTerm, setSearchTerm] = useState('')
   const [loading, setLoading] = useState(true)
@@ -61,7 +64,7 @@ export default function Jogos({ onNavigate }) {
     [openGamesAll, predictionsByGame],
   )
   const allOpenGamesGuessed = Boolean(isParticipant && openGamesAll.length > 0 && pendingOpenGames.length === 0)
-  const sportGames = useMemo(() => games.filter((game) => sportFilter === ALL_ITEMS_FILTER || game.sportId === sportFilter || game.esporteNome === sportFilter), [games, sportFilter])
+  const sportGames = useMemo(() => games.filter((game) => (!turno || getGameShift(game) === turno) && (sportFilter === ALL_ITEMS_FILTER || game.sportId === sportFilter || game.esporteNome === sportFilter)), [games, sportFilter, turno])
   const gameCounts = useMemo(
     () => ({
       [ALL_ITEMS_FILTER]: sportGames.length,
@@ -181,6 +184,7 @@ export default function Jogos({ onNavigate }) {
         </div>
       ) : null}
 
+      <div className="school-shift-filter"><ShiftSelector value={turno} onChange={setTurno} /></div>
       <SportFilter games={games} value={sportFilter} onChange={setSportFilter} allValue={ALL_ITEMS_FILTER} />
 
       <div className="segmented-control" role="tablist" aria-label="Filtro de jogos">

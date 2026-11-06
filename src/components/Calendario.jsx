@@ -1,3 +1,5 @@
+import ShiftSelector from './ShiftSelector.jsx'
+import { getGameShift } from '../utils/schoolShifts.js'
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/useAuth.js'
 import {
@@ -72,6 +74,7 @@ export default function Calendario({ onNavigate }) {
   const [games, setGames] = useState([])
   const [predictions, setPredictions] = useState([])
   const [sportFilter, setSportFilter] = useState(ALL_ITEMS_FILTER)
+  const [turno, setTurno] = useState('')
   const [phaseFilter, setPhaseFilter] = useState(ALL_ITEMS_FILTER)
   const [searchTerm, setSearchTerm] = useState('')
   const [loading, setLoading] = useState(true)
@@ -104,9 +107,9 @@ export default function Calendario({ onNavigate }) {
         sportFilter === ALL_ITEMS_FILTER || game.sportId === sportFilter || game.esporteNome === sportFilter
       const matchesPhase = phaseFilter === ALL_ITEMS_FILTER || game.fase === phaseFilter
 
-      return matchesSport && matchesPhase && gameMatchesSearch(game, searchTerm)
+      return matchesSport && matchesPhase && (!turno || getGameShift(game) === turno) && gameMatchesSearch(game, searchTerm)
     })
-  }, [games, phaseFilter, searchTerm, sportFilter])
+  }, [games, phaseFilter, searchTerm, sportFilter, turno])
   const sportGroups = useMemo(() => groupGamesBySport(visibleGames), [visibleGames])
   const nextGames = visibleGames.filter((game) => getMatchState(game) === MATCH_STATE.SCHEDULED).slice(0, 3)
   const visibleTournaments = useMemo(() => groupGamesByTournament(visibleGames), [visibleGames])
@@ -146,6 +149,7 @@ export default function Calendario({ onNavigate }) {
 
       <PendingGuessBanner count={pendingGuessCount} onNavigate={onNavigate} />
 
+      <div className="school-shift-filter"><ShiftSelector value={turno} onChange={setTurno} /></div>
       <SportFilter games={games} value={sportFilter} onChange={setSportFilter} allValue={ALL_ITEMS_FILTER} />
 
       <section className="calendar-status-strip" aria-label="Resumo do calendário">
