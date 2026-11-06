@@ -16,9 +16,11 @@ const Jogos = lazy(() => import('./components/Jogos.jsx'))
 const Login = lazy(() => import('./components/Login.jsx'))
 const Palpites = lazy(() => import('./components/Palpites.jsx'))
 const TVMode = lazy(() => import('./components/TVMode.jsx'))
+const Regulations = lazy(() => import('./components/Regulations.jsx'))
+const AthleteStatistics = lazy(() => import('./components/AthleteStatistics.jsx'))
 
 const protectedViews = ['dashboard', 'jogos', 'palpites', 'classificacao', 'admin']
-const allViews = ['home', 'calendario', 'login', 'cadastro', 'tv', ...protectedViews]
+const allViews = ['home', 'calendario', 'regulamentos', 'estatisticas', 'login', 'cadastro', 'tv', ...protectedViews]
 const viewFromHash = () => {
   const requested = window.location.hash.slice(1)
   return allViews.includes(requested) ? requested : 'home'
@@ -110,6 +112,8 @@ function AppShell() {
     if (activeView === 'calendario') {
       return <Calendario onNavigate={navigate} />
     }
+    if (activeView === 'regulamentos') return <Regulations />
+    if (activeView === 'estatisticas') return <AthleteStatistics />
 
     if (activeView === 'palpites') {
       return <Palpites onNavigate={navigate} />

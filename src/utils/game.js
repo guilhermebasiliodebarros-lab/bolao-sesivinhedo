@@ -90,6 +90,8 @@ export function getSportVisualClass(sportName) {
 export function getSportIcon(sportName) {
   const normalized = normalizeFilterText(sportName)
 
+  if (normalized.includes('xadrez') || normalized.includes('chess')) return '♟️'
+
   if (normalized.includes('fut') || normalized.includes('soccer')) {
     return '⚽'
   }

@@ -14,8 +14,13 @@
   },
   "dependencies": {
     "firebase": "^12.15.0",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.9",
+    "mammoth": "^1.13.0",
+    "pdfjs-dist": "^6.5.438",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.7",
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

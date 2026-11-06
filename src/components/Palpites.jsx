@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { getMatchCondition, isPredictionVoided } from '../utils/match.js'
 import { useAuth } from '../context/useAuth.js'
 import { canEditPrediction, GAME_STATUS, subscribeGames, subscribeUserPredictions } from '../services/bolaoService.js'
 import { formatPoints } from '../utils/format.js'
@@ -98,7 +99,7 @@ export default function Palpites({ onNavigate }) {
                 <div>
                   <span>Status</span>
                   <strong>
-                    {game?.status === GAME_STATUS.FINISHED ? `${formatPoints(prediction.pontos)} ponto(s)` : 'Aguardando'}
+                    {isPredictionVoided(game) ? 'Palpite anulado' : getMatchCondition(game) === 'postponed' ? 'Aguardando novo horário' : game?.status === GAME_STATUS.FINISHED ? `${formatPoints(prediction.pontos)} ponto(s)` : 'Aguardando'}
                   </strong>
                 </div>
               </article>

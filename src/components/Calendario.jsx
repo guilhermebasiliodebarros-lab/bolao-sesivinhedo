@@ -9,9 +9,12 @@ import {
 } from '../services/bolaoService.js'
 import { formatDateTime } from '../utils/format.js'
 import { gameMatchesSearch, getGameStageLabel, getUniqueGamePhases, groupGamesBySport } from '../utils/game.js'
-import { getMatchState, getMatchScore, MATCH_STATE } from '../utils/match.js'
+import { getMatchState, getMatchCondition, getMatchScore, MATCH_STATE } from '../utils/match.js'
+import MatchNotice from './MatchNotice.jsx'
 import MatchBadge from './MatchBadge.jsx'
 import SportFilter from './SportFilter.jsx'
+import MatchDetails from './MatchDetails.jsx'
+import { formatSportScore } from '../utils/sportRules.js'
 import EmptyState from './EmptyState.jsx'
 import LoadingState from './LoadingState.jsx'
 import PendingGuessBanner from './PendingGuessBanner.jsx'
@@ -133,6 +136,8 @@ export default function Calendario({ onNavigate }) {
         </div>
         <div className="form-actions">
           <button className="btn btn-outline" type="button" onClick={() => onNavigate('tv')}>Abrir modo TV</button>
+          <button className="btn btn-outline" type="button" onClick={() => onNavigate('regulamentos')}>Consultar regulamentos</button>
+          <button className="btn btn-outline" type="button" onClick={() => onNavigate('estatisticas')}>Ver estatísticas dos atletas</button>
           <button className="btn btn-primary" type="button" onClick={() => onNavigate('login')}>Entrar para palpitar</button>
         </div>
       </div>
@@ -279,8 +284,10 @@ export default function Calendario({ onNavigate }) {
                     <MatchBadge game={game} />
                     <strong>{game.timeA} x {game.timeB}</strong>
                     <small>{getGameStageLabel(game)}</small>
+                    <MatchDetails game={game} />
+                    <MatchNotice game={game} />
                   </div>
-                  {getMatchState(game) !== MATCH_STATE.SCHEDULED ? <strong className="calendar-score">{getMatchScore(game).join(' × ')}</strong> : null}
+                  {[MATCH_STATE.LIVE, MATCH_STATE.FINISHED].includes(getMatchState(game)) ? <strong className="calendar-score">{getMatchCondition(game) === 'walkover' ? 'W.O.' : getMatchScore(game).map(formatSportScore).join(' × ')}</strong> : null}
                   <time>{formatDateTime(game.dataHora)}</time>
                 </article>
               ))}

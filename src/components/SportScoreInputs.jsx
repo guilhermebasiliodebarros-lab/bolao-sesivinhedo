@@ -1,0 +1,15 @@
+import { getSportProfile, scoreLabel } from '../utils/sportRules.js'
+
+export default function SportScoreInputs({ game, value, onChange, disabled = false, partials = true }) {
+  const profile = getSportProfile(game)
+  if (profile.scoringMode === 'chess') {
+    const selected = `${value.placarA ?? 0}:${value.placarB ?? 0}`
+    return <label className="chess-result-select">Resultado do xadrez<select value={selected} disabled={disabled} onChange={(event) => { const [a, b] = event.target.value.split(':'); onChange('placarA', a); onChange('placarB', b) }}><option value="0:0">Em andamento</option><option value="1:0">Vitória de {game.timeA} · 1 × 0</option><option value="0.5:0.5">Empate · ½ × ½</option><option value="0:1">Vitória de {game.timeB} · 0 × 1</option></select></label>
+  }
+  const sets = value.setScores ?? game.setScores ?? []
+  return <>
+    {profile.scoringMode === 'sets' && game.liveStatus === 'live' ? <div className="form-grid">{['a', 'b'].map((side) => <label key={side}>Pontos do set atual · {game[side === 'a' ? 'timeA' : 'timeB']}<input type="number" min="0" max="999" step="1" required disabled={disabled} value={value.currentSet?.[side] ?? game.currentSet?.[side] ?? 0} onChange={(event) => onChange('currentSet', { ...(value.currentSet || game.currentSet || { a: 0, b: 0 }), [side]: event.target.value })} /></label>)}</div> : null}
+    <div className="live-score-inputs"><label>{game.timeA} · {scoreLabel(game)}<input type="number" min="0" max={profile.scoringMode === 'sets' ? Math.ceil(profile.volleyballBestOf / 2) : undefined} step="1" required value={value.placarA ?? 0} disabled={disabled} onChange={(event) => onChange('placarA', event.target.value)} /></label><span>×</span><label>{game.timeB} · {scoreLabel(game)}<input type="number" min="0" max={profile.scoringMode === 'sets' ? Math.ceil(profile.volleyballBestOf / 2) : undefined} step="1" required value={value.placarB ?? 0} disabled={disabled} onChange={(event) => onChange('placarB', event.target.value)} /></label></div>
+    {profile.scoringMode === 'sets' && partials ? <div className="set-partials"><strong>Melhor de {profile.volleyballBestOf} sets</strong><p>Informe o placar de sets acima. As parciais em pontos são opcionais.</p>{sets.map((set, index) => <div className="set-partial-row" key={index}><span>{index + 1}º set</span>{['a', 'b'].map((side) => <label key={side}>{side === 'a' ? game.timeA : game.timeB}<input type="number" min="0" max="999" step="1" required value={set[side]} disabled={disabled} onChange={(event) => onChange('setScores', sets.map((item, row) => row === index ? { ...item, [side]: event.target.value } : item))} /></label>)}<button type="button" className="chip-action" disabled={disabled} aria-label={`Remover parcial do ${index + 1}º set`} onClick={() => onChange('setScores', sets.filter((_, row) => row !== index))}>Remover</button></div>)}<button className="btn btn-outline btn-small" type="button" disabled={disabled || sets.length >= profile.volleyballBestOf} onClick={() => onChange('setScores', [...sets, { a: 0, b: 0 }])}>Adicionar parcial de set</button></div> : null}
+  </>
+}

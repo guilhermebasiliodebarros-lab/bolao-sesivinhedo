@@ -5,6 +5,8 @@ import {
   deleteGame,
   deleteSport,
   deleteTeam,
+  deletePlayer,
+  deleteAnnouncement,
   finalizeGame,
   GAME_STATUS,
   isPredictionDeadlineOpen,
@@ -15,8 +17,7 @@ import {
   saveGames,
   saveSport,
   saveTeam,
-  startGame,
-  updateLiveScore,
+  startPreparedGames,
   STATUS_LABELS,
   subscribeAllPredictions,
   subscribeGames,
@@ -30,9 +31,28 @@ import EmptyState from './EmptyState.jsx'
 import LoadingState from './LoadingState.jsx'
 import LiveControlPanel from './LiveControlPanel.jsx'
 import MatchBadge from './MatchBadge.jsx'
-import { getMatchState, MATCH_STATE } from '../utils/match.js'
+import MatchNotice from './MatchNotice.jsx'
+import MatchManagementDialog from './MatchManagementDialog.jsx'
+import MatchStartDialog from './MatchStartDialog.jsx'
+import AdminGameActions from './AdminGameActions.jsx'
+import { getMatchScore } from '../utils/match.js'
+import { normalizeTieBreak, tieBreakSummary } from '../utils/tieBreak.js'
+import TeamRoster from './TeamRoster.jsx'
+import BroadcastAdmin from './BroadcastAdmin.jsx'
+import InterclassStandingsPanel from './InterclassTable.jsx'
+import PendingCenter from './PendingCenter.jsx'
+import DailySchedule from './DailySchedule.jsx'
+import { RegulationsAdmin } from './Regulations.jsx'
+import { AthleteStatisticsPanel } from './AthleteStatistics.jsx'
+import MatchDetails from './MatchDetails.jsx'
+import SportRulesFields from './SportRulesFields.jsx'
+import { getSportProfile } from '../utils/sportRules.js'
+import { findScheduleConflicts } from '../utils/scheduleConflicts.js'
+import { isMatchPrepared } from '../utils/matchStart.js'
+import { getMatchState, getMatchCondition, MATCH_STATE } from '../utils/match.js'
 
 const blankGame = {
+  venue: '', vestA: '', vestB: '', durationMinutes: 30,
   sportId: '',
   esporteNome: '',
   fase: 'Fase de grupos',
@@ -52,6 +72,7 @@ const blankSport = {
 }
 
 const blankTeam = {
+  turma: '',
   id: '',
   sportId: '',
   esporteNome: '',
@@ -60,6 +81,7 @@ const blankTeam = {
 }
 
 const blankBracketForm = {
+  venue: '', vestA: '', vestB: '', durationMinutes: 30,
   tournamentName: '',
   formato: 'grupos-mata-mata',
   fase: 'Chaveamento',
@@ -94,6 +116,9 @@ const KNOCKOUT_STARTS = [
 const GAME_FILTERS = [
   { value: ALL_GAMES_FILTER, label: 'Todos' },
   { value: 'ao-vivo', label: 'Ao vivo' },
+  { value: 'postponed', label: 'Adiados' },
+  { value: 'cancelled', label: 'Cancelados' },
+  { value: 'walkover', label: 'W.O.' },
   { value: GAME_STATUS.OPEN, label: 'Abertos' },
   { value: EXPIRED_GAMES_FILTER, label: 'Prazo vencido' },
   { value: GAME_STATUS.CLOSED, label: 'Encerrados' },
@@ -101,10 +126,17 @@ const GAME_FILTERS = [
 ]
 
 const ADMIN_TABS = [
+  { id: 'pendencias', label: 'Central de pendências' },
+  { id: 'programacao', label: 'Programação / PDF' },
+  { id: 'regulamentos', label: 'Regulamentos' },
+  { id: 'estatisticas', label: 'Estatísticas individuais' },
   { id: 'esportes', label: 'Esportes' },
   { id: 'times', label: 'Times' },
+  { id: 'jogadores', label: 'Jogadores' },
   { id: 'jogos', label: 'Jogos' },
   { id: 'ao-vivo', label: 'Ao vivo / TV' },
+  { id: 'avisos', label: 'Avisos TV' },
+  { id: 'interclasse', label: 'Classificação por grupo' },
   { id: 'participantes', label: 'Participantes' },
   { id: 'palpites', label: 'Palpites' },
 ]
@@ -450,14 +482,14 @@ export default function AdminPanel({ onNavigate }) {
   const [form, setForm] = useState(blankGame)
   const [sportForm, setSportForm] = useState(blankSport)
   const [teamForm, setTeamForm] = useState(blankTeam)
+  const [rosterTeamId, setRosterTeamId] = useState('')
   const [bracketForm, setBracketForm] = useState(blankBracketForm)
   const [bracketGenerated, setBracketGenerated] = useState(false)
   const [bracketTeamOrderIds, setBracketTeamOrderIds] = useState([])
   const [bracketSpinning, setBracketSpinning] = useState(false)
-  const [finalScores, setFinalScores] = useState({})
   const [gameFilter, setGameFilter] = useState(ALL_GAMES_FILTER)
   const [selectedSportId, setSelectedSportId] = useState('')
-  const [activeAdminTab, setActiveAdminTab] = useState('esportes')
+  const [activeAdminTab, setActiveAdminTab] = useState('pendencias')
   const [activeGameTool, setActiveGameTool] = useState('bracket')
   const [phaseFilter, setPhaseFilter] = useState(ALL_PHASES_FILTER)
   const [gameSearch, setGameSearch] = useState('')
@@ -472,6 +504,8 @@ export default function AdminPanel({ onNavigate }) {
   const [message, setMessage] = useState('')
   const [bracketMessage, setBracketMessage] = useState('')
   const [confirmDialog, setConfirmDialog] = useState(null)
+  const [managedMatch, setManagedMatch] = useState(null)
+  const [startingMatchId, setStartingMatchId] = useState(null)
   const [editFocusRequest, setEditFocusRequest] = useState(null)
   const bracketBuilderRef = useRef(null)
   const gameFormRef = useRef(null)
@@ -591,6 +625,14 @@ export default function AdminPanel({ onNavigate }) {
     [bracketForm, bracketGenerated, orderedBracketTeams],
   )
   const bracketPreviewGames = tournamentPlan.games
+  const bracketConflicts = useMemo(() => {
+    const planned = bracketPreviewGames.map((game) => ({
+      ...game, id: `preview-${game.id}`, venue: bracketForm.venue, venueArea: bracketForm.venueArea, durationMinutes: bracketForm.durationMinutes,
+      turmaA: selectedSportTeams.find((team) => team.nome === game.timeA)?.turma || '',
+      turmaB: selectedSportTeams.find((team) => team.nome === game.timeB)?.turma || '',
+    }))
+    return planned.flatMap((game, index) => findScheduleConflicts({ ...game, sportId: selectedSport?.id }, [...games, ...planned.slice(0, index)], teams).map((conflict) => ({ ...conflict, planned: game })))
+  }, [bracketPreviewGames, bracketForm.venue, bracketForm.venueArea, bracketForm.durationMinutes, selectedSportTeams, selectedSport, games, teams])
   const selectedSportTournaments = useMemo(() => groupGamesByTournament(selectedSportGames), [selectedSportGames])
   const predictionTabGames = selectedSport ? selectedSportGames : games
   const gameCountBySport = useMemo(() => {
@@ -619,6 +661,8 @@ export default function AdminPanel({ onNavigate }) {
 
     if (gameFilter === 'ao-vivo') {
       statusFilteredGames = selectedSportGames.filter((game) => getMatchState(game) === MATCH_STATE.LIVE)
+    } else if (['postponed', 'cancelled', 'walkover'].includes(gameFilter)) {
+      statusFilteredGames = selectedSportGames.filter((game) => getMatchCondition(game) === gameFilter)
     } else if (gameFilter === EXPIRED_GAMES_FILTER) {
       statusFilteredGames = expiredOpenGames
     } else if (gameFilter !== ALL_GAMES_FILTER) {
@@ -635,6 +679,9 @@ export default function AdminPanel({ onNavigate }) {
     () => ({
       [ALL_GAMES_FILTER]: selectedSportGames.length,
       'ao-vivo': selectedSportGames.filter((game) => getMatchState(game) === MATCH_STATE.LIVE).length,
+      postponed: selectedSportGames.filter((game) => getMatchCondition(game) === 'postponed').length,
+      cancelled: selectedSportGames.filter((game) => getMatchCondition(game) === 'cancelled').length,
+      walkover: selectedSportGames.filter((game) => getMatchCondition(game) === 'walkover').length,
       [GAME_STATUS.OPEN]: selectedSportGames.filter((game) => game.status === GAME_STATUS.OPEN).length,
       [EXPIRED_GAMES_FILTER]: expiredOpenGames.length,
       [GAME_STATUS.CLOSED]: selectedSportGames.filter((game) => game.status === GAME_STATUS.CLOSED).length,
@@ -694,6 +741,7 @@ export default function AdminPanel({ onNavigate }) {
       ...current,
       sportId,
       esporteNome: sportNameById.get(sportId) || '',
+      ...getSportProfile(sports.find((sport) => sport.id === sportId)),
     }))
   }
 
@@ -716,16 +764,6 @@ export default function AdminPanel({ onNavigate }) {
       esporteNome: sport.nome,
     })
     setMessage('')
-  }
-
-  const updateFinalScore = (gameId, field, value) => {
-    setFinalScores((current) => ({
-      ...current,
-      [gameId]: {
-        ...current[gameId],
-        [field]: value,
-      },
-    }))
   }
 
   const editGame = (game) => {
@@ -768,10 +806,7 @@ export default function AdminPanel({ onNavigate }) {
 
   const editSport = (sport) => {
     setActiveAdminTab('esportes')
-    setSportForm({
-      id: sport.id,
-      nome: sport.nome,
-    })
+    setSportForm({ ...sport })
     setMessage('')
     setEditFocusRequest({ section: 'sport' })
   }
@@ -803,6 +838,7 @@ export default function AdminPanel({ onNavigate }) {
       esporteNome: team.esporteNome || sportNameById.get(team.sportId) || '',
       nome: team.nome,
       categoria: team.categoria || '',
+      turma: team.turma || '',
     })
     setMessage('')
     setEditFocusRequest({ section: 'team' })
@@ -832,38 +868,6 @@ export default function AdminPanel({ onNavigate }) {
     window.setTimeout(() => {
       bracketBuilderRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }, 0)
-  }
-
-  const shiftBracketSchedule = (minutes) => {
-    if (!bracketForm.dataInicial) {
-      showBracketMessage('Informe o horário do primeiro jogo antes de ajustar a agenda.')
-      return
-    }
-
-    setBracketForm((current) => ({
-      ...current,
-      dataInicial: addMinutesToDateTimeLocal(current.dataInicial, minutes),
-    }))
-    setBracketMessage('')
-  }
-
-  const setBracketStartTime = (time) => {
-    if (!time) {
-      return
-    }
-
-    const baseDate = bracketForm.dataInicial ? new Date(bracketForm.dataInicial) : new Date()
-
-    if (Number.isNaN(baseDate.getTime())) {
-      showBracketMessage('Informe uma data inicial válida antes de alterar o horário.')
-      return
-    }
-
-    const [hours, minutes] = time.split(':').map(Number)
-
-    baseDate.setHours(hours || 0, minutes || 0, 0, 0)
-    setBracketForm((current) => ({ ...current, dataInicial: toDateTimeLocalValue(baseDate) }))
-    setBracketMessage('')
   }
 
   const clearBracketPreview = () => {
@@ -953,19 +957,9 @@ export default function AdminPanel({ onNavigate }) {
 
     await runAdminAction(async () => {
       const esporteNome = sportNameById.get(form.sportId) || form.esporteNome
-      const gamePayload = form.id
-        ? { ...form, esporteNome }
-        : {
-            sportId: form.sportId,
-            esporteNome,
-            fase: form.fase,
-            rodada: form.rodada,
-            timeA: form.timeA,
-            timeB: form.timeB,
-            dataHora: form.dataHora,
-            limitePalpites: form.limitePalpites,
-            status: GAME_STATUS.OPEN,
-          }
+      const teamA = teams.find((team) => team.sportId === form.sportId && team.nome === form.timeA)
+      const teamB = teams.find((team) => team.sportId === form.sportId && team.nome === form.timeB)
+      const gamePayload = { ...form, esporteNome, ...getSportProfile(form.id ? form : sports.find((sport) => sport.id === form.sportId)), teamIdA: teamA?.id || '', teamIdB: teamB?.id || '', turmaA: teamA?.turma || '', turmaB: teamB?.turma || '' }
 
       await saveGame(gamePayload)
       resetForm()
@@ -1019,6 +1013,16 @@ export default function AdminPanel({ onNavigate }) {
           id: game.id,
           sportId: selectedSport.id,
           esporteNome: selectedSport.nome,
+          ...getSportProfile(selectedSport),
+          venue: bracketForm.venue,
+          venueArea: bracketForm.venueArea || '',
+          vestA: bracketForm.vestA,
+          vestB: bracketForm.vestB,
+          durationMinutes: bracketForm.durationMinutes,
+          teamIdA: selectedSportTeams.find((team) => team.nome === game.timeA)?.id || '',
+          teamIdB: selectedSportTeams.find((team) => team.nome === game.timeB)?.id || '',
+          turmaA: selectedSportTeams.find((team) => team.nome === game.timeA)?.turma || '',
+          turmaB: selectedSportTeams.find((team) => team.nome === game.timeB)?.turma || '',
           fase: game.fase || bracketForm.fase,
           rodada: game.rodada,
           timeA: game.timeA,
@@ -1103,7 +1107,7 @@ export default function AdminPanel({ onNavigate }) {
   }
 
   const handleFinalize = async (game, scores) => {
-    const draft = scores || finalScores[game.id] || {}
+    const draft = scores || {}
     const live = getMatchState(game) === MATCH_STATE.LIVE
     const finalA = draft.placarA ?? (live ? game.liveScoreA : game.placarA) ?? ''
     const finalB = draft.placarB ?? (live ? game.liveScoreB : game.placarB) ?? ''
@@ -1113,15 +1117,22 @@ export default function AdminPanel({ onNavigate }) {
       return
     }
 
+    let decider
+    try { decider = normalizeTieBreak(game, draft.tieBreak === undefined ? game.tieBreak : draft.tieBreak, finalA, finalB, { final: true }) }
+    catch (error) { setMessage(error.message); return }
+
     confirmAdminAction({
       title: live ? 'Encerrar partida' : 'Finalizar jogo',
-      description: `Confirmar ${game.timeA} ${finalA} x ${finalB} ${game.timeB}? A pontuação será recalculada para todos os participantes.`,
+      description: `Confirmar ${game.timeA} ${finalA} x ${finalB} ${game.timeB}? ${decider ? `${tieBreakSummary({ tieBreak: decider })}. ` : ''}Os palpites serão pontuados pelo placar do tempo normal.`,
       confirmLabel: live ? 'Encerrar e publicar resultado' : 'Finalizar jogo',
       action: () =>
         finalizeGame({
           gameId: game.id,
+          expectedScoreRevision: draft.expectedScoreRevision ?? game.scoreRevision ?? 0,
           placarA: finalA,
           placarB: finalB,
+          setScores: draft.setScores ?? game.setScores,
+          tieBreak: decider,
           user,
         }),
       successMessage: 'Jogo finalizado e pontuação recalculada.',
@@ -1147,7 +1158,7 @@ export default function AdminPanel({ onNavigate }) {
     return <LoadingState label="Carregando área administrativa..." />
   }
 
-  const isSuccessMessage = ['salvo', 'sucesso', 'recalculada', 'finalizado', 'encerrado', 'reaberto', 'excluído'].some(
+  const isSuccessMessage = ['Conferência salva.', 'Partida iniciada.'].some((prefix) => message.startsWith(prefix)) || ['salvo', 'sucesso', 'recalculada', 'finalizado', 'encerrado', 'reaberto', 'excluído'].some(
     (term) => message.toLowerCase().includes(term),
   )
 
@@ -1233,7 +1244,7 @@ export default function AdminPanel({ onNavigate }) {
               onClick={() => setActiveAdminTab(tab.id)}
             >
               <span>{tab.label}</span>
-              <span className="admin-section-count">{tabCount}</span>
+              {tabCount !== undefined ? <span className="admin-section-count">{tabCount}</span> : null}
               <span className="navigation-chevron" aria-hidden="true">›</span>
             </button>
           )
@@ -1255,7 +1266,14 @@ export default function AdminPanel({ onNavigate }) {
         </div>
       ) : null}
 
-      {activeAdminTab === 'ao-vivo' ? <LiveControlPanel games={games} sports={sports} onFinish={handleFinalize} onNavigate={onNavigate} saving={saving} /> : null}
+      {activeAdminTab === 'pendencias' ? <PendingCenter games={games} teams={teams} sports={sports} saving={saving} onPrepare={(game) => setStartingMatchId(game.id)} onManage={(game, tab) => setManagedMatch({ id: game.id, tab })} onStart={(game) => runAdminAction(() => startPreparedGames([game.id]), 'Partida iniciada. Palpites bloqueados e TV atualizada.')} onLive={() => setActiveAdminTab('ao-vivo')} /> : null}
+      {activeAdminTab === 'programacao' ? <DailySchedule games={games} sports={sports} /> : null}
+      {activeAdminTab === 'regulamentos' ? <RegulationsAdmin sports={sports} onNavigate={onNavigate} /> : null}
+      {activeAdminTab === 'estatisticas' ? <AthleteStatisticsPanel games={games} /> : null}
+      {activeAdminTab === 'ao-vivo' ? <LiveControlPanel games={games} teams={teams} sports={sports} onFinish={handleFinalize} onNavigate={onNavigate} saving={saving} onStart={(game) => setStartingMatchId(game.id)} onManage={(game, tab) => setManagedMatch({ id: game.id, tab })} /> : null}
+      {activeAdminTab === 'avisos' ? <BroadcastAdmin games={games} saving={saving} onDelete={(announcement) => confirmAdminAction({ title: 'Remover aviso', description: 'Remover este aviso da transmissão?', confirmLabel: 'Remover aviso', action: () => deleteAnnouncement(announcement.id), successMessage: 'Aviso removido com sucesso.' })} /> : null}
+      {activeAdminTab === 'interclasse' ? <InterclassStandingsPanel games={games} teams={teams} sports={sports} /> : null}
+      {activeAdminTab === 'jogadores' ? <TeamRoster teams={teams} teamId={rosterTeamId} onTeamChange={setRosterTeamId} saving={saving} onRemove={(team, player) => confirmAdminAction({ title: 'Remover jogador', description: `Remover ${player.nome} da equipe ${team.nome}?`, confirmLabel: 'Remover jogador', action: () => deletePlayer(team.id, player.id), successMessage: 'Jogador removido da equipe com sucesso.' })} /> : null}
 
       {activeAdminTab === 'esportes' ? (
       <form className="admin-form admin-sport-form" ref={sportFormRef} onSubmit={handleSportSubmit}>
@@ -1281,6 +1299,8 @@ export default function AdminPanel({ onNavigate }) {
             {saving ? 'Salvando...' : sportForm.id ? 'Salvar esporte' : 'Cadastrar esporte'}
           </button>
         </div>
+
+        <SportRulesFields value={sportForm} onChange={(changes) => setSportForm((current) => ({ ...current, ...changes }))} />
 
         {sports.length ? (
           <div className="sport-chip-list" aria-label="Esportes cadastrados">
@@ -1356,7 +1376,7 @@ export default function AdminPanel({ onNavigate }) {
                 />
               </label>
               <label>
-                Categoria/turma
+                Categoria
                 <input
                   type="text"
                   value={teamForm.categoria}
@@ -1364,6 +1384,7 @@ export default function AdminPanel({ onNavigate }) {
                   placeholder="Ex.: 9o ano, Ensino Medio"
                 />
               </label>
+              <label>Turma<input type="text" maxLength="80" value={teamForm.turma || ''} onChange={(event) => setTeamForm((current) => ({ ...current, turma: event.target.value }))} placeholder="Ex.: 8º A, 9º B" /></label>
               <button className="btn btn-primary" type="submit" disabled={saving}>
                 {saving ? 'Salvando...' : teamForm.id ? 'Salvar time' : 'Cadastrar time'}
               </button>
@@ -1400,6 +1421,7 @@ export default function AdminPanel({ onNavigate }) {
                             <span className={`sport-chip-icon ${getSportVisualClass(team.esporteNome)}`} aria-hidden="true" />
                             <strong>{team.nome}</strong>
                             {team.categoria ? <small>{team.categoria}</small> : null}
+                            <button className="chip-action" type="button" onClick={() => { setRosterTeamId(team.id); setActiveAdminTab('jogadores') }}>Jogadores ({team.playerCount || 0})</button>
                             <button className="chip-action" type="button" onClick={() => editTeam(team)}>
                               Editar
                             </button>
@@ -1658,20 +1680,6 @@ export default function AdminPanel({ onNavigate }) {
           ) : null}
         </div>
 
-        <div className="bracket-bulk-actions" aria-label="Ajustes em lote da agenda">
-          <span>Ajustar datas em lote</span>
-          <button className="btn btn-outline btn-small" type="button" onClick={() => shiftBracketSchedule(-10)}>
-            -10 min em todos
-          </button>
-          <button className="btn btn-outline btn-small" type="button" onClick={() => shiftBracketSchedule(10)}>
-            +10 min em todos
-          </button>
-          <label>
-            Começar às
-            <input type="time" onChange={(event) => setBracketStartTime(event.target.value)} />
-          </label>
-        </div>
-
         {selectedSportTeams.length >= 2 && bracketGenerated ? (
           <>
             {tournamentPlan.groups.length ? (
@@ -1723,17 +1731,15 @@ export default function AdminPanel({ onNavigate }) {
               ))}
             </div>
           </>
-        ) : selectedSportTeams.length >= 2 ? (
-          <EmptyState
-            title="Chaveamento em branco"
-            description="Clique em Sortear grupos/confrontos para montar a prévia antes de salvar os jogos."
-          />
-        ) : (
+        ) : selectedSportTeams.length < 2 ? (
           <EmptyState
             title="Cadastre mais times"
             description="O gerador precisa de pelo menos dois times no esporte selecionado."
           />
-        )}
+        ) : null}
+
+        {bracketConflicts.length ? <div className="schedule-warning" role="status"><strong>Atenção: {bracketConflicts.length} conflito(s) na prévia do chaveamento</strong>{bracketConflicts.slice(0, 8).map(({ game, planned, reasons }, index) => <p key={index}>{planned.timeA} × {planned.timeB} · {formatDateTime(planned.dataHora)}: {reasons.join(' e ')} com {game.timeA} × {game.timeB}.</p>)}<small>Revise os horários das equipes e turmas. O local será definido na preparação de cada partida.</small></div> : null}
+        <p className="form-hint">Local, área, duração e coletes serão definidos em Preparar partida, depois de salvar os jogos.</p>
 
         <div className="form-actions bracket-action-bar">
           <button
@@ -1876,6 +1882,7 @@ export default function AdminPanel({ onNavigate }) {
             />
           </label>
         </div>
+        <p className="form-hint">Local, área, duração e coletes são definidos em Preparar partida.</p>
         {!selectedSportTeams.length ? (
           <div className="form-hint">
             Cadastre times na aba Times para escolher Time A e Time B por lista, sem digitar tudo de novo.
@@ -1965,9 +1972,7 @@ export default function AdminPanel({ onNavigate }) {
                 filteredGames.map((game) => {
                 const gamePredictions = predictionsByGame.get(game.id) || []
                 const pendingPredictions = getPendingPredictionCount(gamePredictions)
-                const draft = finalScores[game.id] || {}
                 const deadlineExpired = game.status === GAME_STATUS.OPEN && !isPredictionDeadlineOpen(game)
-                const canSetFinalScore = game.status !== GAME_STATUS.OPEN
                 const matchState = getMatchState(game)
                 const isLive = matchState === MATCH_STATE.LIVE
 
@@ -1989,86 +1994,17 @@ export default function AdminPanel({ onNavigate }) {
                       </strong>
                       <span>{game.esporteNome}</span>
                       <span>{getGameStageLabel(game)}</span>
+                      <MatchDetails game={game} />
+                      <MatchNotice game={game} />
                       <span>{formatDateTime(game.dataHora)}</span>
                       <span>Palpites até {formatDateTime(game.limitePalpites)}</span>
                       <MatchBadge game={game} />
+                      {isMatchPrepared(game, teams) ? <span className="prepared-badge">Pronta para iniciar</span> : null}
                       <span className={`status-badge status-${game.status}`}>{STATUS_LABELS[game.status]}</span>
                       {deadlineExpired ? <span className="status-badge status-expired">Prazo vencido</span> : null}
                     </div>
-                    {canSetFinalScore ? (
-                      <div className="final-score-form">
-                        <label>
-                          Placar A
-                          <input
-                            type="number"
-                            min="0"
-                            step="1"
-                            value={draft.placarA ?? (isLive ? game.liveScoreA : game.placarA) ?? ''}
-                            onChange={(event) => updateFinalScore(game.id, 'placarA', event.target.value)}
-                          />
-                        </label>
-                        <label>
-                          Placar B
-                          <input
-                            type="number"
-                            min="0"
-                            step="1"
-                            value={draft.placarB ?? (isLive ? game.liveScoreB : game.placarB) ?? ''}
-                            onChange={(event) => updateFinalScore(game.id, 'placarB', event.target.value)}
-                          />
-                        </label>
-                      </div>
-                    ) : (
-                      <div className="initial-score">
-                        <span>Placar inicial</span>
-                        <strong>0 x 0</strong>
-                      </div>
-                    )}
-                    <div className="admin-actions">
-                      <button className="btn btn-outline btn-small" type="button" onClick={() => editGame(game)}>
-                        Editar
-                      </button>
-                      {matchState === MATCH_STATE.SCHEDULED ? <button className="btn btn-primary btn-small" type="button" disabled={saving || Boolean(game.seedLabelA || game.seedLabelB)} onClick={() => runAdminAction(() => startGame(game.id), 'Partida iniciada ao vivo. Palpites bloqueados.')}>Iniciar jogo</button> : null}
-                      {isLive ? <button className="btn btn-outline btn-small" type="button" disabled={saving} onClick={() => runAdminAction(() => updateLiveScore({ gameId: game.id, placarA: draft.placarA ?? game.liveScoreA, placarB: draft.placarB ?? game.liveScoreB }), 'Placar ao vivo atualizado com sucesso.')}>Atualizar placar</button> : null}
-                      {game.status === GAME_STATUS.OPEN ? (
-                        <button
-                          className="btn btn-outline btn-small"
-                          type="button"
-                          disabled={saving}
-                          onClick={() => runAdminAction(() => closeGame(game.id), 'Jogo encerrado para palpites.')}
-                        >
-                          Fechar palpites
-                        </button>
-                      ) : !isLive ? (
-                        <button
-                          className="btn btn-outline btn-small"
-                          type="button"
-                          disabled={saving}
-                          onClick={() => runAdminAction(() => reopenGame(game.id), 'Jogo reaberto para palpites.')}
-                        >
-                          Reabrir palpites
-                        </button>
-                      ) : null}
-                      {canSetFinalScore ? (
-                        <button
-                          className="btn btn-primary btn-small"
-                          type="button"
-                          disabled={saving}
-                          onClick={() => handleFinalize(game)}
-                        >
-                          {isLive ? 'Encerrar partida' : 'Finalizar'}
-                        </button>
-                      ) : null}
-                      <button
-                        className="btn btn-ghost btn-small"
-                        type="button"
-                        disabled={saving || gamePredictions.length > 0 || isLive}
-                        title={isLive ? 'Encerre a partida antes de excluir.' : undefined}
-                        onClick={() => runAdminAction(() => deleteGame(game.id), 'Jogo excluído com sucesso.')}
-                      >
-                        Excluir
-                      </button>
-                    </div>
+                    <div className="initial-score"><span>{isLive ? 'Ao vivo' : matchState === MATCH_STATE.FINISHED ? 'Resultado' : 'Preparação'}</span><strong>{getMatchCondition(game) === 'walkover' ? 'W.O.' : [MATCH_STATE.LIVE, MATCH_STATE.FINISHED].includes(matchState) ? getMatchScore(game).join(' × ') : matchState === MATCH_STATE.SCHEDULED ? 'A iniciar' : 'A reagendar'}</strong></div>
+                    <AdminGameActions game={game} prepared={isMatchPrepared(game, teams)} onQuickStart={(item) => runAdminAction(() => startPreparedGames([item.id]), 'Partida iniciada ao vivo.')} saving={saving} hasPredictions={gamePredictions.length > 0} onStart={(item) => setStartingMatchId(item.id)} onManage={(item, tab) => setManagedMatch({ id: item.id, tab })} onEdit={editGame} onClosePredictions={(item) => runAdminAction(() => closeGame(item.id), 'Palpites bloqueados.')} onReopen={(item) => confirmAdminAction({ title: 'Reabrir partida', description: 'Reabrir este jogo e remover o resultado publicado?', confirmLabel: 'Reabrir partida', action: () => reopenGame(item.id), successMessage: 'Partida reaberta com sucesso.' })} onDelete={(item) => confirmAdminAction({ title: 'Excluir jogo', description: 'Excluir este jogo e seus registros?', confirmLabel: 'Excluir jogo', action: () => deleteGame(item.id), successMessage: 'Jogo excluído com sucesso.' })} />
                     <div className="prediction-counts">
                       <span>{gamePredictions.length} palpite(s)</span>
                       <strong>{pendingPredictions} pendente(s)</strong>
@@ -2190,6 +2126,8 @@ export default function AdminPanel({ onNavigate }) {
       </div>
       </div>
 
+      {startingMatchId && games.some((game) => game.id === startingMatchId) ? <MatchStartDialog key={startingMatchId} game={games.find((game) => game.id === startingMatchId)} games={games} teams={teams} user={user} onClose={() => setStartingMatchId(null)} onStarted={(notice) => { setStartingMatchId(null); setMessage(notice) }} /> : null}
+      {managedMatch && games.some((game) => game.id === managedMatch.id) ? <MatchManagementDialog key={managedMatch.id} game={games.find((game) => game.id === managedMatch.id)} games={games} teams={teams} user={user} initialTab={managedMatch.tab} onClose={() => setManagedMatch(null)} onSaved={(notice) => { setManagedMatch(null); setMessage(notice) }} /> : null}
       {confirmDialog ? (
         <div className="modal-backdrop" role="presentation" onClick={closeConfirmDialog}>
           <section

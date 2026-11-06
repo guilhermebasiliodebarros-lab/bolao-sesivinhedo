@@ -27,6 +27,8 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
   const publicItems = [
     { id: 'home', label: COPY.nav.home },
     { id: 'calendario', label: COPY.nav.calendario },
+    { id: 'regulamentos', label: 'Regulamentos' },
+    { id: 'estatisticas', label: 'Estatísticas' },
     { id: 'tv', label: 'Modo TV' },
   ]
   const participantItems = isParticipant ? [
@@ -69,7 +71,7 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
         <div className="header-topbar">
           <button className="brand" type="button" onClick={() => handleNavigate('home')}>
             {logoLoaded ? (
-              <img className="brand-logo" src="/logo.png" alt={COPY.brand.name} onError={() => setLogoLoaded(false)} />
+              <img className="brand-logo" src="/logo-interclasse.png" alt="Interclasse SESI Vinhedo" onError={() => setLogoLoaded(false)} />
             ) : (
               <><span className="brand-mark">{COPY.brand.shortMark}</span><strong>{COPY.brand.name}</strong></>
             )}

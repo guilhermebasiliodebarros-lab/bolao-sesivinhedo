@@ -11,8 +11,11 @@ import {
 import { formatDateTime, formatPoints, formatTimeRemaining, minutesUntil } from '../utils/format.js'
 import { getGameStageLabel, getSportIcon, getSportVisualClass } from '../utils/game.js'
 import { POINTS, calculateGuessScore, getScoreTypeLabel, hasFinalScore } from '../utils/scoring.js'
-import { getMatchScore, getMatchState, MATCH_STATE } from '../utils/match.js'
+import { getMatchCondition, getMatchScore, getMatchState, isPredictionVoided, MATCH_STATE } from '../utils/match.js'
 import MatchBadge from './MatchBadge.jsx'
+import MatchDetails from './MatchDetails.jsx'
+import MatchNotice from './MatchNotice.jsx'
+import { formatSportScore, getSportProfile, scoreLabel } from '../utils/sportRules.js'
 
 export default function GameCard({ game, existingPrediction, existingGuess, compact = false, onGuessSaved, onNavigate }) {
   const { user, profile, isParticipant, isMaster } = useAuth()
@@ -24,7 +27,7 @@ export default function GameCard({ game, existingPrediction, existingGuess, comp
 
   const prediction = existingPrediction || existingGuess
   const deadline = getPredictionDeadline(game)
-  const deadlineOpen = isPredictionDeadlineOpen(game, now)
+  const deadlineOpen = getMatchCondition(game) === 'normal' && isPredictionDeadlineOpen(game, now)
   const countdownLabel = formatTimeRemaining(deadline, now)
   const minutesToDeadline = minutesUntil(deadline, now)
   const isDeadlineUrgent = deadlineOpen && minutesToDeadline !== null && minutesToDeadline <= 30
@@ -112,7 +115,7 @@ export default function GameCard({ game, existingPrediction, existingGuess, comp
           {game.esporteNome}
         </span>
         <span>{getGameStageLabel(game)}</span>
-        {getMatchState(game) === MATCH_STATE.LIVE ? <MatchBadge game={game} /> : null}
+        {getMatchState(game) === MATCH_STATE.LIVE || getMatchCondition(game) !== 'normal' ? <MatchBadge game={game} /> : null}
         <span className={`status-badge status-${game.status}`}>{STATUS_LABELS[game.status]}</span>
         <span>Jogo: {formatDateTime(game.dataHora)}</span>
         <span>Palpites até: {formatDateTime(deadline)}</span>
@@ -128,16 +131,20 @@ export default function GameCard({ game, existingPrediction, existingGuess, comp
           .join(' ')}
       >
         <span>{deadlineOpen ? (isDeadlineUrgent ? 'Últimos minutos' : 'Contagem regressiva') : 'Palpites encerrados'}</span>
-        <strong>{countdownLabel}</strong>
+        <strong>{isPredictionVoided(game) ? 'Palpites anulados' : getMatchCondition(game) === 'postponed' ? 'Aguardando novo horário' : countdownLabel}</strong>
       </div>
 
       <div className="scoreboard">
         <strong>{game.timeA}</strong>
         <span className="score-display">
-          {game.status === GAME_STATUS.FINISHED && hasFinalScore(game) ? `${game.placarA} x ${game.placarB}` : getMatchState(game) === MATCH_STATE.LIVE ? getMatchScore(game).join(' x ') : 'x'}
+          {getMatchCondition(game) === 'walkover' && !hasFinalScore(game) ? 'W.O.' : game.status === GAME_STATUS.FINISHED && hasFinalScore(game) ? `${formatSportScore(game.placarA)} x ${formatSportScore(game.placarB)}` : getMatchState(game) === MATCH_STATE.LIVE ? getMatchScore(game).map(formatSportScore).join(' x ') : 'x'}
         </span>
         <strong>{game.timeB}</strong>
       </div>
+
+      <p className="game-score-unit">{scoreLabel(game)}</p>
+      <MatchDetails game={game} />
+      <MatchNotice game={game} />
 
       {prediction ? (
         <div className="guess-summary">
@@ -145,7 +152,7 @@ export default function GameCard({ game, existingPrediction, existingGuess, comp
           <strong>
             {prediction.palpiteA} x {prediction.palpiteB}
           </strong>
-          {game.status === GAME_STATUS.FINISHED ? (
+          {game.status === GAME_STATUS.FINISHED || isPredictionVoided(game) ? (
             <small className="score-detail">
               <span>{getScoreTypeLabel(result.type)}</span>
               <strong>
@@ -168,7 +175,8 @@ export default function GameCard({ game, existingPrediction, existingGuess, comp
             <input
               type="number"
               min="0"
-              step="1"
+              step={getSportProfile(game).scoringMode === 'chess' ? '0.5' : '1'}
+              max={getSportProfile(game).scoringMode === 'chess' ? 1 : undefined}
               value={palpiteA}
               onChange={(event) => updateDraft('palpiteA', event.target.value)}
               required
@@ -180,7 +188,8 @@ export default function GameCard({ game, existingPrediction, existingGuess, comp
             <input
               type="number"
               min="0"
-              step="1"
+              step={getSportProfile(game).scoringMode === 'chess' ? '0.5' : '1'}
+              max={getSportProfile(game).scoringMode === 'chess' ? 1 : undefined}
               value={palpiteB}
               onChange={(event) => updateDraft('palpiteB', event.target.value)}
               required

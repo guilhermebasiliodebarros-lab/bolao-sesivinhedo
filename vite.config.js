@@ -29,30 +29,40 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks(id) {
-          if (id.includes('node_modules/firebase') || id.includes('node_modules/@firebase')) {
-            if (id.includes('/firestore') || id.includes('\\firestore')) {
-              return 'firebase-firestore'
-            }
+        codeSplitting: {
+          groups: [
+            { name: 'preload-helper', test: /preload-helper/, priority: 100 },
+            { debugName: 'application-dependencies', name(id) {
+                if (['html2canvas', 'canvg', 'rgbcolor', 'stackblur-canvas', 'utrie', 'text-segmentation', 'css-line-break', '@babel/runtime', 'core-js', 'dompurify'].some((name) => id.includes(`node_modules/${name}/`) || id.includes(`node_modules\\${name.replaceAll('/', '\\')}\\`))) return 'pdf-renderer'
+                if (id.includes('node_modules/jspdf') || id.includes('node_modules/@pdf-lib')) return 'pdf-writer'
+                if (id.includes('node_modules/pdfjs-dist')) return 'pdf-reader'
+                if (id.includes('node_modules/mammoth')) return 'word-reader'
+                if (id.includes('node_modules/tesseract')) return 'ocr-reader'
+                if (id.includes('node_modules/firebase') || id.includes('node_modules/@firebase')) {
+                  if (id.includes('/firestore') || id.includes('\\firestore')) {
+                    return 'firebase-firestore'
+                  }
 
-            if (id.includes('/auth') || id.includes('\\auth')) {
-              return 'firebase-auth'
-            }
+                  if (id.includes('/auth') || id.includes('\\auth')) {
+                    return 'firebase-auth'
+                  }
 
-            if (id.includes('/app') || id.includes('\\app') || id.includes('/component') || id.includes('\\component')) {
-              return 'firebase-app'
-            }
+                  if (id.includes('/app') || id.includes('\\app') || id.includes('/component') || id.includes('\\component')) {
+                    return 'firebase-app'
+                  }
 
-            return 'firebase-shared'
-          }
+                  return 'firebase-shared'
+                }
 
-          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
-            return 'react-vendor'
-          }
+                if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
+                  return 'react-vendor'
+                }
 
-          if (id.includes('node_modules')) {
-            return 'vendor'
-          }
+                if (id.includes('node_modules')) {
+                  return 'vendor'
+                }
+            } },
+          ],
         },
       },
     },

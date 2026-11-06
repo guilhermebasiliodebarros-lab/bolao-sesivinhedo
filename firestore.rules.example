@@ -24,14 +24,20 @@ service cloud.firestore {
       let game = get(/databases/$(database)/documents/games/$(gameId)).data;
 
       return game.status == "aberto"
+        && (!game.keys().hasAny(["matchCondition"]) || game.matchCondition == "normal")
         && (!game.keys().hasAny(["limitePalpites"]) || request.time <= game.limitePalpites);
     }
 
     function validNonNegativeScores() {
-      return request.resource.data.palpiteA is int
-        && request.resource.data.palpiteB is int
-        && request.resource.data.palpiteA >= 0
-        && request.resource.data.palpiteB >= 0;
+      let game = get(/databases/$(database)/documents/games/$(request.resource.data.gameId)).data;
+      let mode = game.keys().hasAny(["scoringMode"]) ? game.scoringMode : (game.esporteNome == "Xadrez" ? "chess" : "points");
+      let a = request.resource.data.palpiteA;
+      let b = request.resource.data.palpiteB;
+      let target = game.keys().hasAny(["volleyballBestOf"]) && game.volleyballBestOf == 5 ? 3 : 2;
+      return mode == "chess"
+        ? ((a == 1 && b == 0) || (a == 0 && b == 1) || (a == 0.5 && b == 0.5))
+        : (a is int && b is int && a >= 0 && b >= 0 && a <= 10000 && b <= 10000
+          && (mode != "sets" || ((a == target && b < target) || (b == target && a < target))));
     }
 
     function userCannotChangeScoreOrRole() {
@@ -100,6 +106,13 @@ service cloud.firestore {
     match /games/{gameId} {
       allow read: if true;
       allow create, update, delete: if isMaster();
+
+      match /documents/{documentId} {
+        allow read, write: if isMaster();
+      }
+      match /events/{eventId} {
+        allow read, write: if isMaster();
+      }
     }
 
     match /sports/{sportId} {
@@ -107,9 +120,27 @@ service cloud.firestore {
       allow create, update, delete: if isMaster();
     }
 
+    match /announcements/{announcementId} {
+      allow read: if isMaster() || resource.data.active == true;
+      allow create, update, delete: if isMaster();
+    }
+
+    match /broadcastSettings/{settingId} {
+      allow read: if true;
+      allow create, update, delete: if isMaster();
+    }
+
+    match /operations/{operationId} {
+      allow read, write: if isMaster();
+    }
+
     match /teams/{teamId} {
       allow read: if true;
       allow create, update, delete: if isMaster();
+
+      match /players/{playerId} {
+        allow read, write: if isMaster();
+      }
     }
 
     match /predictions/{predictionId} {

@@ -1,3 +1,5 @@
+import { isPredictionVoided } from './match.js'
+
 export const POINTS = {
   RESULT: 3,
   PARTIAL_SCORE_MULTIPLIER: 1.2,
@@ -66,6 +68,7 @@ export function calcularPontuacao(palpiteA, palpiteB, placarA, placarB) {
 }
 
 export function calculateGuessScore(game, guess) {
+  if (isPredictionVoided(game)) return { points: POINTS.MISS, type: 'void' }
   if (!hasFinalScore(game) || !guess) {
     return { points: POINTS.MISS, type: 'pending' }
   }
@@ -99,6 +102,7 @@ export function getScoreTypeLabel(type) {
     result: 'Resultado correto',
     miss: 'Palpite sem ponto',
     pending: 'Aguardando resultado',
+    void: 'Palpite anulado',
   }
 
   return labels[type] || labels.pending
