@@ -53,3 +53,41 @@ export function drawSections(teams, config) {
     slots: teams.slice(index * 2, index * 2 + 2).map((team, offset) => ({ team, index: index * 2 + offset })),
   }))
 }
+
+// Presentation order alternates groups; the original array still defines the draw.
+export function drawRevealOrder(teams, config) {
+  const sections = drawSections(teams, config)
+  const entry = (section, slot) => ({ ...slot, destination: section.label })
+  if (config.formato !== 'grupos-mata-mata') return sections.flatMap((section) => section.slots.map((slot) => entry(section, slot)))
+  const order = []
+  for (let row = 0; row < Math.max(...sections.map((section) => section.slots.length)); row += 1) {
+    sections.forEach((section) => { if (section.slots[row]) order.push(entry(section, section.slots[row])) })
+  }
+  return order
+}
+
+export function createDrawPresentation(total) {
+  return { total, count: 0, active: 0, phase: 'idle', automatic: false, replay: false, celebrated: false, cycle: 0 }
+}
+
+export function drawPresentationReducer(state, action) {
+  const busy = !['idle', 'settled'].includes(state.phase)
+  const begin = (replay = false) => ({ ...state, phase: 'mixing', active: replay ? state.count - 1 : state.count, replay, cycle: state.cycle + 1 })
+  if (action.cycle != null && action.cycle !== state.cycle) return state
+  switch (action.type) {
+    case 'automatic': return state.count < state.total ? { ...(busy ? state : begin()), automatic: true } : state
+    case 'pause': return { ...state, automatic: false }
+    case 'next': return !busy && state.count < state.total ? begin() : state
+    case 'repeat': return !busy && state.count > 0 ? { ...begin(true), automatic: false } : state
+    case 'show': return state.phase === 'mixing' ? { ...state, phase: 'ejecting' } : state
+    case 'ready': return state.phase === 'ejecting' ? { ...state, phase: 'ready' } : state
+    case 'open': return state.phase === 'ready' ? { ...state, phase: 'opening' } : state
+    case 'reveal': return state.phase === 'opening' ? { ...state, phase: 'revealing' } : state
+    case 'fly': return state.phase === 'revealing' ? { ...state, phase: 'flying' } : state
+    case 'land': return state.phase === 'flying' ? { ...state, phase: 'landing', count: state.replay ? state.count : Math.min(state.count + 1, state.total) } : state
+    case 'settle': return state.phase === 'landing' ? { ...state, phase: 'settled', celebrated: state.celebrated || state.count === state.total } : state
+    case 'advance': return !busy && state.automatic && state.count < state.total ? begin() : state
+    case 'skip': return { ...state, count: state.total, active: state.total - 1, phase: 'settled', automatic: false, replay: false, celebrated: true, cycle: state.cycle + 1 }
+    default: return state
+  }
+}

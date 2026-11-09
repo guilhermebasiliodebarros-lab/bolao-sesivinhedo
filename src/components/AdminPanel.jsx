@@ -56,10 +56,10 @@ import { drawFingerprint, drawTeamOrder } from '../utils/tournamentDraw.js'
 import { ShiftTabs } from './ShiftSelector.jsx'
 import { getTeamShift, getGameShift, shiftLabel } from '../utils/schoolShifts.js'
 import { orderRoundRobinGames } from '../utils/tournamentSchedule.js'
+import { planBracketSchedule, bracketScheduleConflicts } from '../utils/bracketSchedule.js'
 import MatchDetails from './MatchDetails.jsx'
 import SportRulesFields from './SportRulesFields.jsx'
 import { getSportProfile } from '../utils/sportRules.js'
-import { findScheduleConflicts } from '../utils/scheduleConflicts.js'
 import { isMatchPrepared } from '../utils/matchStart.js'
 import { getMatchState, getMatchCondition, MATCH_STATE } from '../utils/match.js'
 
@@ -109,6 +109,8 @@ const blankBracketForm = {
   classificadosPorGrupo: 2,
   mataMataInicial: 'Semifinal',
   terceiroLugar: false,
+  descansoMinutos: 10,
+  horarioFinal: '',
 }
 
 const ALL_GAMES_FILTER = 'todos'
@@ -417,6 +419,19 @@ function buildTournamentPlan(teams, bracketForm) {
   }
 }
 
+function scheduleTournamentPreview(plan, form, sport, sportTeams, existing, teams) {
+  const drafts = plan.games.map((game) => ({
+    ...game, sportId: sport?.id || '', esporteNome: sport?.nome || '',
+    tournamentId: `preview-${sport?.id}-${form.turno}`,
+    durationMinutes: form.durationMinutes, venue: form.venue, venueArea: form.venueArea || '',
+    ...Object.fromEntries(['A', 'B'].flatMap((side) => {
+      const team = sportTeams.find((item) => item.nome === game[`time${side}`] && !game[`seedLabel${side}`])
+      return [[`teamId${side}`, team?.id || ''], [`turma${side}`, team?.turma || '']]
+    })),
+  }))
+  return planBracketSchedule(drafts, existing, teams, form)
+}
+
 function addMinutesToDateTimeLocal(value, minutes) {
   const date = new Date(value)
 
@@ -645,15 +660,14 @@ export default function AdminPanel({ onNavigate }) {
         : { mode: bracketForm.formato, groups: [], games: [], byes: [] },
     [bracketForm, bracketGenerated, orderedBracketTeams],
   )
-  const bracketPreviewGames = tournamentPlan.games
+  const bracketSchedule = useMemo(() => scheduleTournamentPreview(tournamentPlan, bracketForm, selectedSport, selectedSportTeams, games, teams), [tournamentPlan, bracketForm, selectedSport, selectedSportTeams, games, teams])
+  const ceremonySchedule = useMemo(() => activeDraw ? scheduleTournamentPreview(buildTournamentPlan(activeDraw.teams, activeDraw.config), activeDraw.config, selectedSport, selectedSportTeams, games, teams) : { games: [] }, [activeDraw, selectedSport, selectedSportTeams, games, teams])
+  const bracketPreviewGames = bracketSchedule.games
   const bracketConflicts = useMemo(() => {
-    const planned = bracketPreviewGames.map((game) => ({
-      ...game, id: `preview-${game.id}`, venue: bracketForm.venue, venueArea: bracketForm.venueArea, durationMinutes: bracketForm.durationMinutes,
-      turmaA: selectedSportTeams.find((team) => team.nome === game.timeA)?.turma || '',
-      turmaB: selectedSportTeams.find((team) => team.nome === game.timeB)?.turma || '',
-    }))
-    return planned.flatMap((game, index) => findScheduleConflicts({ ...game, sportId: selectedSport?.id }, [...games, ...planned.slice(0, index)], teams).map((conflict) => ({ ...conflict, planned: game })))
-  }, [bracketPreviewGames, bracketForm.venue, bracketForm.venueArea, bracketForm.durationMinutes, selectedSportTeams, selectedSport, games, teams])
+    if (!bracketForm.dataInicial || bracketSchedule.error) return []
+    try { return bracketScheduleConflicts(bracketPreviewGames, games, teams, bracketForm.descansoMinutos) }
+    catch { return [] }
+  }, [bracketPreviewGames, bracketForm.dataInicial, bracketForm.descansoMinutos, bracketSchedule.error, games, teams])
   const selectedSportTournaments = useMemo(() => groupGamesByTournament(selectedSportGames), [selectedSportGames])
   const predictionTabGames = selectedSport ? selectedSportGames : shiftGames
   const gameCountBySport = useMemo(() => {
@@ -760,7 +774,7 @@ export default function AdminPanel({ onNavigate }) {
     setSelectedShift(turno)
     setBracketGenerated(false)
     setBracketTeamOrderIds([])
-    setBracketForm((current) => ({ ...current, turno, timesPorGrupo: turno === 'manha' ? 4 : 3, tournamentName: '', dataInicial: '' }))
+    setBracketForm((current) => ({ ...current, turno, timesPorGrupo: turno === 'manha' ? 4 : 3, tournamentName: '', dataInicial: '', horarioFinal: '' }))
     setTeamForm({ ...blankTeam, turno, sportId: selectedSport?.id || '', esporteNome: selectedSport?.nome || '' })
     setForm({ ...blankGame, turno, sportId: selectedSport?.id || '', esporteNome: selectedSport?.nome || '' })
     setRosterTeamId('')
@@ -1048,6 +1062,10 @@ export default function AdminPanel({ onNavigate }) {
       showBracketMessage('Não há confrontos para salvar com os times selecionados.')
       return
     }
+    if (bracketSchedule.error || bracketConflicts.length) {
+      showBracketMessage(bracketSchedule.error || 'Confira os conflitos antes de salvar o chaveamento.')
+      return
+    }
 
     setMessage('')
     setBracketMessage('')
@@ -1090,7 +1108,7 @@ export default function AdminPanel({ onNavigate }) {
           placement: game.placement,
           seedLabelA: game.seedLabelA,
           seedLabelB: game.seedLabelB,
-        })),
+        })), { checkSchedule: true, restMinutes: Number(bracketForm.descansoMinutos) },
       )
       setBracketGenerated(false)
       setBracketTeamOrderIds([])
@@ -1671,10 +1689,11 @@ export default function AdminPanel({ onNavigate }) {
             />
           </label>
           <label>
-            Intervalo entre jogos
+            Intervalo entre inícios (min)
             <input
               type="number"
               min="0"
+              max="480"
               step="5"
               value={bracketForm.intervaloMinutos}
               onChange={(event) => updateBracketField('intervaloMinutos', event.target.value)}
@@ -1690,6 +1709,11 @@ export default function AdminPanel({ onNavigate }) {
               onChange={(event) => updateBracketField('limiteHorasAntes', event.target.value)}
             />
           </label>
+          <label>Duração prevista de cada jogo (min)<input type="number" min="1" max="480" step="1" value={bracketForm.durationMinutes} onChange={(event) => updateBracketField('durationMinutes', event.target.value)} /></label>
+          <label>Descanso mínimo da turma (min)<input type="number" min="0" max="240" step="1" value={bracketForm.descansoMinutos} onChange={(event) => updateBracketField('descansoMinutos', event.target.value)} /></label>
+          <label>Encerrar programação do dia às (opcional)<input type="time" value={bracketForm.horarioFinal} onChange={(event) => updateBracketField('horarioFinal', event.target.value)} /></label>
+          <label>Local previsto (opcional)<input type="text" maxLength="80" value={bracketForm.venue} onChange={(event) => updateBracketField('venue', event.target.value)} placeholder="Ex.: Quadra principal" /></label>
+          <label>Área prevista (opcional)<input type="text" maxLength="80" value={bracketForm.venueArea || ''} onChange={(event) => updateBracketField('venueArea', event.target.value)} placeholder="Ex.: Vôlei ou Mesa 1" /></label>
           {bracketForm.formato === 'grupos-mata-mata' ? (
             <>
               <label>
@@ -1794,7 +1818,9 @@ export default function AdminPanel({ onNavigate }) {
         ) : null}
 
         {bracketConflicts.length ? <div className="schedule-warning" role="status"><strong>Atenção: {bracketConflicts.length} conflito(s) na prévia do chaveamento</strong>{bracketConflicts.slice(0, 8).map(({ game, planned, reasons }, index) => <p key={index}>{planned.timeA} × {planned.timeB} · {formatDateTime(planned.dataHora)}: {reasons.join(' e ')} com {game.timeA} × {game.timeB}.</p>)}<small>Revise os horários das equipes e turmas. O local será definido na preparação de cada partida.</small></div> : null}
-        <p className="form-hint">Local, área, duração e coletes serão definidos em Preparar partida, depois de salvar os jogos.</p>
+        {bracketSchedule.error ? <p className="alert alert-error" role="alert">{bracketSchedule.error}</p> : null}
+        {bracketGenerated && bracketForm.dataInicial && !bracketSchedule.error ? <div className="alert" role="status"><strong>Horários distribuídos considerando todas as modalidades.</strong><p>{bracketSchedule.adjusted} jogo(s) ajustado(s) · {bracketSchedule.days} dia(s) de programação · descanso mínimo de {bracketForm.descansoMinutos} minuto(s) por turma.</p>{bracketSchedule.unresolved ? <p>O mata-mata reserva as turmas que ainda podem se classificar e começa após a fase anterior.</p> : null}{bracketSchedule.days > 1 && !bracketForm.horarioFinal ? <p>Defina um horário limite do dia para distribuir os jogos dentro do período disponível.</p> : null}</div> : null}
+        <p className="form-hint">Os horários são provisórios e podem ser editados depois. O intervalo entre inícios respeita pelo menos a duração prevista de uma partida. Com horário limite, os jogos que não couberem passam para o próximo dia, no horário inicial escolhido. Local e área só entram na conferência de conflitos quando informados; presença e coletes continuam na preparação.</p>
 
         <div className="form-actions bracket-action-bar">
           <button
@@ -1816,7 +1842,7 @@ export default function AdminPanel({ onNavigate }) {
           <button
             className="btn btn-primary"
             type="button"
-            disabled={saving || selectedSportTeams.length < 2 || !bracketGenerated}
+            disabled={saving || selectedSportTeams.length < 2 || !bracketGenerated || Boolean(bracketSchedule.error) || Boolean(bracketConflicts.length)}
             onClick={handleGenerateBracket}
           >
             {saving ? 'Gerando...' : 'Salvar chaveamento'}
@@ -2183,7 +2209,7 @@ export default function AdminPanel({ onNavigate }) {
 
       {thirdPlaceTournamentId && selectedSportTournaments.some((tournament) => tournament.id === thirdPlaceTournamentId) ? <ThirdPlaceDialog key={thirdPlaceTournamentId} tournament={selectedSportTournaments.find((tournament) => tournament.id === thirdPlaceTournamentId)} onClose={() => setThirdPlaceTournamentId(null)} onSaved={(notice) => { setThirdPlaceTournamentId(null); setMessage(notice) }} /> : null}
 
-      {activeDraw ? <TournamentDrawDialog draw={activeDraw} teams={selectedSportTeams} config={bracketForm} onClose={() => setActiveDraw(null)} onApply={(ids) => {
+      {activeDraw ? <TournamentDrawDialog draw={activeDraw} teams={selectedSportTeams} config={bracketForm} openingGames={ceremonySchedule.games.filter((game) => !game.seedLabelA && !game.seedLabelB && !game.sourceGameIdA && !game.sourceGameIdB)} onClose={() => setActiveDraw(null)} onApply={(ids) => {
         if (activeDraw.fingerprint !== drawFingerprint(selectedSportTeams, bracketForm)) return
         setBracketTeamOrderIds(ids)
         setBracketGenerated(true)

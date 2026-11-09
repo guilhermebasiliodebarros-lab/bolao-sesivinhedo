@@ -33,6 +33,7 @@ import { isMatchPrepared, matchStartChecklist, preparationKey } from '../utils/m
 import { normalizePlayerInput } from '../utils/player.js'
 import { normalizeDisciplineInput } from '../utils/discipline.js'
 import { sourceParticipant, thirdPlaceParticipants, thirdPlaceSemifinals } from '../utils/thirdPlace.js'
+import { bracketScheduleConflicts } from '../utils/bracketSchedule.js'
 import { getSportProfile, normalizeMatchDetails, normalizeSetScores, validateFinalSets, validateSportScores } from '../utils/sportRules.js'
 
 export const GAME_STATUS = {
@@ -732,7 +733,7 @@ export async function redistributeTournamentSchedule({ tournamentId, expectedGam
   })
 }
 
-export async function saveGames(games) {
+export async function saveGames(games, { checkSchedule = false, restMinutes = 0 } = {}) {
   const firestore = ensureDb()
   const prepared = await validateShiftForSavedGames(firestore, games)
   if (prepared.some((game) => !game.turno)) throw new Error('Selecione Manhã ou Tarde para gerar as partidas.')
@@ -747,6 +748,14 @@ export async function saveGames(games) {
 
   if (normalizedGames.length > 450) {
     throw new Error('Gere no maximo 450 jogos por vez para respeitar o limite do Firebase.')
+  }
+
+  if (checkSchedule) {
+    const [currentGames, currentTeams] = await Promise.all([getDocs(collection(firestore, 'games')), getDocs(collection(firestore, 'teams'))])
+    const existing = currentGames.docs.map((item) => normalizeGame(item.id, item.data()))
+    if (normalizedGames.some((game) => !game.id || existing.some((item) => item.id === game.id))) throw new Error('A prévia contém uma partida já cadastrada. Gere novamente o chaveamento.')
+    const planned = normalizedGames.map((game) => ({ ...game.payload, id: game.id }))
+    if (bracketScheduleConflicts(planned, existing, currentTeams.docs.map((item) => normalizeTeam(item.id, item.data())), restMinutes).length) throw new Error('A programação mudou ou ainda há choque de horários. Confira a prévia atualizada antes de salvar o chaveamento.')
   }
 
   const batch = writeBatch(firestore)

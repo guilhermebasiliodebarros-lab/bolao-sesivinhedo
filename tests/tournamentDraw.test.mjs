@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { drawFingerprint, drawSections, drawTeamOrder, validateDraw } from '../src/utils/tournamentDraw.js'
+import { createDrawPresentation, drawFingerprint, drawPresentationReducer, drawRevealOrder, drawSections, drawTeamOrder, validateDraw } from '../src/utils/tournamentDraw.js'
 
 const teams = Array.from({ length: 8 }, (_, index) => ({ id: `team-${index}`, nome: `Turma ${index}`, sportId: 'football', turno: 'manha' }))
 const config = { formato: 'grupos-mata-mata', grupos: 2, timesPorGrupo: 4 }
@@ -61,4 +61,96 @@ test('draw detects roster, sport, shift and format changes, ignoring irrelevant 
   assert.notEqual(drawFingerprint(teams, { ...config, timesPorGrupo: 3 }), signature)
   assert.notEqual(drawFingerprint(teams, { formato: 'sorteio' }), signature)
   assert.equal(drawFingerprint(teams, { formato: 'sorteio', grupos: 10 }), drawFingerprint(teams, { formato: 'sorteio', grupos: 2 }))
+})
+
+test('presentation alternates groups without changing the group membership or the order applied to the generator', () => {
+  const copy = structuredClone(teams)
+  const order = drawRevealOrder(teams, config)
+  assert.deepEqual(order.map((entry) => entry.index), [0, 4, 1, 5, 2, 6, 3, 7])
+  assert.deepEqual(order.slice(0, 4).map((entry) => entry.destination), ['Grupo A', 'Grupo B', 'Grupo A', 'Grupo B'])
+  assert.deepEqual(order.filter((entry) => entry.destination === 'Grupo B').map((entry) => entry.team.id), teams.slice(4).map((team) => team.id))
+  assert.deepEqual(teams, copy)
+  const six = teams.slice(0, 6)
+  assert.deepEqual(drawRevealOrder(six, { ...config, timesPorGrupo: 3 }).map((entry) => entry.index), [0, 3, 1, 4, 2, 5])
+  for (const formato of ['sorteio', 'todos-contra-todos']) assert.deepEqual(drawRevealOrder(teams.slice(0, 5), { formato }).map((entry) => entry.index), [0, 1, 2, 3, 4])
+})
+
+const finishReveal = (state) => ['show', 'ready', 'open', 'reveal', 'fly', 'land', 'settle'].reduce((value, type) => drawPresentationReducer(value, { type, cycle: value.cycle }), state)
+
+test('replay re-enacts only the last committed reveal and never advances, duplicates or removes a team', () => {
+  let state = createDrawPresentation(8)
+  assert.deepEqual(drawPresentationReducer(state, { type: 'repeat' }), state)
+  state = finishReveal(drawPresentationReducer(state, { type: 'next' }))
+  assert.equal(state.count, 1)
+  const repeat = drawPresentationReducer(state, { type: 'repeat' })
+  assert.equal(repeat.active, 0)
+  assert.equal(repeat.replay, true)
+  assert.equal(repeat.automatic, false)
+  state = finishReveal(repeat)
+  assert.equal(state.count, 1)
+  state = finishReveal(drawPresentationReducer(state, { type: 'next' }))
+  assert.equal(state.active, 1)
+  assert.equal(state.count, 2)
+  state = drawPresentationReducer(state, { type: 'skip' })
+  state = finishReveal(drawPresentationReducer(state, { type: 'repeat' }))
+  assert.equal(state.count, 8)
+  assert.equal(state.active, 7)
+})
+
+test('pausing finishes the current reveal, skipping invalidates old timers, and double clicks cannot consume extra teams', () => {
+  let state = drawPresentationReducer(createDrawPresentation(6), { type: 'automatic' })
+  assert.equal(state.phase, 'mixing')
+  assert.deepEqual(drawPresentationReducer(state, { type: 'next' }), state)
+  state = drawPresentationReducer(state, { type: 'pause' })
+  state = finishReveal(state)
+  assert.equal(state.count, 1)
+  assert.deepEqual(drawPresentationReducer(state, { type: 'advance' }), state)
+  assert.deepEqual(drawPresentationReducer(state, { type: 'land', cycle: state.cycle }), state)
+  state = drawPresentationReducer(state, { type: 'automatic' })
+  const oldCycle = state.cycle
+  state = drawPresentationReducer(state, { type: 'skip' })
+  assert.equal(state.count, 6)
+  state = drawPresentationReducer(state, { type: 'repeat' })
+  assert.deepEqual(drawPresentationReducer(state, { type: 'show', cycle: oldCycle }), state)
+  state = finishReveal(state)
+  assert.equal(state.count, 6)
+  assert.equal(state.active, 5)
+})
+
+test('the capsule ejects and opens before the team is revealed, and the finale waits for the landing to finish', () => {
+  let state = drawPresentationReducer(createDrawPresentation(1), { type: 'next' })
+  for (const [action, phase] of [['show', 'ejecting'], ['ready', 'ready'], ['open', 'opening'], ['reveal', 'revealing'], ['fly', 'flying']]) {
+    state = drawPresentationReducer(state, { type: action, cycle: state.cycle })
+    assert.equal(state.phase, phase)
+    assert.equal(state.count, 0)
+    assert.equal(state.celebrated, false)
+  }
+  state = drawPresentationReducer(state, { type: 'land', cycle: state.cycle })
+  assert.equal(state.count, 1)
+  assert.equal(state.phase, 'landing')
+  assert.equal(state.celebrated, false)
+  assert.deepEqual(drawPresentationReducer(state, { type: 'repeat' }), state)
+  state = drawPresentationReducer(state, { type: 'settle', cycle: state.cycle })
+  assert.equal(state.phase, 'settled')
+  assert.equal(state.celebrated, true)
+  assert.equal(finishReveal(drawPresentationReducer(state, { type: 'repeat' })).count, 1)
+})
+
+test('the ball waits for a click in automatic mode and ignores premature or repeated opening', () => {
+  let state = drawPresentationReducer(createDrawPresentation(8), { type: 'automatic' })
+  assert.deepEqual(drawPresentationReducer(state, { type: 'open' }), state)
+  state = drawPresentationReducer(state, { type: 'show' })
+  assert.deepEqual(drawPresentationReducer(state, { type: 'open' }), state)
+  state = drawPresentationReducer(state, { type: 'ready' })
+  for (const type of ['advance', 'reveal', 'fly', 'next', 'land', 'settle']) {
+    assert.deepEqual(drawPresentationReducer(state, { type }), state)
+  }
+  assert.equal(state.count, 0)
+  assert.equal(state.automatic, true)
+  state = drawPresentationReducer(state, { type: 'open' })
+  assert.equal(state.phase, 'opening')
+  assert.deepEqual(drawPresentationReducer(state, { type: 'open' }), state)
+  state = finishReveal(state)
+  assert.equal(state.count, 1)
+  assert.equal(drawPresentationReducer(state, { type: 'advance' }).phase, 'mixing')
 })

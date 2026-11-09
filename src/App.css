@@ -3325,9 +3325,9 @@ select:focus {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  *:not(:where(.draw-full-motion, .draw-full-motion *)),
+  *:not(:where(.draw-full-motion, .draw-full-motion *))::before,
+  *:not(:where(.draw-full-motion, .draw-full-motion *))::after {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;

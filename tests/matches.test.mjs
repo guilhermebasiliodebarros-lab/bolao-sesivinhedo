@@ -61,6 +61,7 @@ registerHooks({
 })
 const { normalizeGame, startGame, updateLiveScore, finalizeGame, reopenGame, closeGame, saveGame, canEditPrediction, savePlayer, deletePlayer, deleteTeam, importPlayers, saveAnnouncement, changeMatchCondition, saveMatchReport, loadMatchReport, calculateGroupStandings, saveMatchAttendance, saveBroadcastSettings, saveGamePreparation, startPreparedGames, controlMatchClock, saveSportRegulation, saveSport, recordLiveEvent, undoLiveEvent, redistributeTournamentSchedule, saveTeam, saveGames } = await import('../src/services/firestoreService.js')
 const { createThirdPlaceGame, saveDisciplinaryRecord, resolveDisciplinaryRecord } = await import('../src/services/firestoreService.js')
+const { planBracketSchedule } = await import('../src/utils/bracketSchedule.js')
 const original = {
   sportId: 'football', esporteNome: 'Futebol', fase: 'Fase de grupos', rodada: 'Rodada 1',
   timeA: 'Azul', timeB: 'Branco', status: 'aberto', dataHora: '2099-11-06T12:00', limitePalpites: '2099-11-06T11:00',
@@ -70,6 +71,24 @@ const original = {
 const game = (id = 'one') => normalizeGame(id, documents.get(`games/${id}`))
 const preparationFor = (id, area = '') => ({ expectedTeamKey: attendanceTeamKey(game(id)), venue: 'Quadra principal', venueArea: area, vestA: 'Azul', vestB: 'Amarelo', responsible: 'Professor responsável', sides: { A: { status: 'present', players: {} }, B: { status: 'present', players: {} } } })
 beforeEach(() => { useCurrentTimestamp = false; documents.clear(); documents.set('games/one', structuredClone(original)) })
+
+test('saving a generated bracket rechecks the latest cross-sport calendar without silently moving or overwriting fixtures', async () => {
+  const draft = { ...original, id: 'generated', turno: 'manha', timeA: '9º A', timeB: '9º B', tournamentId: 'new-cup', stageType: 'league', venue: '', dataHora: '2099-11-30T08:00', limitePalpites: '2099-11-30T07:00' }
+  const plan = planBracketSchedule([draft], [], [], { dataInicial: draft.dataHora, durationMinutes: 30, descansoMinutos: 10 })
+  assert.equal(plan.error, '')
+  documents.set('games/volley', { ...original, turno: 'manha', sportId: 'volley', esporteNome: 'Vôlei', tournamentId: 'volley-cup', timeA: '9A', timeB: '1A', dataHora: draft.dataHora, durationMinutes: 40 })
+  const before = structuredClone([...documents])
+  await assert.rejects(saveGames(plan.games, { checkSchedule: true, restMinutes: 10 }), /choque de horários/)
+  assert.deepEqual([...documents], before)
+  const current = [game('volley')]
+  const revised = planBracketSchedule([draft], current, [], { dataInicial: draft.dataHora, durationMinutes: 30, descansoMinutos: 10 })
+  assert.equal(revised.games[0].dataHora, '2099-11-30T08:50')
+  await saveGames(revised.games, { checkSchedule: true, restMinutes: 10 })
+  assert.equal(game('generated').dataHora, '2099-11-30T08:50')
+  assert.equal(game('generated').durationMinutes, 30)
+  assert.deepEqual(documents.get('games/volley'), before.find(([path]) => path === 'games/volley')[1])
+  await assert.rejects(saveGames(revised.games, { checkSchedule: true, restMinutes: 10 }), /já cadastrada/)
+})
 
 test('disciplinary records validate team, player and tournament; decisions preserve history and reject stale resolutions', async () => {
   documents.set('teams/a', { sportId: 'football', nome: 'Azul', turno: 'manha' })
