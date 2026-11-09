@@ -186,6 +186,14 @@ Os jogadores presentes ficam expandidos para registrar gols e pontos com autor, 
 
 Em **Painel master → Regulamentos**, a organização cadastra o regulamento de cada modalidade em cinco campos opcionais: participação, classificação/vagas, desempate, W.O./ausências e outras informações (até 10.000 caracteres por seção). Todos começam em branco, sem exemplos preenchidos ou regras automáticas. O menu público **Regulamentos** (`/#regulamentos`) mostra somente o texto salvo pela organização, sem exigir login. Antes do cadastro, informa **Regulamento ainda não cadastrado pela organização**. Campos vazios não são exibidos. A gravação verifica a versão para evitar sobrescrever edições concorrentes. O cadastro é para consulta; pontuação, formato dos placares e cálculos continuam configurados nas áreas próprias do sistema. Alterar o nome ou a pontuação de um esporte preserva o texto salvo.
 
+## Sorteio animado das turmas
+
+Em **Painel master → Jogos → Gerador de chaveamento**, selecione a modalidade e o turno, configure o formato e clique em **Sortear grupos/confrontos**. A apresentação revela uma turma por vez, com avanço automático a cada 1,8 segundo, pausa, avanço manual e opção de revelar as restantes. **Tela cheia** permite projetar a apresentação quando o navegador oferece suporte. A preferência por movimentos reduzidos é respeitada.
+
+Nos grupos, todas as turmas precisam caber exatamente na configuração. O sorteio também funciona em confronto simples (com aviso de turma sem adversário quando a quantidade é ímpar) e todos contra todos. A ordem é sorteada uma única vez com o gerador criptográfico do navegador; pausar ou mudar o ritmo não altera o resultado. Alterações nos cadastros ou na configuração durante a apresentação bloqueiam o uso de um resultado desatualizado.
+
+Ao concluir, use **Usar resultado na prévia**, confira os horários e clique em **Salvar chaveamento** para criar os jogos pelo fluxo existente. Fechar a apresentação descarta apenas o sorteio em andamento e preserva a prévia anterior. A apresentação ocorre no dispositivo do organizador; não há transmissão simultânea para outros navegadores. Nenhum jogo existente é alterado pela animação.
+
 ## Rodar localmente
 
 ```bash

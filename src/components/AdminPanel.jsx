@@ -47,6 +47,8 @@ import DailySchedule from './DailySchedule.jsx'
 import { RegulationsAdmin } from './Regulations.jsx'
 import { AthleteStatisticsPanel } from './AthleteStatistics.jsx'
 import TournamentScheduleDialog from './TournamentScheduleDialog.jsx'
+import TournamentDrawDialog from './TournamentDrawDialog.jsx'
+import { drawFingerprint, drawTeamOrder } from '../utils/tournamentDraw.js'
 import { ShiftTabs } from './ShiftSelector.jsx'
 import { getTeamShift, getGameShift, shiftLabel } from '../utils/schoolShifts.js'
 import { orderRoundRobinGames } from '../utils/tournamentSchedule.js'
@@ -154,34 +156,6 @@ const GAME_TOOL_TABS = [
   { id: 'bracket', label: 'Gerador de chaveamento' },
   { id: 'manual', label: 'Criar jogo manual' },
 ]
-
-function createSeededRandom(seed) {
-  let value = seed % 2147483647
-
-  if (value <= 0) {
-    value += 2147483646
-  }
-
-  return () => {
-    value = (value * 16807) % 2147483647
-    return (value - 1) / 2147483646
-  }
-}
-
-function shuffleItems(items, seed) {
-  const draft = [...items]
-  const random = createSeededRandom(seed || Date.now())
-
-  for (let index = draft.length - 1; index > 0; index -= 1) {
-    const randomIndex = Math.floor(random() * (index + 1))
-    const current = draft[index]
-
-    draft[index] = draft[randomIndex]
-    draft[randomIndex] = current
-  }
-
-  return draft
-}
 
 function buildMatchups(teams, formato) {
   if (formato === 'todos-contra-todos') {
@@ -503,7 +477,7 @@ export default function AdminPanel({ onNavigate }) {
   const [bracketForm, setBracketForm] = useState(blankBracketForm)
   const [bracketGenerated, setBracketGenerated] = useState(false)
   const [bracketTeamOrderIds, setBracketTeamOrderIds] = useState([])
-  const [bracketSpinning, setBracketSpinning] = useState(false)
+  const [activeDraw, setActiveDraw] = useState(null)
   const [gameFilter, setGameFilter] = useState(ALL_GAMES_FILTER)
   const [selectedSportId, setSelectedSportId] = useState('')
   const [selectedShift, setSelectedShift] = useState('manha')
@@ -930,12 +904,21 @@ export default function AdminPanel({ onNavigate }) {
   }
 
   const handleShuffleBracket = () => {
-    setBracketTeamOrderIds(shuffleItems(selectedSportTeams, Date.now()).map((team) => team.id))
-    setBracketGenerated(true)
-    setBracketSpinning(true)
-    window.setTimeout(() => setBracketSpinning(false), 650)
-    setMessage('')
-    setBracketMessage('')
+    try {
+      const drawnTeams = drawTeamOrder(selectedSportTeams, bracketForm)
+      setActiveDraw({
+        teams: drawnTeams,
+        config: { ...bracketForm },
+        fingerprint: drawFingerprint(selectedSportTeams, bracketForm),
+        sportName: selectedSport.nome,
+        shiftName: shiftLabel(selectedShift),
+        tournamentName: bracketForm.tournamentName.trim(),
+      })
+      setMessage('')
+      setBracketMessage('')
+    } catch (error) {
+      showBracketMessage(error.message || 'Não foi possível iniciar o sorteio. Tente novamente.')
+    }
   }
 
   const swapBracketTeam = (currentTeamId, nextTeamId) => {
@@ -1609,12 +1592,12 @@ export default function AdminPanel({ onNavigate }) {
       ) : null}
 
       {activeGameTool === 'bracket' ? (
-      <section className={`bracket-builder ${bracketSpinning ? 'is-spinning' : ''}`} ref={bracketBuilderRef}>
+      <section className="bracket-builder" ref={bracketBuilderRef}>
         <div className="section-heading">
           <div>
             <span className="eyebrow">Gerador de chaveamento</span>
             <h2>Sortear confrontos</h2>
-            <p>Use os times cadastrados, embaralhe como em sorteio e salve todos os jogos de uma vez.</p>
+            <p>Apresente o sorteio turma por turma, confira os grupos e salve os jogos depois de concluir.</p>
           </div>
           <span>{bracketPreviewGames.length} jogo(s) na prévia</span>
         </div>
@@ -1761,12 +1744,6 @@ export default function AdminPanel({ onNavigate }) {
                 ))}
               </div>
             ) : null}
-
-            <div className="bracket-wheel" aria-hidden="true">
-              {selectedSportTeams.map((team) => (
-                <span key={`wheel-${team.id}`}>{team.nome}</span>
-              ))}
-            </div>
 
             <div className="bracket-preview">
               {bracketPreviewGames.map((game, index) => (
@@ -2183,6 +2160,16 @@ export default function AdminPanel({ onNavigate }) {
 
       </div>
       </div>
+
+      {activeDraw ? <TournamentDrawDialog draw={activeDraw} teams={selectedSportTeams} config={bracketForm} onClose={() => setActiveDraw(null)} onApply={(ids) => {
+        if (activeDraw.fingerprint !== drawFingerprint(selectedSportTeams, bracketForm)) return
+        setBracketTeamOrderIds(ids)
+        setBracketGenerated(true)
+        setActiveDraw(null)
+        setBracketMessage('')
+        setMessage('')
+        window.setTimeout(() => bracketBuilderRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0)
+      }} /> : null}
 
       {redistributingTournamentId && selectedSportTournaments.some((tournament) => tournament.id === redistributingTournamentId) ? <TournamentScheduleDialog key={redistributingTournamentId} tournament={selectedSportTournaments.find((tournament) => tournament.id === redistributingTournamentId)} onClose={() => setRedistributingTournamentId(null)} onSaved={(notice) => { setRedistributingTournamentId(null); setMessage(notice) }} /> : null}
       {startingMatchId && games.some((game) => game.id === startingMatchId) ? <MatchStartDialog key={startingMatchId} game={games.find((game) => game.id === startingMatchId)} games={games} teams={teams} user={user} onClose={() => setStartingMatchId(null)} onStarted={(notice) => { setStartingMatchId(null); setMessage(notice) }} /> : null}
