@@ -8,9 +8,19 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
   const [menuOpen, setMenuOpen] = useState(false)
   const [logoLoaded, setLogoLoaded] = useState(true)
   const drawerRef = useRef(null)
+  const headerRef = useRef(null)
   const avatarUrl = profile?.avatarUrl || user?.photoURL || ''
   const displayName = profile?.nome || user?.displayName || user?.email || 'Visitante'
   const avatarLabel = String(displayName).trim().charAt(0).toLocaleUpperCase('pt-BR')
+
+  useEffect(() => {
+    const measure = () => document.documentElement.style.setProperty('--site-header-height', `${headerRef.current.getBoundingClientRect().height}px`)
+    measure()
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null
+    observer?.observe(headerRef.current)
+    window.addEventListener('resize', measure)
+    return () => { observer?.disconnect(); window.removeEventListener('resize', measure); document.documentElement.style.removeProperty('--site-header-height') }
+  }, [])
 
   useEffect(() => {
     if (!menuOpen) return
@@ -69,7 +79,7 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
 
   return (
     <>
-      <header className="site-header commerce-header">
+      <header ref={headerRef} className="site-header commerce-header">
         <div className="header-topbar">
           <button className="brand" type="button" onClick={() => handleNavigate('home')}>
             {logoLoaded ? (

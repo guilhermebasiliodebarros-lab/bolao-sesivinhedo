@@ -4,6 +4,7 @@ import { normalizeFilterText } from './game.js'
 import { VEST_COLORS } from './sportRules.js'
 import { venuesOverlap, venueKey } from './matchVenue.js'
 import { attendanceTeamKey } from './attendance.js'
+import { suspendedPlayers } from './discipline.js'
 
 const key = (value) => normalizeFilterText(value).trim()
 export const usesMatchVests = (game) => /fut|hand|basquet|volei|volley|queimada/.test(key(game.esporteNome))
@@ -15,7 +16,7 @@ export function liveStartConflicts(candidate, games = []) {
     return reasons.length ? [{ game, reasons }] : []
   })
 }
-export function matchStartChecklist(game, { games = [], attendance = null } = {}) {
+export function matchStartChecklist(game, { games = [], attendance = null, discipline = {} } = {}) {
   const conflicts = liveStartConflicts(game, games)
   const participants = Boolean(game.timeA && game.timeB && key(game.timeA) !== key(game.timeB) && !game.seedLabelA && !game.seedLabelB)
   const rosterChecked = !attendance || ['A', 'B'].every((side) => !attendance[side]?.players?.length || (attendance[side].players.every((player) => ['present', 'absent'].includes(player.status)) && attendance[side].players.some((player) => player.status === 'present')))
@@ -24,6 +25,7 @@ export function matchStartChecklist(game, { games = [], attendance = null } = {}
     { id: 'teams', label: 'Duas equipes definidas', done: participants },
     { id: 'presence', label: 'Duas equipes presentes', done: hasConfirmedTeams(game) },
     { id: 'players', label: 'Jogadores conferidos', done: rosterChecked },
+    { id: 'discipline', label: 'Suspensões conferidas: atletas suspensos fora da escalação', done: ['A', 'B'].every((side) => { const suspended = suspendedPlayers(discipline[side], game); return !(attendance?.[side]?.players || []).some((player) => player.status === 'present' && suspended.has(player.id)) }) },
     { id: 'venue', label: 'Local definido', done: Boolean(String(game.venue || '').trim()) },
     { id: 'vests', label: usesMatchVests(game) ? 'Coletes definidos e com cores diferentes' : 'Modalidade sem exigência de coletes', done: !usesMatchVests(game) || (VEST_COLORS.includes(game.vestA) && VEST_COLORS.includes(game.vestB) && game.vestA !== game.vestB) },
     { id: 'conflicts', label: 'Local e equipes disponíveis', done: conflicts.length === 0, conflicts },

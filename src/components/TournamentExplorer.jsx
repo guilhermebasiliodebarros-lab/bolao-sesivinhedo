@@ -28,7 +28,7 @@ function BracketBoard({ games }) {
         <svg className="bracket-connectors" width={graph.width} height={graph.height} aria-hidden="true">{graph.edges.map((edge) => {
           const source = graph.byId.get(edge.source); const target = graph.byId.get(edge.target)
           const startX = source.x + 260; const startY = source.y + 103; const endY = target.y + (edge.side === 'A' ? 83 : 123)
-          return <path key={`${edge.target}:${edge.side}`} className={path.size && path.has(edge.source) && path.has(edge.target) ? 'is-highlighted' : path.size ? 'is-muted' : ''} d={`M ${startX} ${startY} H ${startX + 35} V ${endY} H ${target.x}`} />
+          return <path key={`${edge.target}:${edge.side}`} className={`${target.game[`sourceOutcome${edge.side}`] === 'loser' ? 'is-loser' : ''} ${path.size && path.has(edge.source) && path.has(edge.target) ? 'is-highlighted' : path.size ? 'is-muted' : ''}`} d={`M ${startX} ${startY} H ${startX + 35} V ${endY} H ${target.x}`} />
         })}</svg>
         {graph.rounds.map((round) => <h3 className="bracket-round-label" key={round.rank} style={{ left: round.x }}>{round.label}</h3>)}
         {graph.nodes.map((node) => {
@@ -43,6 +43,7 @@ function BracketBoard({ games }) {
         })}
       </div>
     </div>
+    {graph.nodes.some((node) => node.game.placement === 'third-place') ? <p className="form-hint">As linhas tracejadas levam os perdedores das semifinais à disputa de terceiro lugar.</p> : null}
     {!graph.edges.length && graph.nodes.length > 1 ? <p className="form-hint">Estas partidas ainda não têm vínculos de avanço cadastrados. Nenhuma conexão foi presumida pelo horário ou pelo nome das equipes.</p> : null}
   </section>
 }

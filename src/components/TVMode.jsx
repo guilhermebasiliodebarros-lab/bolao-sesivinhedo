@@ -10,6 +10,7 @@ import { formatSportScore } from '../utils/sportRules.js'
 import { toDate } from '../utils/format.js'
 import './TVMode.css'
 import { buildAutomaticCalls, DEFAULT_BROADCAST_SETTINGS } from '../utils/automaticCalls.js'
+import { readPreference, writePreference } from '../utils/preferences.js'
 
 const clockFormat = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', second: '2-digit' })
 const dateFormat = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit' })
@@ -24,14 +25,14 @@ export default function TVMode({ onNavigate }) {
   const [online, setOnline] = useState(() => navigator.onLine)
   const [now, setNow] = useState(() => new Date())
   const [sport, setSport] = useState('')
-  const [turno, setTurno] = useState(() => ['manha', 'tarde'].includes(localStorage.getItem('tv-turno')) ? localStorage.getItem('tv-turno') : '')
+  const [turno, setTurno] = useState(() => ['manha', 'tarde'].includes(readPreference('tv-turno')) ? readPreference('tv-turno') : '')
   const [cursor, setCursor] = useState('')
   const [duration, setDuration] = useState(() => {
-    const stored = Number(window.localStorage.getItem('tv-interval'))
+    const stored = Number(readPreference('tv-interval'))
     return [8, 12, 20, 30].includes(stored) ? stored : 12
   })
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [density, setDensity] = useState(() => Number(localStorage.getItem('tv-density')) === 4 ? 4 : 2)
+  const [density, setDensity] = useState(() => Number(readPreference('tv-density')) === 4 ? 4 : 2)
   const [rotating, setRotating] = useState(true)
   const [fullscreen, setFullscreen] = useState(false)
   const [compactLive, setCompactLive] = useState(() => window.innerHeight < 1000)
@@ -137,11 +138,11 @@ export default function TVMode({ onNavigate }) {
         <div className="tv-clock"><time>{clockFormat.format(now)}</time><span>{new Intl.DateTimeFormat('pt-BR', { dateStyle: 'full', timeZone: SCHOOL_TIMEZONE }).format(now)}</span></div>
       <button type="button" className="tv-settings-toggle" aria-expanded={settingsOpen} onClick={() => setSettingsOpen((value) => !value)}>{settingsOpen ? 'Fechar ajustes' : 'Ajustes da TV'}</button></header>
       <div className="tv-toolbar" hidden={!settingsOpen}>
-        <ShiftSelector value={turno} onChange={(value) => { setTurno(value); localStorage.setItem('tv-turno', value); setCursor('') }} />
+        <ShiftSelector value={turno} onChange={(value) => { setTurno(value); writePreference('tv-turno', value); setCursor('') }} />
         <div className={online && synced && !error ? 'tv-connection' : 'tv-connection is-offline'} role="status"><span />{error ? 'Atualização indisponível' : !online ? 'Sem conexão · exibindo últimos dados' : synced ? 'Atualizado em tempo real' : 'Aguardando sincronização'}</div>
         <label className="tv-sport-select">Esporte<select value={sport} onChange={(event) => { setSport(event.target.value); setCursor('') }}><option value="">Todos os esportes</option>{sports.map((item) => <option value={item.id} key={item.id}>{item.nome}</option>)}</select></label>
-        <label className="tv-interval-select">Intervalo<select value={duration} onChange={(event) => { const seconds = Number(event.target.value); setDuration(seconds); window.localStorage.setItem('tv-interval', String(seconds)) }}>{[8, 12, 20, 30].map((seconds) => <option key={seconds} value={seconds}>{seconds} s</option>)}</select></label>
-        <label className="tv-density-select">Jogos ao vivo por tela<select value={density} onChange={(event) => { const value = Number(event.target.value); setDensity(value); localStorage.setItem('tv-density', String(value)) }}><option value="2">2 (maior destaque)</option><option value="4">4 (telas grandes)</option></select></label><div className="tv-controls">
+        <label className="tv-interval-select">Intervalo<select value={duration} onChange={(event) => { const seconds = Number(event.target.value); setDuration(seconds); writePreference('tv-interval', String(seconds)) }}>{[8, 12, 20, 30].map((seconds) => <option key={seconds} value={seconds}>{seconds} s</option>)}</select></label>
+        <label className="tv-density-select">Jogos ao vivo por tela<select value={density} onChange={(event) => { const value = Number(event.target.value); setDensity(value); writePreference('tv-density', String(value)) }}><option value="2">2 (maior destaque)</option><option value="4">4 (telas grandes)</option></select></label><div className="tv-controls">
           <button type="button" onClick={() => setRotating((current) => !current)}>{rotating ? 'Pausar rotação' : 'Retomar rotação'}</button>
           <button type="button" onClick={() => step(-1)} disabled={pages.length < 2}>Anterior</button>
           <button type="button" onClick={() => step(1)} disabled={pages.length < 2}>Próxima tela</button>

@@ -113,7 +113,7 @@ export default function Jogos({ onNavigate }) {
   }, [visibleGames])
 
   if (loading) {
-    return <LoadingState label="Buscando jogos..." />
+    return <LoadingState label="Buscando jogos..." error={error} />
   }
 
   return (
@@ -136,7 +136,7 @@ export default function Jogos({ onNavigate }) {
         <div className="alert alert-error">Seu perfil ainda não está liberado para palpites.</div>
       ) : null}
 
-      {error ? <div className="alert alert-error">{error}</div> : null}
+      {error ? <div className="alert alert-error" role="alert">{error}</div> : null}
 
       <section className="match-center-panel" aria-label="Resumo dos jogos">
         <div>

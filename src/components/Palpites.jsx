@@ -46,7 +46,7 @@ export default function Palpites({ onNavigate }) {
   }
 
   if (loading) {
-    return <LoadingState label="Carregando seus palpites..." />
+    return <LoadingState label="Carregando seus palpites..." error={error} />
   }
 
   if (!isParticipant) {
@@ -78,7 +78,7 @@ export default function Palpites({ onNavigate }) {
         </button>
       </div>
 
-      {error ? <div className="alert alert-error">{error}</div> : null}
+      {error ? <div className="alert alert-error" role="alert">{error}</div> : null}
 
       <PendingGuessBanner count={pendingGuessCount} onNavigate={onNavigate} />
 

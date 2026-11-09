@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
+import useModalDialog from '../hooks/useModalDialog.js'
 import { redistributeTournamentSchedule } from '../services/bolaoService.js'
 import { buildScheduleRedistribution, scheduleFingerprint, schedulePlanFingerprint } from '../utils/tournamentSchedule.js'
 import { formatDateTime } from '../utils/format.js'
@@ -11,7 +12,7 @@ export default function TournamentScheduleDialog({ tournament, onClose, onSaved 
   const [error, setError] = useState('')
   const plan = buildScheduleRedistribution(source.games, source.now)
   const stale = source.games.length !== tournament.games.length || source.games.some((game) => !tournament.games.some((current) => current.id === game.id && scheduleFingerprint(current) === scheduleFingerprint(game)))
-  useEffect(() => { const dialog = ref.current; dialog.showModal(); return () => dialog.close() }, [])
+  useModalDialog(ref)
   return <dialog ref={ref} className="match-management-dialog tournament-schedule-dialog" aria-labelledby={title} onCancel={(event) => { event.preventDefault(); if (!busy) onClose() }}>
     <div className="match-management-heading"><div><span className="eyebrow">{tournament.esporteNome} · {tournament.nome}</span><h2 id={title}>Reorganizar ordem dos jogos</h2><p>Distribua os confrontos por rodadas, usando os horários disponíveis da fase de grupos ou todos contra todos.</p></div><button type="button" className="btn btn-outline btn-small" disabled={busy} onClick={onClose}>Fechar</button></div>
     <p>São reorganizados jogos agendados que ainda não começaram, no mesmo dia e local. Os confrontos continuam ligados às mesmas equipes e palpites. O prazo de cada jogo acompanha a mudança de horário.</p>

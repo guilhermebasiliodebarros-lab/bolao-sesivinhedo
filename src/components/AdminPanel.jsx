@@ -30,6 +30,7 @@ import {
 import { formatDateTime, formatPoints, toDateTimeLocalValue } from '../utils/format.js'
 import { gameMatchesSearch, getGameStageLabel, getSportVisualClass, getUniqueGamePhases } from '../utils/game.js'
 import EmptyState from './EmptyState.jsx'
+import ConfirmationDialog from './ConfirmationDialog.jsx'
 import LoadingState from './LoadingState.jsx'
 import LiveControlPanel from './LiveControlPanel.jsx'
 import MatchBadge from './MatchBadge.jsx'
@@ -48,6 +49,9 @@ import { RegulationsAdmin } from './Regulations.jsx'
 import { AthleteStatisticsPanel } from './AthleteStatistics.jsx'
 import TournamentScheduleDialog from './TournamentScheduleDialog.jsx'
 import TournamentDrawDialog from './TournamentDrawDialog.jsx'
+import ThirdPlaceDialog from './ThirdPlaceDialog.jsx'
+import DisciplinePanel from './DisciplinePanel.jsx'
+import { thirdPlaceParticipants, thirdPlaceSemifinals } from '../utils/thirdPlace.js'
 import { drawFingerprint, drawTeamOrder } from '../utils/tournamentDraw.js'
 import { ShiftTabs } from './ShiftSelector.jsx'
 import { getTeamShift, getGameShift, shiftLabel } from '../utils/schoolShifts.js'
@@ -104,13 +108,14 @@ const blankBracketForm = {
   timesPorGrupo: 4,
   classificadosPorGrupo: 2,
   mataMataInicial: 'Semifinal',
+  terceiroLugar: false,
 }
 
 const ALL_GAMES_FILTER = 'todos'
 const ALL_PHASES_FILTER = 'todas'
 const EXPIRED_GAMES_FILTER = 'prazo-vencido'
 
-const PHASE_OPTIONS = ['Fase de grupos', 'Eliminatórias', 'Quartas de final', 'Semifinal', 'Final']
+const PHASE_OPTIONS = ['Fase de grupos', 'Eliminatórias', 'Quartas de final', 'Semifinal', 'Disputa de 3º lugar', 'Final']
 
 const BRACKET_FORMATS = [
   { value: 'grupos-mata-mata', label: 'Grupos + mata-mata' },
@@ -144,6 +149,7 @@ const ADMIN_TABS = [
   { id: 'esportes', label: 'Esportes' },
   { id: 'times', label: 'Times' },
   { id: 'jogadores', label: 'Jogadores' },
+  { id: 'disciplina', label: 'Central disciplinar' },
   { id: 'jogos', label: 'Jogos' },
   { id: 'ao-vivo', label: 'Ao vivo / TV' },
   { id: 'avisos', label: 'Avisos TV' },
@@ -299,6 +305,12 @@ function createKnockoutTree(seedLabels, roundName, bracketForm, startIndex) {
 
     rounds.push(roundGames)
     dateIndex += roundGames.length
+
+    if (currentRoundName === 'Semifinal' && roundGames.length === 2 && bracketForm.terceiroLugar) {
+      const fields = thirdPlaceParticipants(roundGames)
+      rounds.push([createGameDraft({ fase: fields.fase, rodada: fields.rodada, timeA: fields.timeA, timeB: fields.timeB, dateIndex, bracketForm, extra: fields })])
+      dateIndex += 1
+    }
 
     const nextRoundName = getNextKnockoutRound(currentRoundName)
 
@@ -499,6 +511,7 @@ export default function AdminPanel({ onNavigate }) {
   const [managedMatch, setManagedMatch] = useState(null)
   const [startingMatchId, setStartingMatchId] = useState(null)
   const [redistributingTournamentId, setRedistributingTournamentId] = useState(null)
+  const [thirdPlaceTournamentId, setThirdPlaceTournamentId] = useState(null)
   const [editFocusRequest, setEditFocusRequest] = useState(null)
   const bracketBuilderRef = useRef(null)
   const gameFormRef = useRef(null)
@@ -1072,6 +1085,9 @@ export default function AdminPanel({ onNavigate }) {
           stageType: game.stageType,
           sourceGameIdA: game.sourceGameIdA,
           sourceGameIdB: game.sourceGameIdB,
+          sourceOutcomeA: game.sourceOutcomeA,
+          sourceOutcomeB: game.sourceOutcomeB,
+          placement: game.placement,
           seedLabelA: game.seedLabelA,
           seedLabelB: game.seedLabelB,
         })),
@@ -1191,7 +1207,7 @@ export default function AdminPanel({ onNavigate }) {
   }
 
   if (loading) {
-    return <LoadingState label="Carregando área administrativa..." />
+    return <LoadingState label="Carregando área administrativa..." error={message} />
   }
 
   const isSuccessMessage = ['Conferência salva.', 'Partida iniciada.'].some((prefix) => message.startsWith(prefix)) || ['salvo', 'sucesso', 'recalculada', 'finalizado', 'encerrado', 'reaberto', 'excluído'].some(
@@ -1291,7 +1307,7 @@ export default function AdminPanel({ onNavigate }) {
       <div className="admin-workspace-content">
       {classSetup.loading ? <p role="status" className="alert">Preparando as turmas de todos os esportes…</p> : classSetup.error ? <div role="alert" className="alert alert-error">Não foi possível completar o cadastro das turmas: {classSetup.error} <button className="btn btn-outline btn-small" type="button" onClick={() => { setClassSetup({ loading: true, error: '', created: 0, updated: 0 }); setClassSetupAttempt((value) => value + 1) }}>Tentar novamente</button></div> : classSetup.created || classSetup.updated ? <p role="status" className="alert alert-success">Turmas preparadas em todas as modalidades: 8 de manhã e 6 à tarde. Os cadastros existentes foram preservados.</p> : null}
 
-      {['times', 'jogos', 'jogadores', 'ao-vivo', 'interclasse', 'estatisticas', 'pendencias', 'programacao', 'palpites', 'avisos'].includes(activeAdminTab) ? <ShiftTabs value={selectedShift} onChange={changeShift} counts={Object.fromEntries(['manha', 'tarde'].map((turno) => [turno, teams.filter((team) => getTeamShift(team) === turno && (!selectedSport || team.sportId === selectedSport.id)).length]))} /> : null}
+      {['times', 'jogos', 'jogadores', 'disciplina', 'ao-vivo', 'interclasse', 'estatisticas', 'pendencias', 'programacao', 'palpites', 'avisos'].includes(activeAdminTab) ? <ShiftTabs value={selectedShift} onChange={changeShift} counts={Object.fromEntries(['manha', 'tarde'].map((turno) => [turno, teams.filter((team) => getTeamShift(team) === turno && (!selectedSport || team.sportId === selectedSport.id)).length]))} /> : null}
 
       {['times', 'jogos', 'palpites'].includes(activeAdminTab) && sports.length ? (
         <div className="admin-sport-switcher">
@@ -1307,6 +1323,7 @@ export default function AdminPanel({ onNavigate }) {
 
       {activeAdminTab === 'pendencias' ? <PendingCenter games={shiftGames} teams={shiftTeams} sports={sports} saving={saving} onPrepare={(game) => setStartingMatchId(game.id)} onManage={(game, tab) => setManagedMatch({ id: game.id, tab })} onStart={(game) => runAdminAction(() => startPreparedGames([game.id]), 'Partida iniciada. Palpites bloqueados e TV atualizada.')} onLive={() => setActiveAdminTab('ao-vivo')} /> : null}
       {activeAdminTab === 'programacao' ? <DailySchedule games={shiftGames} sports={sports} /> : null}
+      {activeAdminTab === 'disciplina' ? <DisciplinePanel teams={shiftTeams} games={shiftGames} user={user} /> : null}
       {activeAdminTab === 'regulamentos' ? <RegulationsAdmin sports={sports} onNavigate={onNavigate} /> : null}
       {activeAdminTab === 'estatisticas' ? <AthleteStatisticsPanel games={shiftGames} turno={selectedShift} /> : null}
       {activeAdminTab === 'ao-vivo' ? <LiveControlPanel games={shiftGames} conflictGames={games} teams={shiftTeams} sports={sports} onFinish={handleFinalize} onNavigate={onNavigate} saving={saving} onStart={(game) => setStartingMatchId(game.id)} onManage={(game, tab) => setManagedMatch({ id: game.id, tab })} /> : null}
@@ -1550,6 +1567,7 @@ export default function AdminPanel({ onNavigate }) {
                   </div>
 
                   {tournament.games.filter((game) => ['group', 'league'].includes(game.stageType)).length > 1 ? <button className="btn btn-outline btn-small" type="button" disabled={saving} onClick={() => setRedistributingTournamentId(tournament.id)}>Reorganizar ordem dos jogos</button> : null}
+                  {thirdPlaceSemifinals(tournament.games).length ? <button className="btn btn-outline btn-small" type="button" disabled={saving} onClick={() => setThirdPlaceTournamentId(tournament.id)}>Adicionar terceiro lugar</button> : null}
                   {groups.length ? (
                     <div className="standings-grid">
                       {groups.map((group) => (
@@ -1720,6 +1738,8 @@ export default function AdminPanel({ onNavigate }) {
             </>
           ) : null}
         </div>
+
+        {bracketForm.formato === 'grupos-mata-mata' && bracketForm.mataMataInicial !== 'Final' ? <label className="match-checkbox"><input type="checkbox" checked={bracketForm.terceiroLugar} onChange={(event) => updateBracketField('terceiroLugar', event.target.checked)} />Incluir disputa de terceiro lugar entre os perdedores das semifinais</label> : null}
 
         {selectedSportTeams.length >= 2 && bracketGenerated ? (
           <>
@@ -2161,6 +2181,8 @@ export default function AdminPanel({ onNavigate }) {
       </div>
       </div>
 
+      {thirdPlaceTournamentId && selectedSportTournaments.some((tournament) => tournament.id === thirdPlaceTournamentId) ? <ThirdPlaceDialog key={thirdPlaceTournamentId} tournament={selectedSportTournaments.find((tournament) => tournament.id === thirdPlaceTournamentId)} onClose={() => setThirdPlaceTournamentId(null)} onSaved={(notice) => { setThirdPlaceTournamentId(null); setMessage(notice) }} /> : null}
+
       {activeDraw ? <TournamentDrawDialog draw={activeDraw} teams={selectedSportTeams} config={bracketForm} onClose={() => setActiveDraw(null)} onApply={(ids) => {
         if (activeDraw.fingerprint !== drawFingerprint(selectedSportTeams, bracketForm)) return
         setBracketTeamOrderIds(ids)
@@ -2175,30 +2197,7 @@ export default function AdminPanel({ onNavigate }) {
       {startingMatchId && games.some((game) => game.id === startingMatchId) ? <MatchStartDialog key={startingMatchId} game={games.find((game) => game.id === startingMatchId)} games={games} teams={teams} user={user} onClose={() => setStartingMatchId(null)} onStarted={(notice) => { setStartingMatchId(null); setMessage(notice) }} /> : null}
       {managedMatch && games.some((game) => game.id === managedMatch.id) ? <MatchManagementDialog key={managedMatch.id} game={games.find((game) => game.id === managedMatch.id)} games={games} teams={teams} user={user} initialTab={managedMatch.tab} onClose={() => setManagedMatch(null)} onSaved={(notice) => { setManagedMatch(null); setMessage(notice) }} /> : null}
       {confirmDialog ? (
-        <div className="modal-backdrop" role="presentation" onClick={closeConfirmDialog}>
-          <section
-            className="confirm-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="confirm-modal-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="confirm-modal-mark" aria-hidden="true" />
-            <div className="confirm-modal-content">
-              <span className="eyebrow">Confirmação</span>
-              <h2 id="confirm-modal-title">{confirmDialog.title}</h2>
-              <p>{confirmDialog.description}</p>
-            </div>
-            <div className="modal-actions">
-              <button className="btn btn-outline" type="button" disabled={saving} onClick={closeConfirmDialog}>
-                Cancelar
-              </button>
-              <button className="btn btn-primary" type="button" disabled={saving} onClick={handleConfirmDialog}>
-                {saving ? 'Processando...' : confirmDialog.confirmLabel}
-              </button>
-            </div>
-          </section>
-        </div>
+        <ConfirmationDialog {...confirmDialog} busy={saving} onClose={closeConfirmDialog} onConfirm={handleConfirmDialog} />
       ) : null}
     </section>
   )

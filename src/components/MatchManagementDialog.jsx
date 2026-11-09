@@ -10,6 +10,7 @@ import MatchAttendanceForm from './MatchAttendanceForm.jsx'
 import { attendanceTeamKey } from '../utils/attendance.js'
 import MatchScoreForm from './MatchScoreForm.jsx'
 import RefereePanel from './RefereePanel.jsx'
+import useModalDialog from '../hooks/useModalDialog.js'
 
 function MatchReportForm({ game, teams, user }) {
   const [source] = useState(() => ({ game, teams }))
@@ -101,7 +102,7 @@ export default function MatchManagementDialog({ game, games, teams, user, initia
   const ref = useRef(null)
   const titleId = useId()
   const [tab, setTab] = useState(initialTab)
-  useEffect(() => { const dialog = ref.current; dialog.showModal(); return () => dialog.close() }, [])
+  useModalDialog(ref)
   const referee = tab === 'referee'
   return <dialog ref={ref} className={`match-management-dialog${referee ? ' referee-dialog' : ''}`} aria-labelledby={titleId} onCancel={(event) => { event.preventDefault(); onClose() }}>
     <div className="match-management-heading"><div><span className="eyebrow">{referee ? 'Modo árbitro · ' : ''}{game.esporteNome} · {game.tournamentName || game.fase}</span><h2 id={titleId}>{game.timeA} × {game.timeB}</h2>{!referee ? <><p>{formatDateTime(game.dataHora)}{game.venue ? ` · ${game.venue}` : ''}</p><MatchBadge game={game} /></> : null}</div><button className="btn btn-outline btn-small" type="button" onClick={onClose}>{referee ? 'Sair do modo árbitro' : 'Fechar'}</button></div>

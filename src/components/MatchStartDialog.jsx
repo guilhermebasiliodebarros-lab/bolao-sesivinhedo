@@ -1,15 +1,20 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { loadMatchReport, saveGamePreparation, startGame } from '../services/bolaoService.js'
+import { loadMatchReport, saveGamePreparation, startGame, subscribeTeamDiscipline } from '../services/bolaoService.js'
+import { disciplineForGame, DISCIPLINE_TYPES, suspendedPlayers } from '../utils/discipline.js'
 import { attendanceTeamKey, ATTENDANCE_LABELS } from '../utils/attendance.js'
 import { matchStartChecklist, usesMatchVests } from '../utils/matchStart.js'
 import { VEST_COLORS } from '../utils/sportRules.js'
 import { formatDateTime } from '../utils/format.js'
+import useModalDialog from '../hooks/useModalDialog.js'
 
 export default function MatchStartDialog({ game, games, teams, user, onClose, onStarted }) {
   const ref = useRef(null)
   const titleId = useId()
   const [source] = useState(() => ({ game, teams }))
-  const [loading, setLoading] = useState(true)
+  const [rosterLoading, setLoading] = useState(true)
+  const [disciplineLoading, setDisciplineLoading] = useState(true)
+  const [discipline, setDiscipline] = useState({ A: [], B: [] })
+  const loading = rosterLoading || disciplineLoading
   const [loadFailed, setLoadFailed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
@@ -17,7 +22,17 @@ export default function MatchStartDialog({ game, games, teams, user, onClose, on
   const [responsible, setResponsible] = useState('')
   const [rosters, setRosters] = useState({ A: [], B: [] })
   const [sides, setSides] = useState({ A: { status: 'pending', players: {} }, B: { status: 'pending', players: {} } })
-  useEffect(() => { const dialog = ref.current; dialog.showModal(); return () => dialog.close() }, [])
+  useModalDialog(ref)
+  useEffect(() => {
+    const ready = new Set()
+    const subscriptions = ['A', 'B'].map((side) => {
+      const team = source.teams.find((item) => item.id === source.game[`teamId${side}`]) || source.teams.find((item) => item.sportId === source.game.sportId && item.nome === source.game[`time${side}`])
+      const receive = (records) => { setDiscipline((value) => ({ ...value, [side]: records })); ready.add(side); if (ready.size === 2) setDisciplineLoading(false) }
+      if (!team) { receive([]); return () => {} }
+      return subscribeTeamDiscipline(team.id, receive, (error) => { setMessage(error); setLoadFailed(true); setDisciplineLoading(false) })
+    })
+    return () => subscriptions.forEach((stop) => stop())
+  }, [source])
   useEffect(() => {
     let active = true
     loadMatchReport(source.game, source.teams).then((result) => {
@@ -32,7 +47,7 @@ export default function MatchStartDialog({ game, games, teams, user, onClose, on
   const teamKey = attendanceTeamKey(source.game)
   const attendance = Object.fromEntries(['A', 'B'].map((side) => [side, { status: sides[side].status, players: rosters[side].map((player) => ({ ...player, status: sides[side].players[player.id] || 'pending' })) }]))
   const draftGame = { ...game, ...details, attendanceSummary: { teamKey, teamA: sides.A.status, teamB: sides.B.status } }
-  const checks = matchStartChecklist(draftGame, { games, teams, attendance })
+  const checks = matchStartChecklist(draftGame, { games, teams, attendance, discipline })
   const missing = checks.filter((check) => !check.done)
   const preparationMissing = missing.filter((check) => check.id !== 'conflicts')
   const changeSide = (side, value) => setSides((current) => ({ ...current, [side]: { ...current[side], ...value } }))
@@ -52,10 +67,11 @@ export default function MatchStartDialog({ game, games, teams, user, onClose, on
       <div className="start-checklist" aria-label="Conferência para iniciar"><strong>{checks.length - missing.length} de {checks.length} verificações prontas</strong><ul>{checks.map((check) => <li key={check.id} className={check.done ? 'is-ready' : 'is-missing'}><span aria-hidden="true">{check.done ? '✓' : '○'}</span>{check.label}</li>)}</ul></div>
       {checks.find((check) => check.id === 'conflicts')?.conflicts?.map(({ game: other, reasons }) => <div className="schedule-warning" key={other.id}>{reasons.join(' · ')}: {other.timeA} × {other.timeB}{other.venue ? ` em ${other.venue}` : ''}. Você pode salvar a conferência agora e iniciar após liberar a área.</div>)}
       {loading ? <p role="status">Carregando a presença e os jogadores…</p> : null}
+      {['A', 'B'].some((side) => disciplineForGame(discipline[side], game).length) ? <aside className="schedule-warning" aria-label="Ocorrências disciplinares da partida"><strong>Conferência disciplinar</strong>{['A', 'B'].flatMap((side) => disciplineForGame(discipline[side], game).map((record) => <p key={`${side}-${record.id}`}>{game[`time${side}`]} · {record.playerName}: {DISCIPLINE_TYPES[record.type]} · {record.reason}</p>))}<small>Suspensões ativas impedem a escalação como presente. Marque o atleta como ausente ou regularize a decisão na Central disciplinar.</small></aside> : null}
       <fieldset disabled={loading || loadFailed || busy}><legend>1. Equipes e jogadores</legend>
-        {['A', 'B'].map((side) => <section className="attendance-team" key={side}><div className="section-heading"><h3>{game[`time${side}`]}</h3>{rosters[side].length ? <button className="btn btn-outline btn-small" type="button" onClick={() => changeSide(side, { status: 'present', players: Object.fromEntries(rosters[side].map((player) => [player.id, 'present'])) })}>Todos presentes · equipe {side}</button> : null}</div>
+        {['A', 'B'].map((side) => <section className="attendance-team" key={side}><div className="section-heading"><h3>{game[`time${side}`]}</h3>{rosters[side].length ? <button className="btn btn-outline btn-small" type="button" onClick={() => changeSide(side, { status: 'present', players: Object.fromEntries(rosters[side].map((player) => [player.id, suspendedPlayers(discipline[side], game).has(player.id) ? 'absent' : 'present'])) })}>{suspendedPlayers(discipline[side], game).size ? 'Conferir disponíveis' : 'Todos presentes'} · equipe {side}</button> : null}</div>
           <label className="match-checkbox"><input type="checkbox" checked={sides[side].status === 'present'} onChange={(event) => changeSide(side, { status: event.target.checked ? 'present' : 'pending' })} />Equipe {side} presente</label>
-          {rosters[side].length ? rosters[side].map((player) => <label className="attendance-player" key={player.id}><span>{player.nome}{player.capitao ? ' · Capitão' : ''}</span><select aria-label={`Presença de ${player.nome} · equipe ${side}`} value={sides[side].players[player.id] || 'pending'} onChange={(event) => changeSide(side, { players: { ...sides[side].players, [player.id]: event.target.value } })}>{Object.entries(ATTENDANCE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>) : <small>Sem elenco cadastrado. Confirme a presença da equipe para continuar.</small>}
+          {rosters[side].length ? rosters[side].map((player) => <label className="attendance-player" key={player.id}><span>{player.nome}{player.capitao ? ' · Capitão' : ''}{suspendedPlayers(discipline[side], game).has(player.id) ? ' · Suspensão ativa' : ''}</span><select aria-label={`Presença de ${player.nome} · equipe ${side}`} value={sides[side].players[player.id] || 'pending'} onChange={(event) => changeSide(side, { players: { ...sides[side].players, [player.id]: event.target.value } })}>{Object.entries(ATTENDANCE_LABELS).map(([value, label]) => <option key={value} value={value} disabled={value === 'present' && suspendedPlayers(discipline[side], game).has(player.id)}>{label}</option>)}</select></label>) : <small>Sem elenco cadastrado. Confirme a presença da equipe para continuar.</small>}
         </section>)}
       </fieldset>
       <fieldset disabled={loading || loadFailed || busy}><legend>2. Local, área e coletes</legend><div className="form-grid"><label>Local da partida<input type="text" maxLength="80" required value={details.venue} placeholder="Ex.: Quadra principal ou Sala de xadrez" onChange={(event) => setDetails((current) => ({ ...current, venue: event.target.value }))} /></label><label>Área ou mesa<input type="text" maxLength="80" value={details.venueArea} placeholder="Ex.: Basquete, Vôlei ou Mesa 1" onChange={(event) => setDetails((current) => ({ ...current, venueArea: event.target.value }))} /></label></div><small>Na mesma quadra, use áreas diferentes para basquete e vôlei. Sem área, o jogo ocupa o local inteiro.</small>

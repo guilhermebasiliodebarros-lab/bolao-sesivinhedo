@@ -5,6 +5,7 @@ import Header from './components/Header.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
 import { useAuth } from './context/useAuth.js'
 import { firebaseEnvNames, isFirebaseConfigured, missingFirebaseConfig } from './config/firebase.js'
+import { readPreference, writePreference } from './utils/preferences.js'
 
 const AdminPanel = lazy(() => import('./components/AdminPanel.jsx'))
 const Cadastro = lazy(() => import('./components/Cadastro.jsx'))
@@ -44,9 +45,9 @@ function ConfigNotice() {
 function AppShell() {
   const [view, setView] = useState(viewFromHash)
   const [theme, setTheme] = useState(() => {
-    const storedTheme = window.localStorage.getItem('theme')
+    const storedTheme = readPreference('theme')
 
-    if (storedTheme) {
+    if (['light', 'dark'].includes(storedTheme)) {
       return storedTheme
     }
 
@@ -86,7 +87,7 @@ function AppShell() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
-    window.localStorage.setItem('theme', theme)
+    writePreference('theme', theme)
   }, [theme])
 
   const toggleTheme = () => {

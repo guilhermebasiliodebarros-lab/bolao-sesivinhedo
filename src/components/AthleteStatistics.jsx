@@ -52,5 +52,5 @@ export default function AthleteStatistics() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   useEffect(() => subscribeGames((items) => { setGames(items); setLoading(false); setError('') }, (message) => { setError(message); setLoading(false) }), [])
-  return <section className="page-shell athlete-statistics-page"><div className="page-heading"><span className="eyebrow">Interclasse SESI Vinhedo</span><h1>Estatísticas individuais</h1><p>Acompanhe a artilharia e os pontos por atleta de cada modalidade.</p></div>{error ? <div className="alert alert-error">{error}</div> : null}{loading ? <LoadingState label="Carregando estatísticas…" /> : <AthleteStatisticsPanel games={games} />}</section>
+  return <section className="page-shell athlete-statistics-page"><div className="page-heading"><span className="eyebrow">Interclasse SESI Vinhedo</span><h1>Estatísticas individuais</h1><p>Acompanhe a artilharia e os pontos por atleta de cada modalidade.</p></div>{error ? <div className="alert alert-error" role="alert">{error}</div> : null}{loading ? <LoadingState label="Carregando estatísticas…" /> : <AthleteStatisticsPanel games={games} />}</section>
 }

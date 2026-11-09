@@ -13,7 +13,8 @@ export default function Classificacao({ onNavigate }) {
   const [ranking, setRanking] = useState([])
   const [sports, setSports] = useState([])
   const [games, setGames] = useState([])
-  const [predictions, setPredictions] = useState([])
+  const [predictionFeed, setPredictionFeed] = useState({ userId: '', items: [] })
+  const predictions = useMemo(() => user?.uid === predictionFeed.userId && isParticipant ? predictionFeed.items : [], [user?.uid, predictionFeed, isParticipant])
   const [activeRanking, setActiveRanking] = useState(GENERAL_RANKING)
   const [loadingState, setLoadingState] = useState({ ranking: true, sports: true })
   const [error, setError] = useState('')
@@ -44,11 +45,10 @@ export default function Classificacao({ onNavigate }) {
 
   useEffect(() => {
     if (!user || !isParticipant) {
-      setPredictions([])
       return () => {}
     }
 
-    return subscribeUserPredictions(user.uid, setPredictions, setError)
+    return subscribeUserPredictions(user.uid, (items) => setPredictionFeed({ userId: user.uid, items }), setError)
   }, [isParticipant, user])
 
   const visibleRanking = useMemo(() => {
@@ -85,7 +85,7 @@ export default function Classificacao({ onNavigate }) {
   const loading = Object.values(loadingState).some(Boolean)
 
   if (loading) {
-    return <LoadingState label="Atualizando classificação..." />
+    return <LoadingState label="Atualizando classificação..." error={error} />
   }
 
   return (
@@ -101,7 +101,7 @@ export default function Classificacao({ onNavigate }) {
         </button>
       </div>
 
-      {error ? <div className="alert alert-error">{error}</div> : null}
+      {error ? <div className="alert alert-error" role="alert">{error}</div> : null}
 
       <PendingGuessBanner count={pendingGuessCount} onNavigate={onNavigate} />
 

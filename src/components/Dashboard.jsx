@@ -72,7 +72,7 @@ export default function Dashboard({ onNavigate }) {
   }
 
   if (loading || profileLoading) {
-    return <LoadingState label="Carregando seu painel..." />
+    return <LoadingState label="Carregando seu painel..." error={error} />
   }
 
   if (!isParticipant) {
@@ -94,7 +94,7 @@ export default function Dashboard({ onNavigate }) {
         <p>Acompanhe seus palpites, pontuação e próximos jogos disponíveis.</p>
       </div>
 
-      {error ? <div className="alert alert-error">{error}</div> : null}
+      {error ? <div className="alert alert-error" role="alert">{error}</div> : null}
 
       <section className={pendingOpenGames.length ? 'participant-home-callout' : 'participant-home-callout is-complete'}>
         <div>

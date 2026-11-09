@@ -12,9 +12,10 @@ export default function Home({ onNavigate }) {
   const [games, setGames] = useState([])
   const [ranking, setRanking] = useState([])
   const [predictions, setPredictions] = useState([])
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    return subscribeGames(setGames)
+    return subscribeGames((items) => { setGames(items); setError('') }, setError)
   }, [])
 
   useEffect(() => {
@@ -22,7 +23,7 @@ export default function Home({ onNavigate }) {
       return () => {}
     }
 
-    return subscribeRanking(setRanking)
+    return subscribeRanking(setRanking, setError)
   }, [user])
 
   useEffect(() => {
@@ -30,19 +31,19 @@ export default function Home({ onNavigate }) {
       return () => {}
     }
 
-    return subscribeUserPredictions(user.uid, setPredictions)
+    return subscribeUserPredictions(user.uid, setPredictions, setError)
   }, [isParticipant, user])
 
   const openGames = useMemo(() => games.filter((game) => canEditPrediction(game)), [games])
   const activeRanking = user ? ranking : []
-  const activePredictions = user && isParticipant ? predictions : []
-  const predictionsByGame = useMemo(() => new Map(activePredictions.map((prediction) => [prediction.gameId, prediction])), [activePredictions])
+  const predictionsByGame = useMemo(() => new Map((user && isParticipant ? predictions : []).map((prediction) => [prediction.gameId, prediction])), [user, isParticipant, predictions])
   const pendingGuessCount = isParticipant ? openGames.filter((game) => !predictionsByGame.has(game.id)).length : Number.NaN
   const nextGames = openGames.slice(0, 3)
   const topRanking = activeRanking.slice(0, 3)
 
   return (
     <section className="home-page">
+      {error ? <div className="alert alert-error home-data-notice" role="alert"><p>{error}</p><button type="button" className="btn btn-outline btn-small" onClick={() => window.location.reload()}>Tentar novamente</button></div> : null}
       <div className="hero-section" style={{ '--hero-image': `url(${heroImage})` }}>
         <div className="hero-copy">
           <span className="eyebrow">{COPY.home.eyebrow}</span>

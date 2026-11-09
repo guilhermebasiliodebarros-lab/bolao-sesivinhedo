@@ -126,7 +126,7 @@ export default function Calendario({ onNavigate }) {
   )
 
   if (loading) {
-    return <LoadingState label="Montando calendário..." />
+    return <LoadingState label="Montando calendário..." error={error} />
   }
 
   return (
@@ -145,7 +145,7 @@ export default function Calendario({ onNavigate }) {
         </div>
       </div>
 
-      {error ? <div className="alert alert-error">{error}</div> : null}
+      {error ? <div className="alert alert-error" role="alert">{error}</div> : null}
 
       <PendingGuessBanner count={pendingGuessCount} onNavigate={onNavigate} />
 

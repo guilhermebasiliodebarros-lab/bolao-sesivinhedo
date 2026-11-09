@@ -4,6 +4,7 @@ import { getMatchCondition, getMatchOutcome, getMatchState, MATCH_STATE } from '
 import { isKnockoutMatch } from './tieBreak.js'
 import { buildInterclassStandings } from './interclassStandings.js'
 import { getSportProfile, validateSportScores } from './sportRules.js'
+import { sourceParticipant } from './thirdPlace.js'
 
 export const competitionKey = (game) => JSON.stringify([game.sportId || game.esporteNome || 'geral', getGameShift(game), game.tournamentId || normalizeFilterText(game.tournamentName).trim() || 'sem-torneio'])
 
@@ -19,7 +20,7 @@ export function listCompetitions(games) {
 
 const roundRank = (game) => {
   const phase = normalizeFilterText(game.fase)
-  return /oitav/.test(phase) ? 0 : /quart/.test(phase) ? 1 : /semi/.test(phase) ? 2 : /\bfinal\b/.test(phase) ? 3 : 0
+  return game.placement === 'third-place' ? 3 : /oitav/.test(phase) ? 0 : /quart/.test(phase) ? 1 : /semi/.test(phase) ? 2 : /\bfinal\b/.test(phase) ? 3 : 0
 }
 const roundOrder = (a, b) => String(a.rodada || a.id).localeCompare(String(b.rodada || b.id), 'pt-BR', { numeric: true })
 
@@ -64,9 +65,9 @@ export function buildBracket(games) {
     let bottom = 34
     items.forEach((node) => { node.x = 16 + column * (width + gap); node.y = Math.max(bottom + verticalGap, node.desiredY); bottom = node.y + height })
     const names = [...new Set(items.map((node) => node.game.fase || 'Eliminatórias'))]
-    return { rank, x: 16 + column * (width + gap), label: names.length === 1 ? names[0] : `Rodada ${column + 1}`, nodes: items }
+    return { rank, x: 16 + column * (width + gap), label: names.length === 1 ? names[0] : items.some((node) => node.game.placement === 'third-place') ? 'Final e terceiro lugar' : `Rodada ${column + 1}`, nodes: items }
   })
-  const finals = nodes.filter((node) => /\bfinal\b/.test(normalizeFilterText(node.game.fase)) && !/semi|quarta|oitava/.test(normalizeFilterText(node.game.fase)))
+  const finals = nodes.filter((node) => node.game.placement !== 'third-place' && /\bfinal\b/.test(normalizeFilterText(node.game.fase)) && !/semi|quarta|oitava/.test(normalizeFilterText(node.game.fase)))
   const outcome = finals.length === 1 ? getMatchOutcome(finals[0].game) : null
   const champion = ['A', 'B'].includes(outcome) ? finals[0].game[`time${outcome}`] : ''
   return { nodes, byId, edges, rounds, champion, cycle, missingLinks, width: ranks.length ? ranks.length * width + (ranks.length - 1) * gap + 32 : 0, height: nodes.length ? Math.max(...nodes.map((node) => node.y + height)) + 20 : 0 }
@@ -75,12 +76,12 @@ export function buildBracket(games) {
 export function bracketParticipant(node, side, graph) {
   const game = node.game
   const recorded = game[`time${side}`] || ''
-  const placeholder = /^(vencedor|classificado|\d+\s*[oº°]?\s+grupo)/i.test(recorded)
+  const placeholder = /^(vencedor|perdedor|classificado|\d+\s*[oº°]?\s+grupo)/i.test(recorded)
   if (recorded && !game[`seedLabel${side}`] && !placeholder) return recorded
   const edge = graph.edges.find((item) => item.target === node.id && item.side === side)
   const source = edge && graph.byId.get(edge.source)?.game
-  const outcome = source && getMatchOutcome(source)
-  if (['A', 'B'].includes(outcome)) return source[`time${outcome}`]
+  const participant = source && sourceParticipant(source, game[`sourceOutcome${side}`])
+  if (participant) return participant.name
   return game[`seedLabel${side}`] || recorded || 'A definir'
 }
 

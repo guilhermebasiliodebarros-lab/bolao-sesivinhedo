@@ -60,6 +60,7 @@ registerHooks({
   },
 })
 const { normalizeGame, startGame, updateLiveScore, finalizeGame, reopenGame, closeGame, saveGame, canEditPrediction, savePlayer, deletePlayer, deleteTeam, importPlayers, saveAnnouncement, changeMatchCondition, saveMatchReport, loadMatchReport, calculateGroupStandings, saveMatchAttendance, saveBroadcastSettings, saveGamePreparation, startPreparedGames, controlMatchClock, saveSportRegulation, saveSport, recordLiveEvent, undoLiveEvent, redistributeTournamentSchedule, saveTeam, saveGames } = await import('../src/services/firestoreService.js')
+const { createThirdPlaceGame, saveDisciplinaryRecord, resolveDisciplinaryRecord } = await import('../src/services/firestoreService.js')
 const original = {
   sportId: 'football', esporteNome: 'Futebol', fase: 'Fase de grupos', rodada: 'Rodada 1',
   timeA: 'Azul', timeB: 'Branco', status: 'aberto', dataHora: '2099-11-06T12:00', limitePalpites: '2099-11-06T11:00',
@@ -69,6 +70,112 @@ const original = {
 const game = (id = 'one') => normalizeGame(id, documents.get(`games/${id}`))
 const preparationFor = (id, area = '') => ({ expectedTeamKey: attendanceTeamKey(game(id)), venue: 'Quadra principal', venueArea: area, vestA: 'Azul', vestB: 'Amarelo', responsible: 'Professor responsável', sides: { A: { status: 'present', players: {} }, B: { status: 'present', players: {} } } })
 beforeEach(() => { useCurrentTimestamp = false; documents.clear(); documents.set('games/one', structuredClone(original)) })
+
+test('disciplinary records validate team, player and tournament; decisions preserve history and reject stale resolutions', async () => {
+  documents.set('teams/a', { sportId: 'football', nome: 'Azul', turno: 'manha' })
+  documents.set('teams/b', { sportId: 'football', nome: 'Branco', turno: 'manha' })
+  documents.set('teams/a/players/ana', { nome: 'Ana Júlia' })
+  const value = { playerId: 'ana', type: 'yellow', reason: 'Infração registrada pelo árbitro.' }
+  await assert.rejects(saveDisciplinaryRecord('b', value), /atleta/)
+  await assert.rejects(saveDisciplinaryRecord('a', { ...value, reason: 'x' }), /motivo/)
+  await assert.rejects(saveDisciplinaryRecord('a', { ...value, type: 'suspension', scope: 'tournament' }), /partida/)
+  await assert.rejects(saveDisciplinaryRecord('a', { ...value, gameId: 'missing' }), /partida/)
+  const id = await saveDisciplinaryRecord('a', value, { uid: 'master' })
+  const path = `operations/${id}`
+  assert.equal(documents.get(path).playerName, 'Ana Júlia')
+  assert.equal(documents.get(path).createdBy, 'master')
+  assert.equal(documents.get('teams/a').disciplineRevision, 1)
+  assert(!JSON.stringify(documents.get('teams/a')).includes('Ana Júlia'))
+  assert(!JSON.stringify(documents.get('games/one')).includes('Infração'))
+  await assert.rejects(resolveDisciplinaryRecord({ teamId: 'a', recordId: id, expectedRevision: 1, status: 'served', reason: 'Conferido' }), /Somente uma suspensão/)
+  await assert.rejects(resolveDisciplinaryRecord({ teamId: 'b', recordId: id, expectedRevision: 1, status: 'void', reason: 'Correção' }), /não pertence/)
+  await resolveDisciplinaryRecord({ teamId: 'a', recordId: id, expectedRevision: 1, status: 'void', reason: 'Lançamento duplicado.', user: { uid: 'master2' } })
+  assert.equal(documents.get(path).reason, value.reason)
+  assert.equal(documents.get(path).resolvedReason, 'Lançamento duplicado.')
+  assert.equal(documents.get(path).resolvedBy, 'master2')
+  assert.equal(documents.get(path).revision, 2)
+  assert.equal(documents.get('teams/a').disciplineRevision, 2)
+  await assert.rejects(resolveDisciplinaryRecord({ teamId: 'a', recordId: id, expectedRevision: 1, status: 'void', reason: 'Correção' }), /ocorrência mudou/)
+})
+
+test('active suspensions are checked again at preparation and batch start, while yellow cards never impose a suspension', async () => {
+  documents.set('teams/a', { sportId: 'football', nome: 'Azul', turno: 'manha', playerCount: 2 })
+  documents.set('teams/a/players/ana', { nome: 'Ana Júlia' })
+  documents.set('teams/a/players/bia', { nome: 'Beatriz' })
+  documents.set('games/one', { ...original, turno: 'manha', teamIdA: 'a', tournamentId: 'cup' })
+  const setup = () => ({ ...preparationFor('one'), sides: { A: { status: 'present', players: { ana: 'present', bia: 'present' } }, B: { status: 'present', players: {} } } })
+  const value = { playerId: 'ana', type: 'yellow', reason: 'Infração registrada.' }
+  await saveDisciplinaryRecord('a', value)
+  await saveGamePreparation('one', setup())
+  const id = await saveDisciplinaryRecord('a', { ...value, type: 'suspension', scope: 'tournament', gameId: 'one' })
+  await assert.rejects(startPreparedGames(['one']), /Suspensões conferidas/)
+  assert.equal(getMatchState(game()), MATCH_STATE.SCHEDULED)
+  await assert.rejects(saveGamePreparation('one', setup()), /Suspensões conferidas/)
+  await assert.rejects(startGame('one', setup()), /Suspensões conferidas/)
+  const absent = setup(); absent.sides.A.players.ana = 'absent'
+  await saveGamePreparation('one', absent)
+  assert.equal(documents.get('games/one/documents/attendance').A.players.find((player) => player.id === 'ana').status, 'absent')
+  await resolveDisciplinaryRecord({ teamId: 'a', recordId: id, expectedRevision: 1, status: 'served', reason: 'Suspensão cumprida e conferida.' })
+  await startGame('one', setup())
+  assert.equal(getMatchState(game()), MATCH_STATE.LIVE)
+})
+
+function seedSemifinals() {
+  for (const [id, a, b] of [['s1', 'Azul', 'Branco'], ['s2', 'Verde', 'Amarelo']]) documents.set(`games/${id}`, { ...original, id, turno: 'manha', timeA: a, timeB: b, teamIdA: `${id}-a`, teamIdB: `${id}-b`, turmaA: a, turmaB: b, stageType: 'knockout', fase: 'Semifinal', rodada: `Semifinal ${id === 's1' ? 1 : 2}`, tournamentId: 'cup', tournamentName: 'Copa', dataHora: id === 's1' ? '2099-11-06T12:00' : '2099-11-06T12:30' })
+  documents.set('games/final', { ...original, turno: 'manha', tournamentId: 'cup', stageType: 'knockout', fase: 'Final', timeA: 'Vencedor Semifinal 1', timeB: 'Vencedor Semifinal 2', sourceGameIdA: 's1', sourceGameIdB: 's2', seedLabelA: 'Vencedor Semifinal 1', seedLabelB: 'Vencedor Semifinal 2' })
+  for (const id of ['s1', 's2']) documents.set(`games/${id}`, { ...documents.get(`games/${id}`), status: 'encerrado' })
+}
+
+test('third place is created once, routes losers and identities while final routes winners, and reopening clears both paths', async () => {
+  seedSemifinals()
+  const args = { semifinalIds: ['s1', 's2'], dataHora: '2099-11-06T13:00', limitePalpites: '2099-11-06T12:00' }
+  await assert.rejects(createThirdPlaceGame({ ...args, dataHora: '2099-11-06T12:15' }), /posterior/)
+  const id = await createThirdPlaceGame(args)
+  assert.equal(game(id).sourceOutcomeA, 'loser')
+  assert.equal(game(id).placement, 'third-place')
+  await assert.rejects(createThirdPlaceGame(args), /já foi criada/)
+  await finalizeGame({ gameId: 's1', placarA: 1, placarB: 1, tieBreak: { method: 'penalties', scoreA: 4, scoreB: 3 } })
+  await changeMatchCondition({ gameId: 's2', action: 'walkover', reason: 'Equipe ausente.', winnerSide: 'B' })
+  assert.equal(game('final').timeA, 'Azul')
+  assert.equal(game('final').timeB, 'Amarelo')
+  assert.equal(game(id).timeA, 'Branco')
+  assert.equal(game(id).timeB, 'Verde')
+  assert.equal(game(id).teamIdA, 's1-b')
+  assert.equal(game(id).turmaB, 'Verde')
+  await reopenGame('s1')
+  assert.equal(game('final').timeA, 'A definir')
+  assert.equal(game(id).timeA, 'A definir')
+  assert.match(game(id).seedLabelA, /Perdedor/)
+  assert.equal(game(id).teamIdA, '')
+  await closeGame('s1')
+  await finalizeGame({ gameId: 's1', placarA: 0, placarB: 2 })
+  assert.equal(game(id).timeA, 'Azul')
+  documents.set(`games/${id}`, { ...documents.get(`games/${id}`), status: 'encerrado', liveStatus: 'live' })
+  await assert.rejects(reopenGame('s1'), /próxima fase já começou/)
+})
+
+test('adding third place after semis finished fills their losers immediately and does not change original fixtures', async () => {
+  seedSemifinals()
+  await finalizeGame({ gameId: 's1', placarA: 3, placarB: 0 })
+  await finalizeGame({ gameId: 's2', placarA: 1, placarB: 2 })
+  const before = structuredClone([...documents])
+  const id = await createThirdPlaceGame({ semifinalIds: ['s1', 's2'], dataHora: '2099-11-06T13:00' })
+  assert.equal(game(id).timeA, 'Branco')
+  assert.equal(game(id).timeB, 'Verde')
+  assert.equal(game(id).seedLabelA, '')
+  assert.equal(game(id).teamIdB, 's2-a')
+  for (const [path, value] of before) assert.deepEqual(documents.get(path), value)
+})
+
+test('group qualification preserves team identities for semifinal rosters and later losing branches', async () => {
+  documents.set('games/one', { ...original, turno: 'manha', status: 'encerrado', stageType: 'group', groupName: 'Grupo A', tournamentId: 'cup', teamIdA: 'azul', teamIdB: 'branco', turmaA: 'Azul', turmaB: 'Branco' })
+  documents.set('games/semi', { ...original, turno: 'manha', stageType: 'knockout', fase: 'Semifinal', tournamentId: 'cup', timeA: '1o Grupo A', seedLabelA: '1o Grupo A', timeB: '2o Grupo A', seedLabelB: '2o Grupo A' })
+  await finalizeGame({ gameId: 'one', placarA: 1, placarB: 0 })
+  assert.equal(game('semi').teamIdA, 'azul')
+  assert.equal(game('semi').teamIdB, 'branco')
+  assert.equal(game('semi').turmaA, 'Azul')
+  assert.equal(game('semi').seedLabelA, '')
+})
 
 test('saving a new modality creates its fourteen class teams in the same batch', async () => {
   await saveSport({ nome: 'Tênis de Mesa' })

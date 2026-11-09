@@ -1,0 +1,16 @@
+.discipline-panel, .discipline-team, .discipline-records { display: grid; gap: 20px; min-width: 0; }
+.discipline-panel { padding: clamp(16px, 3vw, 28px); background: var(--surface); border: 1px solid var(--border); border-radius: 20px; }
+.discipline-panel label { display: grid; gap: 8px; min-width: 0; }
+.discipline-panel select, .discipline-panel textarea { width: 100%; min-width: 0; }
+.discipline-form fieldset { display: grid; gap: 18px; }
+.discipline-panel fieldset { min-width: 0; padding: 18px; border: 1px solid var(--border); border-radius: 14px; }
+.discipline-panel legend { padding: 0 8px; font-weight: 700; }
+.discipline-panel textarea { padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-strong); color: var(--text); font: inherit; resize: vertical; }
+.discipline-record { display: grid; gap: 12px; padding: 20px; border: 1px solid var(--border); border-left: 5px solid var(--cyan); border-radius: 14px; background: var(--surface-strong); min-width: 0; }
+.discipline-record.is-yellow { border-left-color: #d6a20b; }
+.discipline-record.is-red, .discipline-record.is-suspension { border-left-color: var(--red); }
+.discipline-record h4 { margin: 5px 0 0; font-size: 18px; }
+.discipline-record small { color: var(--muted); }
+.discipline-record form { display: grid; gap: 12px; }
+.discipline-reason { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 600px) { .discipline-panel .section-heading { align-items: start; flex-direction: column; gap: 12px; } .discipline-record { padding: 14px; } }

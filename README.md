@@ -194,7 +194,21 @@ Nos grupos, todas as turmas precisam caber exatamente na configuração. O sorte
 
 Ao concluir, use **Usar resultado na prévia**, confira os horários e clique em **Salvar chaveamento** para criar os jogos pelo fluxo existente. Fechar a apresentação descarta apenas o sorteio em andamento e preserva a prévia anterior. A apresentação ocorre no dispositivo do organizador; não há transmissão simultânea para outros navegadores. Nenhum jogo existente é alterado pela animação.
 
+## Central disciplinar
+
+Em **Painel master → Central disciplinar**, escolha o turno, a modalidade/equipe e um atleta do elenco para registrar advertência, cartão amarelo, cartão vermelho ou suspensão. A partida da ocorrência é opcional. Suspensões podem abranger todas as partidas da equipe na modalidade ou somente o torneio de uma partida vinculada. Cartões não geram suspensões automaticamente; a organização aplica o regulamento. Suspensões continuam ativas até **Marcar como cumprida** ou **Anular registro**, com motivo obrigatório. A ocorrência original, autor, data e decisão de encerramento são preservados, com conferência de versão para impedir decisões concorrentes.
+
+Na preparação da partida, as ocorrências são atualizadas em tempo real e os atletas suspensos não podem ser marcados como presentes. **Conferir disponíveis** marca esses atletas como ausentes e os demais como presentes. O início individual e em lote confere novamente as suspensões atuais, inclusive quando a conferência foi salva antes da suspensão. É necessário manter ao menos um atleta presente em uma equipe com elenco. Não há baixa automática após jogos nem suspensão de outras modalidades. As ocorrências e os nomes completos ficam em documentos privados de `operations`, protegidos pela regra master existente; não aparecem no chaveamento público ou na TV.
+
+## Disputa de terceiro lugar
+
+No gerador **Grupos + mata-mata**, ative **Incluir disputa de terceiro lugar** quando o mata-mata começar em semifinal ou quartas. A prévia inclui o jogo depois das semifinais e antes da final. Para um torneio já criado com duas semifinais, use **Adicionar terceiro lugar** no cartão do torneio e informe o horário e o encerramento dos palpites.
+
+Os perdedores das semifinais são preenchidos automaticamente, incluindo desempates e W.O., com a identidade da equipe preservada para elenco e presença. Se as semifinais já terminaram, o preenchimento ocorre ao criar a disputa. Reabrir uma semifinal limpa seu participante tanto na final quanto no terceiro lugar; a correção fica bloqueada se uma dessas partidas já começou. O chaveamento público usa linhas tracejadas para os perdedores e mantém o campeão vinculado à final. Partidas e palpites existentes são preservados ao adicionar o novo confronto. Uma final direta e o sorteio simples não ganham uma disputa de terceiro lugar automaticamente.
+
 ## Rodar localmente
+
+A revisão de interface, correções de sobreposição e cobertura de telas estão documentadas em [Revisão de usabilidade — 9/11/2026](docs/revisao-usabilidade-2026-11-09.md).
 
 ```bash
 npm install

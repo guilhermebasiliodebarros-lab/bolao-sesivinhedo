@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { drawFingerprint, drawSections } from '../utils/tournamentDraw.js'
 import './TournamentDrawDialog.css'
+import useModalDialog from '../hooks/useModalDialog.js'
 
 export default function TournamentDrawDialog({ draw, teams, config, onClose, onApply }) {
   const dialogRef = useRef(null)
@@ -15,12 +16,11 @@ export default function TournamentDrawDialog({ draw, teams, config, onClose, onA
   const sections = drawSections(draw.teams, draw.config)
   const latest = revealed ? draw.teams[revealed - 1] : null
   const destination = revealed ? sections.find((section) => section.slots.some((slot) => slot.index === revealed - 1))?.label : ''
+  useModalDialog(dialogRef)
 
   useEffect(() => {
-    const dialog = dialogRef.current
     const presentation = presentationRef.current
-    dialog.showModal()
-    return () => { if (document.fullscreenElement === presentation) document.exitFullscreen().catch(() => {}); dialog.close() }
+    return () => { if (document.fullscreenElement === presentation) document.exitFullscreen().catch(() => {}) }
   }, [])
 
   useEffect(() => {

@@ -31,6 +31,8 @@ import { attendanceTeamKey, currentAttendance, normalizeAttendanceSide } from '.
 import { normalizeBroadcastSettings } from '../utils/automaticCalls.js'
 import { isMatchPrepared, matchStartChecklist, preparationKey } from '../utils/matchStart.js'
 import { normalizePlayerInput } from '../utils/player.js'
+import { normalizeDisciplineInput } from '../utils/discipline.js'
+import { sourceParticipant, thirdPlaceParticipants, thirdPlaceSemifinals } from '../utils/thirdPlace.js'
 import { getSportProfile, normalizeMatchDetails, normalizeSetScores, validateFinalSets, validateSportScores } from '../utils/sportRules.js'
 
 export const GAME_STATUS = {
@@ -285,6 +287,9 @@ export function normalizeGame(id, data = {}) {
     stageType: data.stageType || '',
     sourceGameIdA: data.sourceGameIdA || '',
     sourceGameIdB: data.sourceGameIdB || '',
+    sourceOutcomeA: data.sourceOutcomeA === 'loser' ? 'loser' : 'winner',
+    sourceOutcomeB: data.sourceOutcomeB === 'loser' ? 'loser' : 'winner',
+    placement: data.placement === 'third-place' ? 'third-place' : '',
     qualifierGroupA: data.qualifierGroupA || '',
     qualifierGroupB: data.qualifierGroupB || '',
     qualifierSeedA: data.qualifierSeedA || '',
@@ -365,6 +370,9 @@ function normalizeGameInput(game) {
     stageType: String(game.stageType ?? '').trim(),
     sourceGameIdA: String(game.sourceGameIdA ?? '').trim(),
     sourceGameIdB: String(game.sourceGameIdB ?? '').trim(),
+    sourceOutcomeA: game.sourceOutcomeA === 'loser' ? 'loser' : 'winner',
+    sourceOutcomeB: game.sourceOutcomeB === 'loser' ? 'loser' : 'winner',
+    placement: game.placement === 'third-place' ? 'third-place' : '',
     seedLabelA: String(game.seedLabelA ?? '').trim(),
     seedLabelB: String(game.seedLabelB ?? '').trim(),
     nextGameId: String(game.nextGameId ?? '').trim(),
@@ -865,6 +873,55 @@ export function subscribePlayers(teamId, onData, onError) {
   }, (error) => onError?.(toFriendlyError(error)))
 }
 
+function teamDisciplineQuery(firestore, teamId) {
+  return query(collection(firestore, 'operations'), where('recordKind', '==', 'discipline'), where('teamId', '==', teamId))
+}
+
+export function subscribeTeamDiscipline(teamId, onData, onError) {
+  return onSnapshot(teamDisciplineQuery(ensureDb(), teamId), (snapshot) => {
+    onData(snapshot.docs.map((item) => ({ ...item.data(), id: item.id })).sort((a, b) => (toDate(b.createdAt)?.getTime() || 0) - (toDate(a.createdAt)?.getTime() || 0)))
+  }, (error) => onError?.(toFriendlyError(error)))
+}
+
+export async function saveDisciplinaryRecord(teamId, value, user) {
+  if (!teamId) throw new Error('Selecione uma equipe.')
+  const payload = normalizeDisciplineInput(value)
+  const firestore = ensureDb()
+  const teamRef = doc(firestore, 'teams', teamId)
+  const recordRef = doc(collection(firestore, 'operations'))
+  await runTransaction(firestore, async (transaction) => {
+    const [team, player, match] = await Promise.all([
+      transaction.get(teamRef), transaction.get(doc(firestore, 'teams', teamId, 'players', payload.playerId)),
+      payload.gameId ? transaction.get(doc(firestore, 'games', payload.gameId)) : null,
+    ])
+    if (!team.exists() || !player.exists()) throw new Error('A equipe ou o atleta não está mais cadastrado. Atualize a lista.')
+    const teamData = team.data()
+    const game = match?.exists() ? normalizeGame(match.id, match.data()) : null
+    if (payload.gameId && (!game || game.sportId !== teamData.sportId || (game.turno && getTeamShift(teamData) && game.turno !== getTeamShift(teamData)) || !['A', 'B'].some((side) => game[`teamId${side}`] ? game[`teamId${side}`] === teamId : game[`time${side}`] === teamData.nome))) throw new Error('A partida precisa pertencer à equipe e à modalidade selecionadas.')
+    if (payload.scope === 'tournament' && !game?.tournamentId) throw new Error('Escolha uma partida vinculada a um torneio.')
+    transaction.set(recordRef, { ...payload, recordKind: 'discipline', teamId, playerName: player.data().nome, sportId: teamData.sportId, turno: getTeamShift(teamData), tournamentId: game?.tournamentId || '', tournamentName: game?.tournamentName || '', matchLabel: game ? `${game.timeA} × ${game.timeB} · ${game.fase}` : '', status: 'active', revision: 1, createdAt: serverTimestamp(), createdBy: user?.uid || null })
+    transaction.update(teamRef, { disciplineRevision: (Number(teamData.disciplineRevision) || 0) + 1 })
+  })
+  return recordRef.id
+}
+
+export async function resolveDisciplinaryRecord({ teamId, recordId, status, reason, expectedRevision, user }) {
+  const note = String(reason || '').trim()
+  if (!teamId || !recordId || !['served', 'void'].includes(status) || note.length < 3 || note.length > 1000) throw new Error('Informe a situação e um motivo de 3 a 1.000 caracteres.')
+  const firestore = ensureDb()
+  const teamRef = doc(firestore, 'teams', teamId), recordRef = doc(firestore, 'operations', recordId)
+  await runTransaction(firestore, async (transaction) => {
+    const [team, record] = await Promise.all([transaction.get(teamRef), transaction.get(recordRef)])
+    if (!team.exists() || !record.exists()) throw new Error('A ocorrência ou a equipe não existe mais.')
+    const current = record.data()
+    if (current.recordKind !== 'discipline' || current.teamId !== teamId) throw new Error('A ocorrência não pertence à equipe selecionada.')
+    if (current.status !== 'active' || current.revision !== expectedRevision) throw new Error('A ocorrência mudou. Confira a lista atualizada.')
+    if (status === 'served' && current.type !== 'suspension') throw new Error('Somente uma suspensão pode ser marcada como cumprida.')
+    transaction.update(recordRef, { status, revision: current.revision + 1, resolvedReason: note, resolvedAt: serverTimestamp(), resolvedBy: user?.uid || null })
+    transaction.update(teamRef, { disciplineRevision: (Number(team.data().disciplineRevision) || 0) + 1 })
+  })
+}
+
 export async function savePlayer(teamId, player) {
   if (!teamId) throw new Error('Selecione uma equipe para cadastrar jogadores.')
   const firestore = ensureDb()
@@ -1108,7 +1165,7 @@ export async function reopenGame(gameId) {
         if (data[`sourceGameId${side}`] === gameId || (snapshot.data().stageType === 'group' && data[`qualifierGroup${side}`] === snapshot.data().groupName)) {
           fields[`time${side}`] = 'A definir'
           fields[`teamId${side}`] = ''; fields[`turma${side}`] = ''
-          fields[`seedLabel${side}`] = data[`qualifierSeed${side}`] || 'Vencedor da partida anterior'
+          fields[`seedLabel${side}`] = data[`qualifierSeed${side}`] || (data[`sourceOutcome${side}`] === 'loser' ? 'Perdedor da semifinal' : 'Vencedor da partida anterior')
         }
       }
       if (Object.keys(fields).length) transaction.update(dependent.ref, { ...fields, updatedAt: serverTimestamp() })
@@ -1157,6 +1214,7 @@ async function readPreparedGame(transaction, firestore, gameId, candidates, subm
   const selectedTeams = [teamFor('A'), teamFor('B')]
   await Promise.all(selectedTeams.filter(Boolean).map((team) => transaction.get(team.ref)))
   const rosters = await Promise.all(selectedTeams.map(async (team) => team ? (await getDocs(collection(firestore, 'teams', team.id, 'players'))).docs.map((item) => ({ ...item.data(), id: item.id })) : []))
+  const discipline = Object.fromEntries(await Promise.all(selectedTeams.map(async (team, index) => [index ? 'B' : 'A', team ? (await getDocs(teamDisciplineQuery(firestore, team.id))).docs.map((item) => ({ ...item.data(), id: item.id })) : []])))
   const sides = submitted?.sides || Object.fromEntries(['A', 'B'].map((side) => [side, {
     status: previous?.[side]?.status || validSummary?.[`team${side}`] || 'pending',
     players: Object.fromEntries((previous?.[side]?.players || []).map((player) => [player.id, player.status])),
@@ -1167,7 +1225,7 @@ async function readPreparedGame(transaction, firestore, gameId, candidates, subm
   const attendance = { teamKey: attendanceTeamKey(game), A: normalizeAttendanceSide(sides.A, rosters[0]), B: normalizeAttendanceSide(sides.B, rosters[1]), responsible,
     checkedAt: submitted ? serverTimestamp() : previous?.checkedAt || serverTimestamp(), checkedBy: submitted?.user?.uid || previous?.checkedBy || null }
   game = { ...game, ...details, requireAttendance: true, attendanceSummary: { teamKey: attendance.teamKey, teamA: attendance.A.status, teamB: attendance.B.status, checkedAt: attendance.checkedAt } }
-  const missing = matchStartChecklist(game, { attendance }).filter((check) => check.id !== 'conflicts' && !check.done)
+  const missing = matchStartChecklist(game, { attendance, discipline }).filter((check) => check.id !== 'conflicts' && !check.done)
   if (missing.length) throw new Error(`Antes de iniciar: ${missing.map((check) => check.label).join('; ')}.`)
   const preparation = { key: preparationKey(game), playerCountA: rosters[0].length, playerCountB: rosters[1].length, preparedAt: serverTimestamp(), preparedBy: submitted?.user?.uid || game.preparation?.preparedBy || null }
   return { raw, game: { ...game, preparation }, attendance, fields: { ...details, turno: game.turno, requireAttendance: true, attendanceSummary: game.attendanceSummary, preparation, updatedAt: serverTimestamp() } }
@@ -1320,6 +1378,9 @@ async function advanceGroupQualifiers(firestore, game) {
   await Promise.all(
     standings.map(async (team, index) => {
       const seedLabel = getGroupSeedLabel(index + 1, game.groupName)
+      const appearance = groupGames.find((match) => ['A', 'B'].some((side) => match[`time${side}`] === team.nome))
+      const side = appearance?.timeA === team.nome ? 'A' : 'B'
+      const teamId = appearance?.[`teamId${side}`] || '', turma = appearance?.[`turma${side}`] || ''
       const [slotASnapshot, slotBSnapshot] = await Promise.all([
         getDocs(query(collection(firestore, 'games'), where('seedLabelA', '==', seedLabel))),
         getDocs(query(collection(firestore, 'games'), where('seedLabelB', '==', seedLabel))),
@@ -1334,6 +1395,7 @@ async function advanceGroupQualifiers(firestore, game) {
 
         batch.update(nextGameDoc.ref, {
           timeA: team.nome,
+          teamIdA: teamId, turmaA: turma,
           seedLabelA: '',
           qualifierGroupA: game.groupName, qualifierSeedA: seedLabel,
           updatedAt: serverTimestamp(),
@@ -1350,6 +1412,7 @@ async function advanceGroupQualifiers(firestore, game) {
 
         batch.update(nextGameDoc.ref, {
           timeB: team.nome,
+          teamIdB: teamId, turmaB: turma,
           seedLabelB: '',
           qualifierGroupB: game.groupName, qualifierSeedB: seedLabel,
           updatedAt: serverTimestamp(),
@@ -1407,29 +1470,18 @@ export async function finalizeGame({ gameId, placarA, placarB, user, setScores, 
 
 async function advanceCompletedMatch(firestore, game) {
   const gameId = game.id
-  const outcome = getMatchOutcome(game)
-  const winner = ['A', 'B'].includes(outcome) ? game[`time${outcome}`] : ''
-  if (winner) {
+  if (sourceParticipant(game)) {
     const [slotASnapshot, slotBSnapshot] = await Promise.all([
       getDocs(query(collection(firestore, 'games'), where('sourceGameIdA', '==', gameId))),
       getDocs(query(collection(firestore, 'games'), where('sourceGameIdB', '==', gameId))),
     ])
     const batch = writeBatch(firestore)
 
-    slotASnapshot.forEach((nextGameDoc) => {
-      batch.update(nextGameDoc.ref, {
-        timeA: winner,
-        seedLabelA: '',
-        updatedAt: serverTimestamp(),
-      })
-    })
-
-    slotBSnapshot.forEach((nextGameDoc) => {
-      batch.update(nextGameDoc.ref, {
-        timeB: winner,
-        seedLabelB: '',
-        updatedAt: serverTimestamp(),
-      })
+    for (const [side, snapshot] of [['A', slotASnapshot], ['B', slotBSnapshot]]) snapshot.forEach((nextGameDoc) => {
+      const target = nextGameDoc.data()
+      if (target.sportId !== game.sportId || (target.tournamentId || '') !== (game.tournamentId || '') || getGameShift(target) !== getGameShift(game)) return
+      const participant = sourceParticipant(game, target[`sourceOutcome${side}`])
+      batch.update(nextGameDoc.ref, { [`time${side}`]: participant.name, [`teamId${side}`]: participant.teamId, [`turma${side}`]: participant.turma, [`seedLabel${side}`]: '', preparation: null, updatedAt: serverTimestamp() })
     })
 
     if (!slotASnapshot.empty || !slotBSnapshot.empty) {
@@ -1438,6 +1490,27 @@ async function advanceCompletedMatch(firestore, game) {
   }
 
   await advanceGroupQualifiers(firestore, game)
+}
+
+export async function createThirdPlaceGame({ semifinalIds, dataHora, limitePalpites }) {
+  if (!Array.isArray(semifinalIds) || semifinalIds.length !== 2 || new Set(semifinalIds).size !== 2) throw new Error('Selecione duas semifinais do mesmo torneio.')
+  const firestore = ensureDb()
+  const first = await getDoc(doc(firestore, 'games', semifinalIds[0]))
+  if (!first.exists() || !first.data().tournamentId) throw new Error('Torneio não encontrado.')
+  const tournament = await getDocs(query(collection(firestore, 'games'), where('tournamentId', '==', first.data().tournamentId)))
+  const targetRef = doc(firestore, 'games', `third-${[...semifinalIds].sort().join('-')}`)
+  await runTransaction(firestore, async (transaction) => {
+    const [target, ...snapshots] = await Promise.all([transaction.get(targetRef), ...tournament.docs.map((item) => transaction.get(item.ref))])
+    if (target.exists()) throw new Error('A disputa de terceiro lugar já foi criada.')
+    const games = snapshots.filter((item) => item.exists()).map((item) => normalizeGame(item.id, item.data()))
+    const semis = thirdPlaceSemifinals(games)
+    if (semis.length !== 2 || semis.some((item) => !semifinalIds.includes(item.id))) throw new Error('As semifinais mudaram ou o terceiro lugar já existe. Reabra o torneio.')
+    if (!dataHora || eventDate(dataHora).getTime() <= Math.max(...semis.map((item) => eventDate(item.dataHora).getTime()))) throw new Error('Escolha um horário posterior às duas semifinais.')
+    const source = semis[0]
+    const payload = normalizeGameInput({ sportId: source.sportId, esporteNome: source.esporteNome, turno: getGameShift(source), tournamentId: source.tournamentId, tournamentName: source.tournamentName, ...getSportProfile(source), ...thirdPlaceParticipants(semis), dataHora, limitePalpites: limitePalpites || dataHora, status: GAME_STATUS.OPEN })
+    transaction.set(targetRef, { ...payload, createdAt: serverTimestamp(), updatedAt: serverTimestamp() })
+  })
+  return targetRef.id
 }
 
 export async function deleteGame(gameId) {
