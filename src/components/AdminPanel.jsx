@@ -7,6 +7,7 @@ import {
   deleteTeam,
   deletePlayer,
   deleteAnnouncement,
+  ensureSchoolClassTeams,
   finalizeGame,
   GAME_STATUS,
   isPredictionDeadlineOpen,
@@ -24,6 +25,7 @@ import {
   subscribeParticipants,
   subscribeSports,
   subscribeTeams,
+  toFriendlyError,
 } from '../services/bolaoService.js'
 import { formatDateTime, formatPoints, toDateTimeLocalValue } from '../utils/format.js'
 import { gameMatchesSearch, getGameStageLabel, getSportVisualClass, getUniqueGamePhases } from '../utils/game.js'
@@ -528,6 +530,19 @@ export default function AdminPanel({ onNavigate }) {
   const gameFormRef = useRef(null)
   const sportFormRef = useRef(null)
   const teamFormRef = useRef(null)
+  const [classSetup, setClassSetup] = useState({ loading: true, error: '', created: 0, updated: 0 })
+  const [classSetupAttempt, setClassSetupAttempt] = useState(0)
+
+  useEffect(() => {
+    if (!isMaster || !user?.uid) return
+    let active = true
+    ensureSchoolClassTeams().then((result) => {
+      if (active) setClassSetup({ ...result, loading: false, error: '' })
+    }).catch((error) => {
+      if (active) setClassSetup({ loading: false, error: toFriendlyError(error), created: 0, updated: 0 })
+    })
+    return () => { active = false }
+  }, [isMaster, user?.uid, classSetupAttempt])
 
   useEffect(() => {
     if (!editFocusRequest) return
@@ -1291,6 +1306,7 @@ export default function AdminPanel({ onNavigate }) {
       {selectedSport ? <p className="admin-navigation-context">Esporte selecionado<strong>{selectedSport.nome}</strong></p> : null}
       </aside>
       <div className="admin-workspace-content">
+      {classSetup.loading ? <p role="status" className="alert">Preparando as turmas de todos os esportes…</p> : classSetup.error ? <div role="alert" className="alert alert-error">Não foi possível completar o cadastro das turmas: {classSetup.error} <button className="btn btn-outline btn-small" type="button" onClick={() => { setClassSetup({ loading: true, error: '', created: 0, updated: 0 }); setClassSetupAttempt((value) => value + 1) }}>Tentar novamente</button></div> : classSetup.created || classSetup.updated ? <p role="status" className="alert alert-success">Turmas preparadas em todas as modalidades: 8 de manhã e 6 à tarde. Os cadastros existentes foram preservados.</p> : null}
 
       {['times', 'jogos', 'jogadores', 'ao-vivo', 'interclasse', 'estatisticas', 'pendencias', 'programacao', 'palpites', 'avisos'].includes(activeAdminTab) ? <ShiftTabs value={selectedShift} onChange={changeShift} counts={Object.fromEntries(['manha', 'tarde'].map((turno) => [turno, teams.filter((team) => getTeamShift(team) === turno && (!selectedSport || team.sportId === selectedSport.id)).length]))} /> : null}
 
@@ -1387,6 +1403,7 @@ export default function AdminPanel({ onNavigate }) {
               <div>
                 <h2>{teamForm.id ? 'Editar time' : 'Times por esporte'}</h2>
                 <p>Cadastro de {shiftLabel(selectedShift).toLocaleLowerCase('pt-BR')}. O gerador usará somente as equipes deste turno.</p>
+                <p>As modalidades novas já começam com as 14 turmas: 6º a 8º A/B à tarde e 9º a 3º do Ensino Médio A/B de manhã.</p>
               </div>
               <button className="btn btn-outline btn-small" type="button" onClick={resetTeamForm}>
                 Novo time

@@ -4,7 +4,7 @@ import { buildInterclassStandings } from '../utils/interclassStandings.js'
 
 const number = (value) => new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(value)
 
-function StandingsTable({ table }) {
+export function StandingsTable({ table }) {
   return <div className="interclass-table-wrap"><table className="interclass-table" aria-label={`${table.sportName} · ${table.tournamentName} · ${table.groupName}`}><thead><tr><th>Pos.</th><th>Equipe</th><th>Pts</th><th>J</th><th>V</th><th>E</th><th>D</th><th>Saldo</th></tr></thead><tbody>{table.rows.map((row, index) => <tr key={row.id}><td>{index + 1}º</td><th scope="row">{row.nome}</th><td><strong>{number(row.pontos)}</strong></td><td>{row.jogos}</td><td>{row.vitorias}</td><td>{row.empates}</td><td>{row.derrotas}</td><td>{number(row.saldo)}</td></tr>)}</tbody></table><p className="standings-rule-note">Vitória: {number(table.winPoints)} · Empate: {number(table.drawPoints)} · Derrota: {number(table.lossPoints)} · Desempate: vitórias, saldo e pontos a favor.</p></div>
 }
 

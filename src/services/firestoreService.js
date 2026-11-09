@@ -25,6 +25,7 @@ import { applyLiveEvent, scoreRevision } from '../utils/liveEvents.js'
 import { normalizeRegulation } from '../utils/regulations.js'
 import { buildScheduleRedistribution, scheduleFingerprint, schedulePlanFingerprint } from '../utils/tournamentSchedule.js'
 import { getTeamShift, getGameShift, resolveCompetitionShifts, validateTeamShift, validateGameShift } from '../utils/schoolShifts.js'
+import { SCHOOL_CLASSES_VERSION, schoolClassPlan, synchronizeSchoolClasses } from '../utils/schoolClasses.js'
 import { normalizeTieBreak } from '../utils/tieBreak.js'
 import { attendanceTeamKey, currentAttendance, normalizeAttendanceSide } from '../utils/attendance.js'
 import { normalizeBroadcastSettings } from '../utils/automaticCalls.js'
@@ -284,6 +285,10 @@ export function normalizeGame(id, data = {}) {
     stageType: data.stageType || '',
     sourceGameIdA: data.sourceGameIdA || '',
     sourceGameIdB: data.sourceGameIdB || '',
+    qualifierGroupA: data.qualifierGroupA || '',
+    qualifierGroupB: data.qualifierGroupB || '',
+    qualifierSeedA: data.qualifierSeedA || '',
+    qualifierSeedB: data.qualifierSeedB || '',
     seedLabelA: data.seedLabelA || '',
     seedLabelB: data.seedLabelB || '',
     nextGameId: data.nextGameId || '',
@@ -776,13 +781,32 @@ export async function saveSport(sport) {
     await batch.commit()
   } else {
     const sportRef = doc(collection(firestore, 'sports'))
-
-    await setDoc(sportRef, {
+    const batch = writeBatch(firestore)
+    batch.set(sportRef, {
       ...payload,
+      schoolClassesVersion: SCHOOL_CLASSES_VERSION,
+      schoolClassesSeededAt: serverTimestamp(),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     })
+    schoolClassPlan({ id: sportRef.id, ...payload }).forEach((item) => {
+      batch.set(doc(firestore, 'teams', item.id), { ...item.data, createdAt: serverTimestamp(), updatedAt: serverTimestamp() })
+    })
+    await batch.commit()
   }
+}
+
+export async function ensureSchoolClassTeams() {
+  const firestore = ensureDb()
+  return synchronizeSchoolClasses({
+    list: async (name) => (await getDocs(collection(firestore, name))).docs.map((item) => ({ ...item.data(), id: item.id })),
+    timestamp: serverTimestamp,
+    runTransaction: (action) => runTransaction(firestore, (transaction) => action({
+      get: async (path) => { const item = await transaction.get(doc(firestore, path)); return item.exists() ? { ...item.data(), id: item.id } : null },
+      create: (path, data) => transaction.set(doc(firestore, path), data),
+      update: (path, data) => transaction.update(doc(firestore, path), data),
+    })),
+  })
 }
 
 export async function saveSportRegulation(sportId, value, expectedRevision) {

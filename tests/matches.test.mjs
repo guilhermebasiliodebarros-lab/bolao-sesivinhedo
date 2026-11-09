@@ -70,6 +70,21 @@ const game = (id = 'one') => normalizeGame(id, documents.get(`games/${id}`))
 const preparationFor = (id, area = '') => ({ expectedTeamKey: attendanceTeamKey(game(id)), venue: 'Quadra principal', venueArea: area, vestA: 'Azul', vestB: 'Amarelo', responsible: 'Professor responsável', sides: { A: { status: 'present', players: {} }, B: { status: 'present', players: {} } } })
 beforeEach(() => { useCurrentTimestamp = false; documents.clear(); documents.set('games/one', structuredClone(original)) })
 
+test('saving a new modality creates its fourteen class teams in the same batch', async () => {
+  await saveSport({ nome: 'Tênis de Mesa' })
+  const [path, sport] = [...documents].find(([key]) => key.startsWith('sports/'))
+  const sportId = path.split('/')[1]
+  const teams = [...documents].filter(([key, value]) => key.startsWith('teams/') && value.sportId === sportId).map(([, value]) => value)
+  assert.equal(sport.schoolClassesVersion, 1)
+  assert.equal(teams.length, 14)
+  assert.equal(teams.filter((team) => team.turno === 'manha').length, 8)
+  assert.equal(teams.filter((team) => team.turno === 'tarde').length, 6)
+  assert(teams.every((team) => team.esporteNome === 'Tênis de Mesa' && team.turma === team.nome && team.playerCount === 0))
+  await saveSport({ id: sportId, nome: 'Tênis de mesa atualizado' })
+  assert.equal([...documents].filter(([key]) => key.startsWith('teams/')).length, 14)
+  assert.deepEqual(documents.get('games/one'), original)
+})
+
 test('existing games remain scheduled; unknown final scores are never invented', () => {
   assert.equal(getMatchState(game()), MATCH_STATE.SCHEDULED)
   assert.equal(getMatchState({ status: 'finalizado', liveStatus: 'live' }), MATCH_STATE.FINISHED)

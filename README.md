@@ -73,6 +73,20 @@ Os jogadores ficam na subcoleção `teams/{teamId}/players`, com leitura e escri
 
 ## Organização do Interclasse
 
+### Chaveamento público e simulador
+
+Os menus **Chaveamento** (`#chaveamento`) e **Simulador** (`#simulador`) podem ser acessados sem login. Ambos recebem as modalidades, as equipes e as partidas públicas em tempo real, com seleção por esporte, turno e torneio.
+
+- **Chaveamento:** mostra as tabelas oficiais dos grupos e as rodadas do mata-mata com conexões entre os jogos. As linhas seguem os vínculos registrados (`sourceGameIdA/B` ou `nextGameId`), sem adivinhar avanços pela ordem do calendário. Toque em uma partida para destacar seus antecedentes e o caminho até a final. O campeão só aparece com uma final oficial decidida, incluindo W.O. e desempate. No celular, o desenho tem rolagem horizontal própria.
+- **Simulador:** permite preencher resultados hipotéticos apenas em jogos ainda sem resultado oficial da fase de grupos ou de todos contra todos. A tabela reaproveita as regras reais de pontos e desempate do sistema, com conferência dos sets do vôlei e meios pontos do xadrez. É possível destacar uma equipe e ajustar a faixa de classificação para explorar cenários. Empates no corte são sinalizados; a faixa escolhida não confirma uma vaga oficial e partidas restantes podem mudar as posições.
+- Os cenários existem somente na memória da tela. Não gravam placares, palpites, ranking ou chaveamento no Firebase. Trocar o torneio, sair da tela ou usar **Limpar simulação** descarta os cenários. Se nomes, regras ou situação oficial de uma partida forem alterados enquanto ela estiver simulada, o cenário antigo é ignorado e a tela pede novo preenchimento. Resultados já finalizados, cancelamentos e W.O. permanecem oficiais.
+
+As telas estão prontas no código local. A atualização do site publicado depende de uma nova publicação do Hosting. A suíte `tests/tournamentExplorer.test.mjs` cobre os vínculos, os turnos, as regras de placar, a imutabilidade dos resultados, os empates na faixa e as atualizações oficiais.
+
+Todas as modalidades começam com as **14 turmas da escola**: 6º, 7º e 8º A/B no turno da tarde; 9º A/B e 1º, 2º e 3º A/B do Ensino Médio de manhã. Ao abrir o painel master, os esportes antigos recebem somente as turmas que faltam. Cadastros existentes são identificados também sem espaço, como `9ºA`, preservando seus IDs, nomes, jogadores e jogos. A turma, a categoria e o turno são preenchidos no cadastro existente quando necessário; categorias já informadas são preservadas. Modalidades novas são salvas junto das 14 equipes em uma única operação.
+
+A preparação é registrada por modalidade em `schoolClassesVersion`, com IDs estáveis para as turmas novas. Reabrir o painel ou executar novamente não duplica equipes. Remoções feitas posteriormente pelo master não são desfeitas automaticamente. A separação por turno continua sendo respeitada nos jogos, nas listas e no gerador de chaveamento.
+
 - **Logo:** a versão `public/logo-interclasse.png` troca Bolão por Interclasse preservando o escudo SESI Vinhedo. A área de palpites dos professores mantém o nome Bolão.
 - **Local e coletes:** em Jogos, informe quadra/sala, duração prevista e a cor de colete de cada equipe. Os dados aparecem nos jogos, no calendário e na TV.
 - **Conflitos:** a prévia do chaveamento avisa sobre horários sobrepostos com a mesma equipe/turma. O local, a área, a duração e os coletes são definidos apenas em **Preparar partida**; o início verifica a disponibilidade do local e das equipes. Para detectar turmas entre modalidades, preencha **Turma** no cadastro de cada time com o mesmo nome.

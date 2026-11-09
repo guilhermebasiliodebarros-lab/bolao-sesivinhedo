@@ -27,6 +27,8 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
   const publicItems = [
     { id: 'home', label: COPY.nav.home },
     { id: 'calendario', label: COPY.nav.calendario },
+    { id: 'chaveamento', label: 'Chaveamento' },
+    { id: 'simulador', label: 'Simulador' },
     { id: 'regulamentos', label: 'Regulamentos' },
     { id: 'estatisticas', label: 'Estatísticas' },
     { id: 'tv', label: 'Modo TV' },
