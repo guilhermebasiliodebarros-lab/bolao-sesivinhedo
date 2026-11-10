@@ -22,7 +22,7 @@ import { getMatchState, getMatchCondition, getMatchOutcome, isPredictionVoided, 
 import { normalizeMatchReportInput } from '../utils/matchReport.js'
 import { eventDate } from '../utils/tvSchedule.js'
 import { clockRevision, matchClockValue, stoppedMatchClock } from '../utils/matchClock.js'
-import { applyLiveEvent, scoreRevision } from '../utils/liveEvents.js'
+import { applyLiveEvent, canCorrectLiveEvent, rebuildLiveEvents, scoringSnapshot, scoreRevision } from '../utils/liveEvents.js'
 import { normalizeRegulation } from '../utils/regulations.js'
 import { buildScheduleRedistribution, scheduleFingerprint, schedulePlanFingerprint } from '../utils/tournamentSchedule.js'
 import { getTeamShift, getGameShift, resolveCompetitionShifts, validateTeamShift, validateGameShift } from '../utils/schoolShifts.js'
@@ -1484,6 +1484,51 @@ export async function undoLiveEvent({ gameId, eventId, expectedScoreRevision }) 
     if (getMatchState(game) !== MATCH_STATE.LIVE || game.lastScoreEventId !== eventId || scoreRevision(game) !== expectedScoreRevision) throw new Error('O placar mudou. Só é possível desfazer o último lance da partida ao vivo.')
     transaction.update(ref, { ...event.data().before, scoreRevision: scoreRevision(game) + 1, updatedAt: serverTimestamp() })
     transaction.update(eventRef, { undone: true, undoneAt: serverTimestamp() })
+  })
+}
+
+export async function correctLiveEvent({ gameId, eventId, requestId, action, playerId = '', expectedScoreRevision, user }) {
+  if (!['remove', 'transfer'].includes(action)) throw new Error('Escolha excluir o lance ou corrigir a equipe.')
+  if (![eventId, requestId].every((id) => /^[a-zA-Z0-9_-]{8,100}$/.test(id || '')) || eventId === requestId) throw new Error('Identificador da correção inválido. Tente novamente.')
+  const firestore = ensureDb()
+  const gameRef = doc(firestore, 'games', gameId)
+  const requestRef = doc(firestore, 'games', gameId, 'events', requestId)
+  const fingerprint = JSON.stringify([eventId, action, action === 'transfer' ? playerId : ''])
+  await runTransaction(firestore, async (transaction) => {
+    const [snapshot, priorRequest] = await Promise.all([transaction.get(gameRef), transaction.get(requestRef)])
+    if (priorRequest.exists()) {
+      if (priorRequest.data().correction?.fingerprint !== fingerprint) throw new Error('Esta solicitação já foi usada para outra correção.')
+      return
+    }
+    if (!snapshot.exists()) throw new Error('Jogo não encontrado.')
+    const game = normalizeGame(snapshot.id, snapshot.data())
+    if (scoreRevision(game) !== expectedScoreRevision) throw new Error('O placar mudou em outro dispositivo. Confira os lances atuais antes de corrigir.')
+    const target = game.liveEvents?.find((event) => event.id === eventId)
+    if (!canCorrectLiveEvent(game, target)) throw new Error('Este lance não pode mais ser corrigido aqui. No vôlei, corrija pontos do set atual; para um set encerrado, reabra o set pelo último lance ou use a correção manual.')
+    const records = []
+    let cursor = game.lastScoreEventId
+    while (cursor && records.length < 8) {
+      const ref = doc(firestore, 'games', gameId, 'events', cursor)
+      const record = await transaction.get(ref)
+      if (!record.exists() || record.data().undone || record.data().event?.id !== cursor) throw new Error('O histórico do lance mudou. Confira os dados atuais antes de corrigir.')
+      records.push({ ...record.data(), ref })
+      if (cursor === eventId) break
+      cursor = record.data().previousEventId
+    }
+    if (records.at(-1)?.event.id !== eventId) throw new Error('Escolha um dos lances recentes exibidos na partida.')
+    records.reverse()
+    let player = null
+    if (action === 'transfer' && playerId) {
+      const attendance = await transaction.get(doc(firestore, 'games', gameId, 'documents', 'attendance'))
+      const side = target.side === 'A' ? 'B' : 'A'
+      player = currentAttendance(game, attendance.exists() ? attendance.data() : null)?.[side]?.players?.find((item) => item.id === playerId && item.status === 'present')
+      if (!player) throw new Error('Escolha um jogador presente da equipe que deve receber o lance.')
+    }
+    const rebuilt = rebuildLiveEvents(game, records, { action, player })
+    for (const change of rebuilt.changes) transaction.update(doc(firestore, 'games', gameId, 'events', change.id), { ...change, updatedAt: serverTimestamp(), correctionRequestId: requestId })
+    if (action === 'remove') transaction.update(records[0].ref, { undone: true, removedAt: serverTimestamp(), removedBy: user?.uid || null, correctionRequestId: requestId })
+    transaction.set(requestRef, { correction: { fingerprint, action, eventId, revisionBefore: scoreRevision(game), revisionAfter: scoreRevision(game) + 1, before: scoringSnapshot(game), after: rebuilt.after }, createdAt: serverTimestamp(), updatedBy: user?.uid || null })
+    transaction.update(gameRef, { ...rebuilt.after, scoreRevision: scoreRevision(game) + 1, updatedAt: serverTimestamp() })
   })
 }
 

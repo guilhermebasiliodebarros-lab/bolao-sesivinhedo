@@ -1,0 +1,29 @@
+.quick-scoring .quick-team { padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-strong); }
+.quick-scoring .quick-team-A { border-top: 4px solid #2874df; }
+.quick-scoring .quick-team-B { border-top: 4px solid #e78422; }
+.quick-team-score { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.quick-team-score h4 { overflow-wrap: anywhere; }
+.quick-team-score > strong { font-size: 2.4rem; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.quick-scoring .quick-team > label, .quick-transfer-review > label { display: grid; gap: 6px; min-width: 0; font-size: .85rem; }
+.quick-scoring select { min-width: 0; width: 100%; min-height: 48px; font-size: 16px; }
+.quick-scoring .quick-score-button { min-height: 86px; width: 100%; font-size: 1.35rem; touch-action: manipulation; }
+.quick-scoring .quick-score-button small { overflow-wrap: anywhere; line-height: 1.4; }
+.quick-team-B .quick-score-button { background: #2459ab; border-color: #1d498e; }
+.quick-remove-score { min-height: 46px; padding: 10px; border: 1px solid #bc5959; border-radius: 8px; color: #ad2525; background: var(--surface-strong); font: inherit; font-size: .85rem; font-weight: 750; cursor: pointer; touch-action: manipulation; }
+.quick-scoring .quick-player-buttons { max-height: 190px; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
+.quick-scoring .quick-player-buttons button { min-height: 48px; text-align: left; overflow-wrap: anywhere; }
+.quick-scoring .form-actions { flex-wrap: wrap; }
+.quick-scoring .form-actions > button { min-height: 44px; white-space: normal; }
+.quick-last-event { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-strong); }
+.quick-last-event > span { color: var(--muted); font-size: .75rem; text-transform: uppercase; font-weight: 800; }
+.quick-last-event > strong { font-size: .95rem; overflow-wrap: anywhere; }
+.quick-roster-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.quick-roster-actions > small { flex: 1 1 180px; color: var(--muted); line-height: 1.5; }
+.quick-events ol { list-style: none; padding: 0; }
+.quick-events li { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-strong); }
+.quick-events li > div:first-child { display: grid; flex: 1 1 180px; gap: 5px; min-width: 0; }
+.quick-events li strong { font-size: .85rem; color: var(--text); overflow-wrap: anywhere; }
+.quick-events li small { color: var(--muted); }
+.quick-scoring button:disabled { cursor: not-allowed; opacity: .5; }
+:root[data-theme=dark] .quick-remove-score { color: #ffb1aa; }
+@media (max-width: 640px) { .quick-scoring .quick-team-columns { grid-template-columns: 1fr; } .quick-scoring-heading { flex-wrap: wrap; } .quick-scoring .quick-team { padding: 12px; } .quick-scoring .quick-score-button { min-height: 82px; font-size: 1.4rem; } }

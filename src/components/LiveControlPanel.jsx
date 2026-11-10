@@ -61,7 +61,7 @@ export default function LiveControlPanel({ games, conflictGames = games, teams, 
           <MatchDetails game={game} />
           <button type="button" className="btn btn-primary referee-open-button" disabled={disabled} onClick={() => onManage(game, 'referee')}>Abrir modo árbitro</button>
           <MatchClockControl game={game} disabled={disabled} />
-          <QuickScoring game={game} teams={teams} disabled={disabled} />
+          <QuickScoring game={game} teams={teams} disabled={disabled} expandedPlayers />
           {scores(game).expectedScoreRevision !== scoreRevision(game) ? <p className="schedule-warning">O placar mudou. <button type="button" className="btn btn-outline btn-small" onClick={() => setDrafts((current) => { const next = { ...current }; delete next[game.id]; return next })}>Usar placar atual</button></p> : null}
           <form onSubmit={(event) => { event.preventDefault(); act(async () => { await updateLiveScore({ gameId: game.id, ...scores(game) }); setDrafts((current) => { const next = { ...current }; delete next[game.id]; return next }) }, 'Placar atualizado em todas as telas.') }}>
             <details className="score-manual-editor"><summary>Correção manual do placar e parciais</summary><p>Alterar o placar manualmente reinicia os lances e autores exibidos na TV.</p><SportScoreInputs game={game} value={scores(game)} disabled={disabled} onChange={(field, value) => update(game, field, value)} /><TieBreakInputs game={game} value={scores(game)} disabled={disabled} onChange={(value) => update(game, 'tieBreak', value)} /><button className="btn btn-outline" type="submit" disabled={disabled || scores(game).expectedScoreRevision !== scoreRevision(game)}>Salvar correção manual</button></details>
