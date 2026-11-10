@@ -1,21 +1,22 @@
 import {
   collection,
-  deleteDoc,
+  deleteDoc as firestoreDeleteDoc,
   doc,
   getDoc,
   getDocs,
-  onSnapshot,
   query,
-  runTransaction,
+  runTransaction as firestoreRunTransaction,
   serverTimestamp,
-  setDoc,
+  setDoc as firestoreSetDoc,
   Timestamp,
-  updateDoc,
+  updateDoc as firestoreUpdateDoc,
   where,
-  writeBatch,
+  writeBatch as firestoreWriteBatch,
 } from 'firebase/firestore'
 import { db } from './firebase.js'
-import { asNumberOrNull, toDate, toDateTimeLocalValue } from '../utils/format.js'
+import { watchGames, watchSnapshot as onSnapshot } from './realtime.js'
+import { trackWrite } from './pendingWrites.js'
+import { asNumberOrNull, toDate } from '../utils/format.js'
 import { calcularPontuacao, hasFinalScore } from '../utils/scoring.js'
 import { getMatchState, getMatchCondition, getMatchOutcome, isPredictionVoided, MATCH_STATE } from '../utils/match.js'
 import { normalizeMatchReportInput } from '../utils/matchReport.js'
@@ -34,7 +35,21 @@ import { normalizePlayerInput } from '../utils/player.js'
 import { normalizeDisciplineInput } from '../utils/discipline.js'
 import { sourceParticipant, thirdPlaceParticipants, thirdPlaceSemifinals } from '../utils/thirdPlace.js'
 import { bracketScheduleConflicts } from '../utils/bracketSchedule.js'
+import { automaticPredictionDeadline, predictionDeadlineInput } from '../utils/predictionDeadline.js'
+import { calendarCandidate, calendarConflictSignature, calendarConflicts, calendarFingerprint } from '../utils/visualSchedule.js'
+import { deletionFingerprint, validateDeletionSelection } from '../utils/bulkGameDeletion.js'
 import { getSportProfile, normalizeMatchDetails, normalizeSetScores, validateFinalSets, validateSportScores } from '../utils/sportRules.js'
+
+const runTransaction = (...args) => trackWrite(() => firestoreRunTransaction(...args))
+const setDoc = (...args) => trackWrite(() => firestoreSetDoc(...args))
+const updateDoc = (...args) => trackWrite(() => firestoreUpdateDoc(...args))
+const deleteDoc = (...args) => trackWrite(() => firestoreDeleteDoc(...args))
+const writeBatch = (...args) => {
+  const batch = firestoreWriteBatch(...args)
+  const commit = batch.commit.bind(batch)
+  batch.commit = (...options) => trackWrite(() => commit(...options))
+  return batch
+}
 
 export const GAME_STATUS = {
   OPEN: 'aberto',
@@ -172,21 +187,21 @@ export function calculateGroupStandings(games) {
 }
 
 export function getPredictionDeadline(game) {
-  return game?.limitePalpites || game?.predictionDeadline || game?.dataHora || game?.dateTime || null
+  return automaticPredictionDeadline(game)
 }
 
 export function isPredictionDeadlineOpen(game, now = new Date()) {
   const deadline = toDate(getPredictionDeadline(game))
 
   if (Number.isNaN(deadline.getTime())) {
-    return true
+    return false
   }
 
-  return now.getTime() <= deadline.getTime()
+  return now.getTime() < deadline.getTime()
 }
 
 export function canEditPrediction(game, now = new Date()) {
-  return game?.status === GAME_STATUS.OPEN && getMatchCondition(game) === 'normal' && isPredictionDeadlineOpen(game, now)
+  return game?.status === GAME_STATUS.OPEN && !game.deletionPending && getMatchState(game) === MATCH_STATE.SCHEDULED && !game.startedAt && getMatchCondition(game) === 'normal' && isPredictionDeadlineOpen(game, now)
 }
 
 export function isRankingProfile(profile) {
@@ -242,7 +257,7 @@ export function normalizeTeam(id, data = {}) {
 }
 
 export function normalizeGame(id, data = {}) {
-  const limitePalpites = data.limitePalpites || data.predictionDeadline || data.dataHora || data.dateTime || ''
+  const limitePalpites = predictionDeadlineInput(data)
 
   return {
     id,
@@ -254,10 +269,12 @@ export function normalizeGame(id, data = {}) {
     timeA: data.timeA || data.teamA || '',
     timeB: data.timeB || data.teamB || '',
     dataHora: data.dataHora || data.dateTime || '',
-    limitePalpites: toDateTimeLocalValue(limitePalpites) || limitePalpites,
+    limitePalpites,
     placarA: asNumberOrNull(data.placarA ?? data.finalScoreA),
     placarB: asNumberOrNull(data.placarB ?? data.finalScoreB),
     status: normalizeStatus(data.status),
+    deletionPending: data.deletionPending || null,
+    deletionPreviousStatus: data.deletionPreviousStatus || null,
     ...getSportProfile({ ...data, esporteNome: data.esporteNome || data.sportName || data.nomeEsporte }),
     venue: data.venue || '',
     venueArea: data.venueArea || '',
@@ -358,11 +375,12 @@ function normalizeGameInput(game) {
   const timeA = String(game.timeA ?? game.teamA ?? '').trim()
   const timeB = String(game.timeB ?? game.teamB ?? '').trim()
   const dataHora = game.dataHora ?? game.dateTime ?? ''
-  const limitePalpites = game.limitePalpites ?? game.predictionDeadline ?? dataHora
+  const suppliedDeadline = game.limitePalpites ?? game.predictionDeadline ?? ''
+  const limitePalpites = automaticPredictionDeadline({ dataHora })
   const status = normalizeStatus(game.status)
   const placarA = asNumberOrNull(game.placarA ?? game.finalScoreA)
   const placarB = asNumberOrNull(game.placarB ?? game.finalScoreB)
-  const gameDate = toDate(dataHora)
+  const gameDate = eventDate(dataHora)
   const deadlineDate = toDate(limitePalpites)
   const metadata = {
     tournamentId: String(game.tournamentId ?? '').trim(),
@@ -379,6 +397,7 @@ function normalizeGameInput(game) {
     nextGameId: String(game.nextGameId ?? '').trim(),
     nextGameSlot: String(game.nextGameSlot ?? '').trim(),
   }
+  const unscheduled = Boolean(metadata.tournamentId && !dataHora && !suppliedDeadline && status === GAME_STATUS.CLOSED && getMatchState(game) === MATCH_STATE.SCHEDULED && !game.startedAt && placarA === null && placarB === null)
 
   if (!sportId || !esporteNome) {
     throw new Error('Cadastre e selecione um esporte antes de criar o jogo.')
@@ -388,15 +407,15 @@ function normalizeGameInput(game) {
     throw new Error('Informe a fase do jogo.')
   }
 
-  if (!timeA || !timeB || !dataHora || !limitePalpites) {
-    throw new Error('Preencha os times, a data do jogo e o limite dos palpites.')
+  if (!timeA || !timeB || (!unscheduled && (!dataHora || !limitePalpites))) {
+    throw new Error('Preencha os times, a data e o horário do jogo. O prazo dos palpites é automático.')
   }
 
-  if (Number.isNaN(gameDate.getTime())) {
+  if (!unscheduled && Number.isNaN(gameDate.getTime())) {
     throw new Error('Informe uma data válida para o jogo.')
   }
 
-  if (Number.isNaN(deadlineDate.getTime())) {
+  if (!unscheduled && Number.isNaN(deadlineDate.getTime())) {
     throw new Error('Informe uma data válida para o limite dos palpites.')
   }
 
@@ -419,7 +438,7 @@ function normalizeGameInput(game) {
     timeA,
     timeB,
     dataHora,
-    limitePalpites: Timestamp.fromDate(deadlineDate),
+    limitePalpites: unscheduled ? null : Timestamp.fromDate(deadlineDate),
     placarA,
     placarB,
     status,
@@ -520,7 +539,7 @@ export function subscribeUserProfile(userId, onData, onError) {
     (snapshot) => {
       onData(snapshot.exists() ? normalizeUserProfile(snapshot.id, snapshot.data()) : null)
     },
-    (error) => onError?.(toFriendlyError(error)),
+    (error) => onError?.(error ? toFriendlyError(error) : ''),
   )
 }
 
@@ -530,16 +549,15 @@ export function subscribeGames(onData, onError, onSync) {
     return () => {}
   }
 
-  return onSnapshot(
+  return watchGames(
     collection(db, 'games'),
-    { includeMetadataChanges: true },
     (snapshot) => {
       const games = resolveCompetitionShifts(snapshot.docs.map((item) => normalizeGame(item.id, item.data()))).sort(sortByDate)
 
       onData(games)
-      onSync?.(!snapshot.metadata.fromCache)
     },
-    (error) => onError?.(toFriendlyError(error)),
+    (error) => onError?.(error ? toFriendlyError(error) : ''),
+    onSync,
   )
 }
 
@@ -554,7 +572,7 @@ export function subscribeSports(onData, onError) {
     (snapshot) => {
       onData(snapshot.docs.map((item) => normalizeSport(item.id, item.data())).sort(sortByName))
     },
-    (error) => onError?.(toFriendlyError(error)),
+    (error) => onError?.(error ? toFriendlyError(error) : ''),
   )
 }
 
@@ -569,11 +587,11 @@ export function subscribeTeams(onData, onError) {
     (snapshot) => {
       onData(snapshot.docs.map((item) => normalizeTeam(item.id, item.data())).sort(sortByName))
     },
-    (error) => onError?.(toFriendlyError(error)),
+    (error) => onError?.(error ? toFriendlyError(error) : ''),
   )
 }
 
-export function subscribeUserPredictions(userId, onData, onError) {
+export function subscribeUserPredictions(userId, onData, onError, onSync) {
   if (!db || !userId) {
     onData([])
     return () => {}
@@ -584,7 +602,8 @@ export function subscribeUserPredictions(userId, onData, onError) {
     (snapshot) => {
       onData(snapshot.docs.map((item) => normalizePrediction(item.id, item.data())))
     },
-    (error) => onError?.(toFriendlyError(error)),
+    (error) => onError?.(error ? toFriendlyError(error) : ''),
+    onSync,
   )
 }
 
@@ -599,7 +618,7 @@ export function subscribeAllPredictions(onData, onError) {
     (snapshot) => {
       onData(snapshot.docs.map((item) => normalizePrediction(item.id, item.data())))
     },
-    (error) => onError?.(toFriendlyError(error)),
+    (error) => onError?.(error ? toFriendlyError(error) : ''),
   )
 }
 
@@ -619,7 +638,7 @@ export function subscribeParticipants(onData, onError) {
 
       onData(users)
     },
-    (error) => onError?.(toFriendlyError(error)),
+    (error) => onError?.(error ? toFriendlyError(error) : ''),
   )
 }
 
@@ -648,7 +667,7 @@ export function subscribeRanking(onData, onError) {
 
       onData(ranking)
     },
-    (error) => onError?.(toFriendlyError(error)),
+    (error) => onError?.(error ? toFriendlyError(error) : ''),
   )
 }
 
@@ -684,6 +703,7 @@ export async function saveGame(game) {
       const snapshot = await transaction.get(gameRef)
       if (!snapshot.exists()) throw new Error('Jogo não encontrado.')
       const current = normalizeGame(snapshot.id, snapshot.data())
+      if (current.deletionPending) throw new Error('Esta partida está em exclusão. Aguarde a conclusão antes de editar.')
       transaction.update(gameRef, {
         ...payload,
         ...(getMatchState(current) !== MATCH_STATE.SCHEDULED ? getSportProfile(current) : {}),
@@ -722,12 +742,13 @@ export async function redistributeTournamentSchedule({ tournamentId, expectedGam
     })
     const plan = buildScheduleRedistribution(games, new Date())
     if (expectedPlan && expectedPlan !== schedulePlanFingerprint(plan)) throw new Error('Os horários disponíveis mudaram. Reabra a prévia antes de aplicar a nova ordem.')
-    for (const change of plan.changes) {
-      const game = games.find((item) => item.id === change.id)
-      const raw = snapshots.find((item) => item.id === game.id).data()
-      const deadline = eventDate(raw.limitePalpites || raw.dataHora)
-      const delta = eventDate(change.dataHora).getTime() - eventDate(game.dataHora).getTime()
-      transaction.update(doc(firestore, 'games', change.id), { dataHora: change.dataHora, limitePalpites: Timestamp.fromDate(new Date(deadline.getTime() + delta)), preparation: null, updatedAt: serverTimestamp() })
+    for (const scheduled of plan.after) {
+      const change = plan.changes.find((item) => item.id === scheduled.id)
+      const stored = snapshots.find((item) => item.id === scheduled.id).data()
+      const deadline = automaticPredictionDeadline(scheduled)
+      if (change || toDate(stored.limitePalpites).getTime() !== deadline.getTime()) {
+        transaction.update(doc(firestore, 'games', scheduled.id), { ...(change ? { dataHora: change.dataHora, preparation: null } : {}), limitePalpites: Timestamp.fromDate(deadline), updatedAt: serverTimestamp() })
+      }
     }
     return plan.changes.length
   })
@@ -755,7 +776,7 @@ export async function saveGames(games, { checkSchedule = false, restMinutes = 0 
     const existing = currentGames.docs.map((item) => normalizeGame(item.id, item.data()))
     if (normalizedGames.some((game) => !game.id || existing.some((item) => item.id === game.id))) throw new Error('A prévia contém uma partida já cadastrada. Gere novamente o chaveamento.')
     const planned = normalizedGames.map((game) => ({ ...game.payload, id: game.id }))
-    if (bracketScheduleConflicts(planned, existing, currentTeams.docs.map((item) => normalizeTeam(item.id, item.data())), restMinutes).length) throw new Error('A programação mudou ou ainda há choque de horários. Confira a prévia atualizada antes de salvar o chaveamento.')
+    if (planned.some((game) => game.dataHora) && bracketScheduleConflicts(planned, existing, currentTeams.docs.map((item) => normalizeTeam(item.id, item.data())), restMinutes).length) throw new Error('A programação mudou ou ainda há choque de horários. Confira a prévia atualizada antes de salvar o chaveamento.')
   }
 
   const batch = writeBatch(firestore)
@@ -772,6 +793,118 @@ export async function saveGames(games, { checkSchedule = false, restMinutes = 0 
 
   await batch.commit()
   await recalculateScores()
+}
+
+export async function ensureAutomaticPredictionDeadlines() {
+  const firestore = ensureDb()
+  const needsUpdate = (data) => {
+    const deadline = automaticPredictionDeadline(data)
+    const stored = data.limitePalpites
+    return deadline && !data.deletionPending && getMatchState(data) === MATCH_STATE.SCHEDULED && getMatchCondition(data) === 'normal' && !data.startedAt
+      && (!(stored instanceof Date || typeof stored?.toDate === 'function') || toDate(stored).getTime() !== deadline.getTime())
+  }
+  const snapshots = await getDocs(collection(firestore, 'games'))
+  const candidates = snapshots.docs.filter((snapshot) => needsUpdate(snapshot.data()))
+  let updated = 0
+  for (let index = 0; index < candidates.length; index += 10) {
+    const results = await Promise.all(candidates.slice(index, index + 10).map((candidate) => runTransaction(firestore, async (transaction) => {
+      const snapshot = await transaction.get(candidate.ref)
+      if (!snapshot.exists() || !needsUpdate(snapshot.data())) return false
+      transaction.update(candidate.ref, { limitePalpites: Timestamp.fromDate(automaticPredictionDeadline(snapshot.data())), updatedAt: serverTimestamp() })
+      return true
+    })))
+    updated += results.filter(Boolean).length
+  }
+  return { updated }
+}
+
+export async function saveCalendarGame({ gameId, expectedFingerprint, change, acceptedConflicts = '' }) {
+  const firestore = ensureDb()
+  const [current, roster] = await Promise.all([getDocs(collection(firestore, 'games')), getDocs(collection(firestore, 'teams'))])
+  if (!current.docs.some((item) => item.id === gameId)) throw new Error('Esta partida foi removida. Reabra a agenda.')
+  const teams = roster.docs.map((item) => normalizeTeam(item.id, item.data()))
+  return runTransaction(firestore, async (transaction) => {
+    const snapshots = await Promise.all(current.docs.map((item) => transaction.get(item.ref)))
+    const games = snapshots.filter((item) => item.exists()).map((item) => normalizeGame(item.id, item.data()))
+    const game = games.find((item) => item.id === gameId)
+    if (!game || calendarFingerprint(game) !== expectedFingerprint) throw new Error('Esta partida mudou. Feche a edição e abra novamente para conferir a agenda atual.')
+    const candidate = calendarCandidate(game, change)
+    const conflicts = calendarConflicts(candidate, games, teams)
+    if (conflicts.length && calendarConflictSignature(conflicts) !== acceptedConflicts) throw new Error('Há conflitos na agenda atual. Confira os avisos e confirme novamente antes de salvar.')
+    transaction.update(doc(firestore, 'games', gameId), {
+      dataHora: candidate.dataHora, venue: candidate.venue, venueArea: candidate.venueArea, durationMinutes: candidate.durationMinutes,
+      limitePalpites: Timestamp.fromDate(automaticPredictionDeadline(candidate)), preparation: null, updatedAt: serverTimestamp(),
+    })
+    return { conflicts: conflicts.length }
+  })
+}
+
+export async function deleteGamesBulk({ expectedGames, includePredictions = false }) {
+  const firestore = ensureDb()
+  if (!Array.isArray(expectedGames) || !expectedGames.length || new Set(expectedGames.map((game) => game.id)).size !== expectedGames.length) throw new Error('Confira os jogos selecionados antes de excluir.')
+  const current = await getDocs(collection(firestore, 'games'))
+  const games = current.docs.map((item) => normalizeGame(item.id, item.data()))
+  const selected = expectedGames.map((expected) => {
+    const game = games.find((item) => item.id === expected.id)
+    if (!game || deletionFingerprint(game) !== expected.fingerprint) throw new Error('A seleção mudou. Reabra a exclusão e confira os jogos novamente.')
+    return game
+  })
+  validateDeletionSelection(selected, games)
+  const predictions = await getDocs(collection(firestore, 'predictions'))
+  const ids = new Set(selected.map((game) => game.id))
+  if (!includePredictions && predictions.docs.some((item) => ids.has(item.data().gameId))) throw new Error('A seleção tem palpites. Confirme também a exclusão dos palpites vinculados.')
+  const operation = doc(collection(firestore, 'operations'))
+  await setDoc(operation, { type: 'bulk-game-deletion', gameIds: [...ids], status: 'running', deletedCount: 0, createdAt: serverTimestamp(), updatedAt: serverTimestamp() })
+  let deleted = 0
+  try {
+    // Close betting first so a concurrent prediction cannot become an orphan.
+    for (let index = 0; index < selected.length; index += 100) {
+      await runTransaction(firestore, async (transaction) => {
+        const snapshots = await Promise.all(selected.slice(index, index + 100).map((game) => transaction.get(doc(firestore, 'games', game.id))))
+        snapshots.forEach((snapshot) => {
+          const expected = expectedGames.find((item) => item.id === snapshot.id)
+          if (!snapshot.exists() || deletionFingerprint(normalizeGame(snapshot.id, snapshot.data())) !== expected.fingerprint || getMatchState(snapshot.data()) === MATCH_STATE.LIVE) throw new Error('Uma partida mudou antes da exclusão. Confira a seleção novamente.')
+        })
+        snapshots.forEach((snapshot) => transaction.update(snapshot.ref, { deletionPending: operation.id, deletionPreviousStatus: snapshot.data().deletionPreviousStatus || normalizeStatus(snapshot.data().status), status: GAME_STATUS.CLOSED, updatedAt: serverTimestamp() }))
+      })
+    }
+    for (let index = 0; index < selected.length; index += 20) {
+      const chunk = selected.slice(index, index + 20)
+      const nested = await Promise.all(chunk.flatMap((game) => [getDocs(collection(firestore, 'games', game.id, 'events')), getDocs(collection(firestore, 'games', game.id, 'documents')), getDocs(query(collection(firestore, 'predictions'), where('gameId', '==', game.id)))]))
+      const children = nested.flatMap((snapshot) => snapshot.docs)
+      if (!includePredictions && children.some((item) => item.ref.path?.startsWith('predictions/'))) throw new Error('Surgiram palpites na seleção. Confirme novamente a exclusão com os palpites vinculados.')
+      for (let offset = 0; offset < children.length; offset += 400) {
+        const batch = writeBatch(firestore)
+        children.slice(offset, offset + 400).forEach((item) => batch.delete(item.ref))
+        await batch.commit()
+      }
+      const count = await runTransaction(firestore, async (transaction) => {
+        const snapshots = await Promise.all(chunk.map((game) => transaction.get(doc(firestore, 'games', game.id))))
+        const remaining = snapshots.filter((item) => item.exists())
+        if (remaining.some((item) => item.data().deletionPending !== operation.id)) throw new Error('A exclusão foi retomada em outra sessão. Atualize a lista antes de continuar.')
+        remaining.forEach((item) => transaction.delete(item.ref))
+        return remaining.length
+      })
+      deleted += count
+      await updateDoc(operation, { deletedCount: deleted, updatedAt: serverTimestamp() })
+    }
+    await recalculateScores()
+    await updateDoc(operation, { status: 'complete', deletedCount: deleted, updatedAt: serverTimestamp() })
+    return { deleted }
+  } catch (error) {
+    // Restore betting state on any remaining records that this operation owns.
+    try {
+      for (let index = 0; index < selected.length; index += 100) {
+        await runTransaction(firestore, async (transaction) => {
+          const snapshots = await Promise.all(selected.slice(index, index + 100).map((game) => transaction.get(doc(firestore, 'games', game.id))))
+          snapshots.filter((item) => item.exists() && item.data().deletionPending === operation.id).forEach((item) => transaction.update(item.ref, { status: item.data().deletionPreviousStatus || GAME_STATUS.CLOSED, deletionPending: null, deletionPreviousStatus: null, updatedAt: serverTimestamp() }))
+        })
+      }
+      await recalculateScores()
+      await updateDoc(operation, { status: 'failed', deletedCount: deleted, updatedAt: serverTimestamp() })
+    } catch { /* A subsequent attempt can resume records left pending by a connection failure. */ }
+    throw new Error(`${deleted} jogo(s) excluído(s). ${error.message} Os jogos restantes continuam na lista; confira a seleção para tentar novamente.`, { cause: error })
+  }
 }
 
 export async function saveSport(sport) {
@@ -879,7 +1012,7 @@ export function subscribePlayers(teamId, onData, onError) {
   const firestore = ensureDb()
   return onSnapshot(collection(firestore, 'teams', teamId, 'players'), (snapshot) => {
     onData(snapshot.docs.map((item) => ({ ...item.data(), id: item.id })).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')))
-  }, (error) => onError?.(toFriendlyError(error)))
+  }, (error) => onError?.(error ? toFriendlyError(error) : ''))
 }
 
 function teamDisciplineQuery(firestore, teamId) {
@@ -889,7 +1022,7 @@ function teamDisciplineQuery(firestore, teamId) {
 export function subscribeTeamDiscipline(teamId, onData, onError) {
   return onSnapshot(teamDisciplineQuery(ensureDb(), teamId), (snapshot) => {
     onData(snapshot.docs.map((item) => ({ ...item.data(), id: item.id })).sort((a, b) => (toDate(b.createdAt)?.getTime() || 0) - (toDate(a.createdAt)?.getTime() || 0)))
-  }, (error) => onError?.(toFriendlyError(error)))
+  }, (error) => onError?.(error ? toFriendlyError(error) : ''))
 }
 
 export async function saveDisciplinaryRecord(teamId, value, user) {
@@ -980,11 +1113,11 @@ export async function importPlayers(teamId, candidates) {
 export function subscribeAnnouncements(onData, onError, includeInactive = false) {
   const firestore = ensureDb()
   const source = includeInactive ? collection(firestore, 'announcements') : query(collection(firestore, 'announcements'), where('active', '==', true))
-  return onSnapshot(source, (snapshot) => onData(snapshot.docs.map((item) => ({ ...item.data(), id: item.id })).sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0))), (error) => onError?.(toFriendlyError(error)))
+  return onSnapshot(source, (snapshot) => onData(snapshot.docs.map((item) => ({ ...item.data(), id: item.id })).sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0))), (error) => onError?.(error ? toFriendlyError(error) : ''))
 }
 
 export function subscribeBroadcastSettings(onData, onError) {
-  return onSnapshot(doc(ensureDb(), 'broadcastSettings', 'tv'), (snapshot) => onData(normalizeBroadcastSettings(snapshot.exists() ? snapshot.data() : {})), (error) => onError?.(toFriendlyError(error)))
+  return onSnapshot(doc(ensureDb(), 'broadcastSettings', 'tv'), (snapshot) => onData(normalizeBroadcastSettings(snapshot.exists() ? snapshot.data() : {})), (error) => onError?.(error ? toFriendlyError(error) : ''))
 }
 
 export async function saveBroadcastSettings(value) {
@@ -1015,6 +1148,7 @@ async function loadProgressionRefs(firestore, gameId) {
   const source = await getDoc(doc(firestore, 'games', gameId))
   if (!source.exists()) throw new Error('Jogo não encontrado.')
   const game = source.data()
+  if (game.deletionPending) throw new Error('Esta partida está em exclusão. Aguarde a conclusão.')
   const results = await Promise.all([
     getDocs(query(collection(firestore, 'games'), where('sourceGameIdA', '==', gameId))),
     getDocs(query(collection(firestore, 'games'), where('sourceGameIdB', '==', gameId))),
@@ -1029,7 +1163,7 @@ async function readProgressionGames(transaction, refs) {
   return games
 }
 
-export async function changeMatchCondition({ gameId, action, reason, winnerSide, placarA, placarB, dataHora, limitePalpites, reopenPredictions = false, user }) {
+export async function changeMatchCondition({ gameId, action, reason, winnerSide, placarA, placarB, dataHora, reopenPredictions = false, user }) {
   if (!['postpone', 'cancel', 'walkover', 'reschedule'].includes(action)) throw new Error('Selecione uma situação válida.')
   const message = String(reason || '').trim()
   if (message.length < 3 || message.length > 500) throw new Error('Informe um motivo de 3 a 500 caracteres.')
@@ -1038,6 +1172,7 @@ export async function changeMatchCondition({ gameId, action, reason, winnerSide,
   const refs = action === 'walkover' ? await loadProgressionRefs(firestore, gameId) : []
   const updated = await runTransaction(firestore, async (transaction) => {
     const snapshot = await transaction.get(gameRef)
+    if (snapshot.exists() && snapshot.data().deletionPending) throw new Error('Esta partida está em exclusão. Aguarde a conclusão.')
     if (!snapshot.exists()) throw new Error('Jogo não encontrado.')
     const raw = snapshot.data()
     const game = normalizeGame(snapshot.id, raw)
@@ -1046,8 +1181,8 @@ export async function changeMatchCondition({ gameId, action, reason, winnerSide,
     if (action === 'reschedule') {
       if (!['postponed', 'cancelled'].includes(getMatchCondition(game))) throw new Error('Somente partidas adiadas ou canceladas podem ser reagendadas aqui.')
       const date = eventDate(dataHora)
-      const deadline = eventDate(limitePalpites || dataHora)
-      if (!dataHora || !Number.isFinite(date.getTime()) || !Number.isFinite(deadline.getTime()) || deadline > date) throw new Error('Informe um novo horário válido e um prazo de palpites até o início do jogo.')
+      const deadline = automaticPredictionDeadline({ dataHora })
+      if (!dataHora || !Number.isFinite(date.getTime()) || !deadline) throw new Error('Informe um novo horário válido para o jogo.')
       if (reopenPredictions && game.startedAt) throw new Error('Uma partida que já começou não pode reabrir os palpites.')
       Object.assign(fields, { matchCondition: 'normal', liveStatus: MATCH_STATE.SCHEDULED, status: reopenPredictions ? GAME_STATUS.OPEN : GAME_STATUS.CLOSED, dataHora, limitePalpites: Timestamp.fromDate(deadline), previousDate: game.previousDate || game.dataHora, walkoverWinner: '' })
     } else if (action === 'walkover') {
@@ -1090,6 +1225,7 @@ export async function saveMatchAttendance({ gameId, sides, expectedTeamKey, requ
   const gameRef = doc(firestore, 'games', gameId)
   await runTransaction(firestore, async (transaction) => {
     const snapshot = await transaction.get(gameRef)
+    if (snapshot.exists() && snapshot.data().deletionPending) throw new Error('Esta partida está em exclusão. Aguarde a conclusão.')
     if (!snapshot.exists()) throw new Error('Jogo não encontrado.')
     const game = normalizeGame(snapshot.id, snapshot.data())
     const priorAttendance = await transaction.get(doc(firestore, 'games', gameId, 'documents', 'attendance'))
@@ -1114,6 +1250,7 @@ export async function saveMatchReport(gameId, value, user) {
   await runTransaction(firestore, async (transaction) => {
     const game = await transaction.get(doc(firestore, 'games', gameId))
     if (!game.exists()) throw new Error('Jogo não encontrado.')
+    if (game.data().deletionPending) throw new Error('Esta partida está em exclusão. Aguarde a conclusão.')
     transaction.set(doc(firestore, 'games', gameId, 'documents', 'matchReport'), { ...payload, updatedAt: serverTimestamp(), updatedBy: user?.uid || null })
   })
 }
@@ -1161,7 +1298,11 @@ export async function reopenGame(gameId) {
   const progressionRefs = await loadProgressionRefs(firestore, gameId)
   await runTransaction(firestore, async (transaction) => {
     const snapshot = await transaction.get(gameRef)
+    if (snapshot.exists() && snapshot.data().deletionPending) throw new Error('Esta partida está em exclusão. Aguarde a conclusão.')
     if (!snapshot.exists()) throw new Error('Jogo não encontrado.')
+    if (!Number.isFinite(toDate(snapshot.data().dataHora).getTime()) || !Number.isFinite(toDate(getPredictionDeadline(snapshot.data())).getTime())) {
+      throw new Error('Defina a data e o horário em Editar jogo antes de abrir os palpites. O prazo será calculado automaticamente.')
+    }
     if (getMatchState(snapshot.data()) === MATCH_STATE.LIVE) {
       throw new Error('Encerre a partida ao vivo antes de reabrir os palpites.')
     }
@@ -1181,6 +1322,7 @@ export async function reopenGame(gameId) {
     })
     transaction.update(gameRef, {
       status: GAME_STATUS.OPEN,
+      limitePalpites: Timestamp.fromDate(getPredictionDeadline(snapshot.data())),
       liveStatus: MATCH_STATE.SCHEDULED,
       liveScoreA: 0,
       liveScoreB: 0,
@@ -1501,7 +1643,7 @@ async function advanceCompletedMatch(firestore, game) {
   await advanceGroupQualifiers(firestore, game)
 }
 
-export async function createThirdPlaceGame({ semifinalIds, dataHora, limitePalpites }) {
+export async function createThirdPlaceGame({ semifinalIds, dataHora }) {
   if (!Array.isArray(semifinalIds) || semifinalIds.length !== 2 || new Set(semifinalIds).size !== 2) throw new Error('Selecione duas semifinais do mesmo torneio.')
   const firestore = ensureDb()
   const first = await getDoc(doc(firestore, 'games', semifinalIds[0]))
@@ -1516,7 +1658,7 @@ export async function createThirdPlaceGame({ semifinalIds, dataHora, limitePalpi
     if (semis.length !== 2 || semis.some((item) => !semifinalIds.includes(item.id))) throw new Error('As semifinais mudaram ou o terceiro lugar já existe. Reabra o torneio.')
     if (!dataHora || eventDate(dataHora).getTime() <= Math.max(...semis.map((item) => eventDate(item.dataHora).getTime()))) throw new Error('Escolha um horário posterior às duas semifinais.')
     const source = semis[0]
-    const payload = normalizeGameInput({ sportId: source.sportId, esporteNome: source.esporteNome, turno: getGameShift(source), tournamentId: source.tournamentId, tournamentName: source.tournamentName, ...getSportProfile(source), ...thirdPlaceParticipants(semis), dataHora, limitePalpites: limitePalpites || dataHora, status: GAME_STATUS.OPEN })
+    const payload = normalizeGameInput({ sportId: source.sportId, esporteNome: source.esporteNome, turno: getGameShift(source), tournamentId: source.tournamentId, tournamentName: source.tournamentName, ...getSportProfile(source), ...thirdPlaceParticipants(semis), dataHora, status: GAME_STATUS.OPEN })
     transaction.set(targetRef, { ...payload, createdAt: serverTimestamp(), updatedAt: serverTimestamp() })
   })
   return targetRef.id
@@ -1545,7 +1687,6 @@ export async function deleteGame(gameId) {
 
 export async function savePrediction({ user, profile, game, palpiteA, palpiteB, guessA, guessB }) {
   const firestore = ensureDb()
-  const [parsedA, parsedB] = validateSportScores(game, palpiteA ?? guessA, palpiteB ?? guessB, { final: true })
 
   if (!user) {
     throw new Error('Entre na sua conta para enviar palpites.')
@@ -1555,21 +1696,19 @@ export async function savePrediction({ user, profile, game, palpiteA, palpiteB, 
     throw new Error('Usuário master não registra palpites.')
   }
 
-  if (game.status !== GAME_STATUS.OPEN || getMatchCondition(game) !== 'normal') {
-    throw new Error('Este jogo não está aberto para edição de palpites.')
-  }
-
-  if (!isPredictionDeadlineOpen(game)) {
-    throw new Error('O prazo para palpites deste jogo já encerrou.')
-  }
-
+  if (!game?.id) throw new Error('Selecione uma partida para enviar o palpite.')
+  const gameRef = doc(firestore, 'games', game.id)
   const predictionRef = doc(firestore, 'predictions', `${user.uid}_${game.id}`)
-  const currentSnapshot = await getDoc(predictionRef)
-  const createdAt = currentSnapshot.exists() ? currentSnapshot.data().createdAt : serverTimestamp()
-
-  await setDoc(
-    predictionRef,
-    {
+  await runTransaction(firestore, async (transaction) => {
+    const currentGame = await transaction.get(gameRef)
+    if (!currentGame.exists()) throw new Error('Jogo não encontrado.')
+    const latest = normalizeGame(currentGame.id, currentGame.data())
+    if (!isPredictionDeadlineOpen(latest)) throw new Error('O prazo para palpites encerra 5 minutos antes do jogo e já terminou.')
+    if (!canEditPrediction(latest)) throw new Error('Este jogo não está aberto para edição de palpites.')
+    const [parsedA, parsedB] = validateSportScores(latest, palpiteA ?? guessA, palpiteB ?? guessB, { final: true })
+    const currentSnapshot = await transaction.get(predictionRef)
+    const createdAt = currentSnapshot.exists() ? currentSnapshot.data().createdAt : serverTimestamp()
+    transaction.set(predictionRef, {
       userId: user.uid,
       gameId: game.id,
       nomeUsuario: profile?.nome || user.displayName || user.email,
@@ -1580,9 +1719,8 @@ export async function savePrediction({ user, profile, game, palpiteA, palpiteB, 
       acertoResultado: false,
       createdAt,
       updatedAt: serverTimestamp(),
-    },
-    { merge: true },
-  )
+    }, { merge: true })
+  })
 }
 
 export async function recalculateScores() {

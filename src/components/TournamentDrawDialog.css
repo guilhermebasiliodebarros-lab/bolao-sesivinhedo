@@ -99,7 +99,7 @@
 .phase-ready .draw-urn-globe, .phase-ready .draw-urn-neck, .phase-ready .draw-urn-base { opacity: .18; }
 .phase-idle .draw-capsule, .phase-mixing .draw-capsule { opacity: 0; }
 .phase-ejecting .draw-capsule { animation: draw-capsule-exit var(--draw-ejection-duration) cubic-bezier(.25,.7,.25,1) both; }
-.draw-capsule-half { position: absolute; z-index: 3; left: 0; width: 160px; height: 80px; border: 2px solid #b8f8ff; box-shadow: inset 5px 5px 12px #fff4, inset -8px -7px 14px #06394c88, 0 8px 22px #0005; transition: transform calc(var(--draw-opening-duration) - 200ms) cubic-bezier(.45,0,.2,1), opacity .6s; backface-visibility: hidden; }
+.draw-capsule-half { position: absolute; z-index: 3; left: 0; width: 160px; height: 80px; border: 2px solid #b8f8ff; box-shadow: inset 5px 5px 12px #fff4, inset -8px -7px 14px #06394c88, 0 8px 22px #0005; transition: transform calc(var(--draw-opening-duration) - 100ms) cubic-bezier(.45,0,.2,1), opacity .6s; backface-visibility: hidden; }
 .draw-capsule-top { top: 0; border-radius: 85px 85px 0 0; background: radial-gradient(ellipse at 32% 42%, #f0ffff, #a1eff8 34%, #20aec8 78%, #106d8d); transform-origin: 20% 100%; }
 .draw-capsule-bottom { top: 80px; border-radius: 0 0 85px 85px; background: radial-gradient(ellipse at 32% -20%, #94ecf6, #18a1b9 55%, #07445f); transform-origin: 80% 0; }
 .draw-capsule-seam { position: absolute; z-index: 4; top: 78px; left: 2px; width: 156px; height: 4px; background: #ffe89d; box-shadow: 0 0 12px #f9cc4799; transition: opacity .8s; }
@@ -112,7 +112,7 @@
 .phase-opening .draw-capsule-bottom { animation: draw-shell-bottom-open var(--draw-opening-duration) linear both; }
 .phase-opening .draw-capsule-seam, .phase-opening .draw-capsule-number, .phase-revealing .draw-capsule-seam, .phase-revealing .draw-capsule-number, .phase-flying .draw-capsule-seam, .phase-flying .draw-capsule-number, .phase-landing .draw-capsule-seam, .phase-landing .draw-capsule-number, .phase-settled .draw-capsule-seam, .phase-settled .draw-capsule-number { opacity: 0; transform: scale(.5); }
 .phase-opening .draw-capsule-glow, .phase-revealing .draw-capsule-glow { opacity: 1; }
-.phase-opening .draw-capsule-ticket { animation: draw-ticket-unfold calc(var(--draw-opening-duration) - 1800ms) linear 1.5s both; }
+.phase-opening .draw-capsule-ticket { animation: draw-ticket-unfold calc(var(--draw-opening-duration) - 900ms) linear .75s both; }
 .phase-revealing .draw-capsule-ticket { opacity: 1; transform: translateX(-50%); }
 .phase-flying .draw-capsule-ticket, .phase-landing .draw-capsule-ticket, .phase-settled .draw-capsule-ticket { opacity: 0; transform: translateX(-50%); }
 .phase-flying .draw-capsule-half, .phase-landing .draw-capsule-half, .phase-settled .draw-capsule-half { opacity: .3; }

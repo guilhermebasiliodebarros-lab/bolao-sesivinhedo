@@ -7,6 +7,7 @@ export default function AdminGameActions({ game, prepared = false, saving, hasPr
   const ref = useRef(null)
   const menuRef = useRef(null)
   const state = getMatchState(game)
+  const unscheduled = state === MATCH_STATE.SCHEDULED && !game.dataHora
   useEffect(() => {
     if (!open) return
     const outside = (event) => { if (!ref.current?.contains(event.target) && !menuRef.current?.contains(event.target)) setOpen(false) }
@@ -46,8 +47,9 @@ export default function AdminGameActions({ game, prepared = false, saving, hasPr
     }
   }
   const act = (action) => { setOpen(false); ref.current?.querySelector('button')?.focus({ preventScroll: true }); action() }
+  if (game.deletionPending) return <span role="status">Exclusão em andamento. Use a exclusão em lote para tentar novamente se necessário.</span>
   return <div className="admin-actions compact-game-actions">
-    <button className="btn btn-primary btn-small" disabled={saving} onClick={() => state === MATCH_STATE.SCHEDULED ? prepared ? onQuickStart(game) : onStart(game) : onManage(game, state === MATCH_STATE.LIVE ? 'score' : state === MATCH_STATE.FINISHED ? 'report' : 'condition')}>{state === MATCH_STATE.SCHEDULED ? prepared ? 'Iniciar agora' : 'Preparar partida' : state === MATCH_STATE.LIVE ? 'Abrir placar' : state === MATCH_STATE.FINISHED ? 'Ver súmula' : 'Reagendar partida'}</button>
+    <button className="btn btn-primary btn-small" disabled={saving} onClick={() => unscheduled ? onEdit(game) : state === MATCH_STATE.SCHEDULED ? prepared ? onQuickStart(game) : onStart(game) : onManage(game, state === MATCH_STATE.LIVE ? 'score' : state === MATCH_STATE.FINISHED ? 'report' : 'condition')}>{unscheduled ? 'Definir data e horário' : state === MATCH_STATE.SCHEDULED ? prepared ? 'Iniciar agora' : 'Preparar partida' : state === MATCH_STATE.LIVE ? 'Abrir placar' : state === MATCH_STATE.FINISHED ? 'Ver súmula' : 'Reagendar partida'}</button>
     <div className="game-actions-menu" ref={ref}><button className="btn btn-outline btn-small" aria-expanded={open} aria-label={`Mais opções · ${game.timeA} × ${game.timeB}`} disabled={saving} onClick={() => setOpen((current) => !current)}>Mais opções <span aria-hidden="true">⋮</span></button>
       {open ? createPortal(<div ref={menuRef} className="game-actions-popover" role="group" aria-label="Mais ações da partida" onKeyDown={onMenuKeyDown}>{state === MATCH_STATE.LIVE ? <button onClick={() => act(() => onManage(game, 'referee'))}>Modo árbitro</button> : null}{state === MATCH_STATE.SCHEDULED ? <button onClick={() => act(() => onStart(game))}>Revisar conferência</button> : null}<button onClick={() => act(() => onEdit(game))}>Editar jogo</button><button onClick={() => act(() => onManage(game, 'condition'))}>Situação da partida</button><button onClick={() => act(() => onManage(game, 'attendance'))}>Conferir presença</button><button onClick={() => act(() => onManage(game, 'report'))}>Súmula / PDF</button>{getMatchCondition(game) === 'normal' && game.status !== 'aberto' ? <button onClick={() => act(() => onManage(game, 'score'))}>{state === MATCH_STATE.FINISHED ? 'Corrigir resultado' : 'Lançar placar'}</button> : null}{game.status === 'aberto' ? <button onClick={() => act(() => onClosePredictions(game))}>Fechar palpites</button> : state !== MATCH_STATE.LIVE && !['postponed', 'cancelled'].includes(getMatchCondition(game)) ? <button onClick={() => act(() => onReopen(game))}>Reabrir palpites / resultado</button> : null}<button className="danger-action" disabled={hasPredictions || state === MATCH_STATE.LIVE} onClick={() => act(() => onDelete(game))}>Excluir jogo</button></div>, document.body) : null}
     </div>

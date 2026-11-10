@@ -4348,3 +4348,38 @@ select:focus {
 .prepared-match-row > span { display: grid; gap: 4px; min-width: 0; }
 .prepared-match-row small { color: var(--muted); }
 .prepared-match-row:has(input:checked) { border-color: #54ab82; background: #42a47712; }
+
+.prediction-draft-note { display: grid; gap: 6px; margin: 12px 0; padding: 12px; border: 1px dashed var(--cyan); border-radius: 8px; background: var(--surface-strong); font-size: .85rem; }
+.prediction-draft-note span { color: var(--muted); }
+.prediction-draft-note button { justify-self: start; }
+.participant-reminders, .app-update-notice { width: min(1180px, calc(100% - 32px)); margin: 16px auto; }
+.participant-reminders:empty { display: none; }
+.reminder-settings, .prediction-reminder-banner, .app-update-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 18px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-strong); }
+.reminder-settings > div, .prediction-reminder-banner > div, .app-update-notice > span { flex: 1 1 260px; min-width: 0; }
+.reminder-settings p, .prediction-reminder-banner p { margin: 5px 0 0; color: var(--muted); font-size: .85rem; }
+.reminder-settings label { display: grid; gap: 6px; font-size: .85rem; }
+.reminder-settings select { max-width: 100%; }
+.reminder-settings > small, .reminder-settings > p { flex-basis: 100%; color: var(--muted); }
+.prediction-reminder-banner { margin-top: 12px; border-color: var(--cyan); }
+.app-update-notice { border-color: var(--cyan); }
+.site-connection { display: flex; align-items: center; gap: 8px; padding: 7px max(16px, calc((100% - 1180px) / 2)); color: var(--muted); background: var(--surface-strong); border-bottom: 1px solid var(--border); font-size: .75rem; }
+.site-connection > span { width: 7px; height: 7px; border-radius: 50%; background: var(--cyan); flex: 0 0 7px; }
+.site-connection-live > span { background: #239b68; }
+.site-connection-offline > span, .site-connection-reconnecting > span { background: #d49228; }
+.match-score { display: inline-flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; vertical-align: middle; }
+.match-score-value { font-variant-numeric: tabular-nums; white-space: nowrap; animation: score-received .65s ease-out; }
+.match-score-caption, .match-score-partials { max-width: 230px; font-size: .65rem; font-weight: 600; line-height: 1.4; white-space: normal; text-align: center; }
+.score-display:has(.match-score-caption) { padding: 9px; }
+.live-scores-strip { display: flex; gap: 14px; width: min(1180px, calc(100% - 32px)); margin: 16px auto; padding: 14px; background: var(--surface-strong); border: 1px solid var(--border); border-radius: 12px; }
+.live-scores-heading { display: flex; flex: 0 0 90px; flex-wrap: wrap; align-content: center; align-items: center; gap: 7px; font-size: .8rem; }
+.live-scores-heading small { flex-basis: 100%; color: var(--muted); }
+.live-scores-track { display: flex; gap: 12px; flex: 1; min-width: 0; overflow-x: auto; overscroll-behavior-inline: contain; padding: 2px 2px 8px; }
+.live-scores-match { flex: 0 0 auto; min-width: 230px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 9px; }
+.live-scores-match > small { color: var(--muted); font-size: .7rem; }
+.live-scores-match > div { display: flex; align-items: center; gap: 14px; margin-top: 8px; font-size: .82rem; }
+.live-scores-match .match-score-value { font-size: 1.2rem; font-weight: 900; }
+.prediction-official-score { display: flex; align-items: center; gap: 12px; margin-top: 8px; font-size: .9rem; }
+@keyframes score-received { from { background: #00a7b52e; box-shadow: 0 0 0 6px #00a7b52e; } to { background: transparent; box-shadow: 0 0 0 0 transparent; } }
+@media (prefers-reduced-motion: reduce) { .match-score-value { animation: none; } }
+@media (max-width: 600px) { .live-scores-strip { flex-direction: column; gap: 6px; } .live-scores-heading { flex-basis: auto; } .live-scores-heading small { flex-basis: auto; } }
+@media (max-width: 480px) { .reminder-settings label, .prediction-reminder-banner .btn { width: 100%; } }

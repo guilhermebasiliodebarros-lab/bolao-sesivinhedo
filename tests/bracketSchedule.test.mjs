@@ -15,7 +15,7 @@ test('different sport registrations of the same class cannot overlap, including 
   const plan = planBracketSchedule(draft, existing, [], options)
   assert.equal(plan.error, '')
   assert.equal(plan.games[0].dataHora, '2099-11-30T08:40')
-  assert.equal(minutes(plan.games[0].dataHora) - minutes(plan.games[0].limitePalpites), 60)
+  assert.equal(minutes(plan.games[0].dataHora) - minutes(plan.games[0].limitePalpites), 5)
   assert.equal(bracketScheduleConflicts(plan.games, existing, [], 10).length, 0)
   assert.deepEqual({ existing, draft }, copy)
   const secondary = planBracketSchedule([match('f', '1º B', '2º A')], existing, [], options)
@@ -88,7 +88,7 @@ test('unknown group qualifiers reserve only their possible classes, and knockout
 
 test('invalid settings and cyclic draft references surface an error, while unrelated broken old brackets do not block planning', () => {
   const draft = [match('a', '9º A', '9º B')]
-  for (const fields of [{ durationMinutes: '' }, { durationMinutes: 0 }, { descansoMinutos: -1 }, { descansoMinutos: 1.5 }, { intervaloMinutos: -2 }, { limiteHorasAntes: 'no' }, { horarioFinal: '07:00' }, { horarioFinal: '08:20' }]) assert.notEqual(planBracketSchedule(draft, [], [], { ...options, ...fields }).error, '')
+  for (const fields of [{ durationMinutes: '' }, { durationMinutes: 0 }, { descansoMinutos: -1 }, { descansoMinutos: 1.5 }, { intervaloMinutos: -2 }, { horarioFinal: '07:00' }, { horarioFinal: '08:20' }]) assert.notEqual(planBracketSchedule(draft, [], [], { ...options, ...fields }).error, '')
   const circular = [match('a', 'Vencedor B', '9º B', { sourceGameIdA: 'b' }), match('b', 'Vencedor A', '1º B', { sourceGameIdA: 'a' })]
   assert.match(planBracketSchedule(circular, [], [], options).error, /circular/)
   const old = match('old', 'Vencedor removido', '9º B', { sportId: 'v', tournamentId: 'old', sourceGameIdA: 'deleted', dataHora: '2090-01-01T08:00' })

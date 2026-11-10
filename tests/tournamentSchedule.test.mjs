@@ -35,7 +35,7 @@ test('two four-team groups replace repeated games with at least two other matche
   const ninth = plan.after.filter((game) => [game.timeA, game.timeB].includes('9B'))
   assert.deepEqual(ninth.map((game) => eventDate(game.dataHora).toISOString().slice(11, 16)), ['10:10', '10:58', '11:46'])
   assert.deepEqual(plan.after.map((game) => eventDate(game.dataHora).getTime()).sort(), games.map((game) => eventDate(game.dataHora).getTime()).sort())
-  plan.after.forEach((game) => assert.equal(eventDate(game.dataHora) - eventDate(game.limitePalpites), 3600000))
+  plan.after.forEach((game) => assert.equal(eventDate(game.dataHora) - eventDate(game.limitePalpites), 300000))
   assert.equal(buildScheduleRedistribution(plan.after, now).changes.length, 0)
 })
 

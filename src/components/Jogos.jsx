@@ -1,4 +1,5 @@
 import ShiftSelector from './ShiftSelector.jsx'
+import usePredictionClock from '../hooks/usePredictionClock.js'
 import { getGameShift } from '../utils/schoolShifts.js'
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/useAuth.js'
@@ -26,6 +27,7 @@ const filters = [
 export default function Jogos({ onNavigate }) {
   const { user, isParticipant, isMaster } = useAuth()
   const [games, setGames] = useState([])
+  const now = usePredictionClock(games)
   const [predictions, setPredictions] = useState([])
   const [activeFilter, setActiveFilter] = useState(ALL_ITEMS_FILTER)
   const [sportFilter, setSportFilter] = useState(ALL_ITEMS_FILTER)
@@ -58,7 +60,7 @@ export default function Jogos({ onNavigate }) {
   const predictionsByGame = useMemo(() => {
     return new Map((user ? predictions : []).map((prediction) => [prediction.gameId, prediction]))
   }, [predictions, user])
-  const openGamesAll = useMemo(() => games.filter((game) => canEditPrediction(game)), [games])
+  const openGamesAll = useMemo(() => games.filter((game) => canEditPrediction(game, now)), [games, now])
   const pendingOpenGames = useMemo(
     () => openGamesAll.filter((game) => !predictionsByGame.has(game.id)),
     [openGamesAll, predictionsByGame],
@@ -72,11 +74,11 @@ export default function Jogos({ onNavigate }) {
       postponed: sportGames.filter((game) => getMatchCondition(game) === 'postponed').length,
       cancelled: sportGames.filter((game) => getMatchCondition(game) === 'cancelled').length,
       walkover: sportGames.filter((game) => getMatchCondition(game) === 'walkover').length,
-      [GAME_STATUS.OPEN]: sportGames.filter((game) => game.status === GAME_STATUS.OPEN).length,
-      [GAME_STATUS.CLOSED]: sportGames.filter((game) => game.status === GAME_STATUS.CLOSED).length,
+      [GAME_STATUS.OPEN]: sportGames.filter((game) => canEditPrediction(game, now)).length,
+      [GAME_STATUS.CLOSED]: sportGames.filter((game) => game.status === GAME_STATUS.CLOSED || (game.status === GAME_STATUS.OPEN && !canEditPrediction(game, now))).length,
       [GAME_STATUS.FINISHED]: sportGames.filter((game) => game.status === GAME_STATUS.FINISHED).length,
     }),
-    [sportGames],
+    [sportGames, now],
   )
   const guessedOpenGames = Math.max(openGamesAll.length - pendingOpenGames.length, 0)
   const guessProgress = openGamesAll.length ? Math.round((guessedOpenGames / openGamesAll.length) * 100) : 0
@@ -84,14 +86,14 @@ export default function Jogos({ onNavigate }) {
   const phaseOptions = useMemo(() => getUniqueGamePhases(games), [games])
   const visibleGames = useMemo(() => {
     return games.filter((game) => {
-      const matchesStatus = activeFilter === ALL_ITEMS_FILTER || (activeFilter === 'ao-vivo' ? getMatchState(game) === MATCH_STATE.LIVE : ['postponed', 'cancelled', 'walkover'].includes(activeFilter) ? getMatchCondition(game) === activeFilter : game.status === activeFilter)
+      const matchesStatus = activeFilter === ALL_ITEMS_FILTER || (activeFilter === GAME_STATUS.OPEN ? canEditPrediction(game, now) : activeFilter === GAME_STATUS.CLOSED ? game.status === GAME_STATUS.CLOSED || (game.status === GAME_STATUS.OPEN && !canEditPrediction(game, now)) : activeFilter === 'ao-vivo' ? getMatchState(game) === MATCH_STATE.LIVE : ['postponed', 'cancelled', 'walkover'].includes(activeFilter) ? getMatchCondition(game) === activeFilter : game.status === activeFilter)
       const matchesSport =
         sportFilter === ALL_ITEMS_FILTER || game.sportId === sportFilter || game.esporteNome === sportFilter
       const matchesPhase = phaseFilter === ALL_ITEMS_FILTER || game.fase === phaseFilter
 
       return matchesStatus && matchesSport && matchesPhase && gameMatchesSearch(game, searchTerm)
     })
-  }, [activeFilter, games, phaseFilter, searchTerm, sportFilter])
+  }, [activeFilter, games, phaseFilter, searchTerm, sportFilter, now])
   const groupedGames = useMemo(() => {
     const groups = new Map()
 
@@ -122,7 +124,7 @@ export default function Jogos({ onNavigate }) {
         <div>
           <span className="eyebrow">Jogos e palpites</span>
           <h1>Calendário de jogos</h1>
-          <p>Envie ou altere seus palpites enquanto o status estiver aberto.</p>
+          <p>Envie ou altere seus palpites até 5 minutos antes de cada jogo.</p>
         </div>
         {!user ? (
           <button className="btn btn-primary" type="button" onClick={() => onNavigate('login')}>
@@ -157,7 +159,7 @@ export default function Jogos({ onNavigate }) {
             Total
           </span>
           <span>
-            <strong>{games.filter((game) => game.status === GAME_STATUS.OPEN).length}</strong>
+            <strong>{openGamesAll.length}</strong>
             Abertos
           </span>
           <span>

@@ -162,8 +162,8 @@ export default function Classificacao({ onNavigate }) {
           title="Ranking ainda vazio"
           description="Os participantes aparecem aqui depois do cadastro."
           action={
-            <button className="btn btn-primary" type="button" onClick={() => onNavigate('cadastro')}>
-              Cadastrar participante
+            <button className="btn btn-primary" type="button" onClick={() => onNavigate(user ? 'jogos' : 'cadastro')}>
+              {user ? 'Ver jogos' : 'Cadastrar participante'}
             </button>
           }
         />

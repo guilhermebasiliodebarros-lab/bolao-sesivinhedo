@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import usePredictionClock from '../hooks/usePredictionClock.js'
 import { useAuth } from '../context/useAuth.js'
 import {
   canEditPrediction,
@@ -16,6 +17,7 @@ import LoadingState from './LoadingState.jsx'
 export default function Dashboard({ onNavigate }) {
   const { user, profile, profileLoading, isParticipant } = useAuth()
   const [games, setGames] = useState([])
+  const now = usePredictionClock(games)
   const [predictions, setPredictions] = useState([])
   const [ranking, setRanking] = useState([])
   const [loading, setLoading] = useState(true)
@@ -47,7 +49,7 @@ export default function Dashboard({ onNavigate }) {
     return new Map(predictions.map((prediction) => [prediction.gameId, prediction]))
   }, [predictions])
 
-  const openGamesAll = games.filter((game) => canEditPrediction(game))
+  const openGamesAll = games.filter((game) => canEditPrediction(game, now))
   const openGames = openGamesAll.slice(0, 4)
   const gamesById = useMemo(() => new Map(games.map((game) => [game.id, game])), [games])
   const scoredHistory = predictions

@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { subscribeAnnouncements, subscribeGames, subscribeBroadcastSettings } from '../services/bolaoService.js'
 import { getUniqueGameSports } from '../utils/game.js'
-import { getMatchScore } from '../utils/match.js'
+import MatchScore from './MatchScore.jsx'
 import { buildTVSchedule, eventDate, schoolDay, SCHOOL_TIMEZONE, TV_SECTIONS } from '../utils/tvSchedule.js'
 import TVMatchCard from './TVMatchCard.jsx'
 import ShiftSelector from './ShiftSelector.jsx'
 import { getGameShift } from '../utils/schoolShifts.js'
-import { formatSportScore } from '../utils/sportRules.js'
 import { toDate } from '../utils/format.js'
 import './TVMode.css'
 import { buildAutomaticCalls, DEFAULT_BROADCAST_SETTINGS } from '../utils/automaticCalls.js'
@@ -21,19 +20,22 @@ export default function TVMode({ onNavigate }) {
   const [broadcastSettings, setBroadcastSettings] = useState(DEFAULT_BROADCAST_SETTINGS)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [announcementError, setAnnouncementError] = useState('')
+  const [settingsError, setSettingsError] = useState('')
+  const [lastSync, setLastSync] = useState(null)
   const [synced, setSynced] = useState(false)
   const [online, setOnline] = useState(() => navigator.onLine)
   const [now, setNow] = useState(() => new Date())
-  const [sport, setSport] = useState('')
+  const [sport, setSport] = useState(() => readPreference('tv-sport', ''))
   const [turno, setTurno] = useState(() => ['manha', 'tarde'].includes(readPreference('tv-turno')) ? readPreference('tv-turno') : '')
-  const [cursor, setCursor] = useState('')
+  const [cursor, setCursor] = useState(() => readPreference('tv-page', ''))
   const [duration, setDuration] = useState(() => {
     const stored = Number(readPreference('tv-interval'))
     return [8, 12, 20, 30].includes(stored) ? stored : 12
   })
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [density, setDensity] = useState(() => Number(readPreference('tv-density')) === 4 ? 4 : 2)
-  const [rotating, setRotating] = useState(true)
+  const [rotating, setRotating] = useState(() => readPreference('tv-rotating') !== 'false')
   const [fullscreen, setFullscreen] = useState(false)
   const [compactLive, setCompactLive] = useState(() => window.innerHeight < 1000)
   const [screenMessage, setScreenMessage] = useState('')
@@ -48,10 +50,11 @@ export default function TVMode({ onNavigate }) {
     setError(message)
     setLoading(false)
     setSynced(false)
-  }, setSynced), [])
+  }, (connected, info) => { setSynced(connected); if (connected) { setError(''); setLastSync(info?.lastServerAt || Date.now()) } }), [])
 
-  useEffect(() => subscribeAnnouncements(setAnnouncements, setError), [])
-  useEffect(() => subscribeBroadcastSettings(setBroadcastSettings, setError), [])
+  useEffect(() => subscribeAnnouncements((items) => { setAnnouncements(items); setAnnouncementError('') }, setAnnouncementError), [])
+  useEffect(() => subscribeBroadcastSettings((settings) => { setBroadcastSettings(settings); setSettingsError('') }, setSettingsError), [])
+  useEffect(() => { writePreference('tv-sport', sport); writePreference('tv-rotating', String(rotating)); writePreference('tv-page', cursor) }, [sport, rotating, cursor])
 
   useEffect(() => {
     const clock = window.setInterval(() => setNow(new Date()), 1000)
@@ -150,10 +153,10 @@ export default function TVMode({ onNavigate }) {
           <button type="button" onClick={leave}>Sair do modo TV</button>
         </div>
       </div>
-      {error || screenMessage ? <div className="tv-notice" role="alert">{error || screenMessage}</div> : null}
+      {error || announcementError || settingsError || screenMessage ? <div className="tv-notice" role="alert">{error || announcementError || settingsError || screenMessage}{error || announcementError || settingsError ? ' Tentando reconectar automaticamente…' : ''}</div> : null}
       {announcement ? <aside className={`tv-announcement tv-announcement-${announcement.type}`} role="status"><strong>{announcement.type === 'chamada' ? 'CHAMADA' : announcement.type === 'atraso' ? 'ATENÇÃO' : 'AVISO'}</strong><span>{announcement.text}</span></aside> : null}
       <nav className="tv-section-nav" aria-label="Páginas da transmissão">{TV_SECTIONS.filter((section) => counts[section.id]).map((section) => <button key={section.id} type="button" className={page?.kind === section.id ? 'is-active' : ''} aria-pressed={page?.kind === section.id} disabled={!counts[section.id]} onClick={() => setCursor(pages.find((item) => item.kind === section.id)?.id || '')}>{section.label}<span>{counts[section.id]}</span></button>)}</nav>
-      {live.length ? <aside className="tv-live-ticker" aria-label="Placares ao vivo"><strong><span className="live-dot" />AO VIVO · {live.length}</strong><div>{ticker.map((game) => <span key={game.id}><b>{game.esporteNome}</b> {game.timeA} <strong>{getMatchScore(game).map(formatSportScore).join(' : ')}</strong> {game.timeB}</span>)}</div>{live.length > ticker.length ? <small>+{live.length - ticker.length} partida(s)</small> : null}</aside> : null}
+      {live.length ? <aside className="tv-live-ticker" aria-label="Placares ao vivo"><strong><span className="live-dot" />AO VIVO · {live.length}</strong><div>{ticker.map((game) => <span key={game.id}><b>{game.esporteNome}</b> {game.timeA} <strong><MatchScore game={game} /></strong> {game.timeB}</span>)}</div>{live.length > ticker.length ? <small>+{live.length - ticker.length} partida(s)</small> : null}</aside> : null}
       {page ? (
         <div className={`tv-slide tv-slide-${page.kind}`} key={page.id}>
           <div className="tv-slide-heading"><div><span className="tv-slide-eyebrow">{page.kind === 'live' ? `${counts.live} partida(s) simultânea(s)` : page.sportName}</span><h2>{page.title}</h2><p>{page.description}</p></div><span className="tv-slide-part">{page.kind === 'live' ? 'PLACARES AO VIVO' : page.kind === 'tomorrow' ? dateFormat.format(eventDate(`${schedule.tomorrow}T12:00`)) : page.kind === 'today' ? dateFormat.format(now) : page.sportName}<strong>Página {page.part} / {page.parts}</strong></span></div>
@@ -162,7 +165,7 @@ export default function TVMode({ onNavigate }) {
           </div>
         </div>
       ) : <div className="tv-empty"><span aria-hidden="true">🏆</span><h2>{loading ? 'Carregando programação…' : 'Aguardando a programação'}</h2><p>Os jogos aparecerão aqui assim que forem cadastrados.</p></div>}
-      <footer className={online && !error ? 'tv-footer' : 'tv-footer is-offline'}><strong>INTERCLASSE SESI VINHEDO <span>{error ? 'Atualização indisponível' : !online ? 'Sem conexão' : synced ? 'Ao vivo · atualizado' : 'Sincronizando'}</span></strong><span>{rotating ? `Rotação automática · ${duration} s por página` : 'Rotação pausada'} · Tela {pages.length ? pageIndex + 1 : 0}/{pages.length}</span></footer>
+      <footer className={online && synced && !error ? 'tv-footer' : 'tv-footer is-offline'}><strong>INTERCLASSE SESI VINHEDO <span>{!online ? 'Sem conexão · últimos dados' : error ? 'Reconectando' : synced ? 'Ao vivo · atualizado' : 'Sincronizando'}{lastSync ? ` · conferido às ${clockFormat.format(new Date(lastSync))}` : ''}</span></strong><span>{rotating ? `Rotação automática · ${duration} s por página` : 'Rotação pausada'} · Tela {pages.length ? pageIndex + 1 : 0}/{pages.length}</span></footer>
     </section>
   )
 }

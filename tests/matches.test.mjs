@@ -11,6 +11,9 @@ import { scheduleFingerprint, buildScheduleRedistribution, schedulePlanFingerpri
 const documents = new Map()
 let generatedId = 0
 let useCurrentTimestamp = false
+let failBatchNumber = 0
+let batchCommitSizes = []
+let inspectBatch = null
 const snapshot = (ref) => ({ id: ref.id, ref, exists: () => documents.has(ref.path), data: () => structuredClone(documents.get(ref.path)) })
 const apply = (ref, fields) => {
   if (!documents.has(ref.path)) throw new Error('Document not found')
@@ -23,11 +26,16 @@ const sdk = {
     return { path, id: path.split('/').at(-1) }
   },
   getDoc: async (ref) => snapshot(ref),
+  getDocFromServer: async (ref) => snapshot(ref),
+  getDocsFromServer: async () => { throw new Error('Unexpected recovery read in a service test') },
+  getCountFromServer: async () => { throw new Error('Unexpected count read in a service test') },
   getDocs: async (query) => {
     const docs = [...documents.keys()].filter((path) => path.split('/').slice(0, -1).join('/') === query.name).map((path) => snapshot({ path, id: path.split('/').at(-1) })).filter((doc) => (query.filters || []).every((filter) => doc.data()[filter.field] === filter.value))
     return { docs, empty: !docs.length, size: docs.length, forEach: (callback) => docs.forEach(callback) }
   },
   query: (collection, ...filters) => ({ ...collection, filters }),
+  queryEqual: (first, second) => JSON.stringify(first) === JSON.stringify(second),
+  refEqual: (first, second) => first.path === second.path,
   where: (field, operator, value) => { assert.equal(operator, '=='); return { field, value } },
   runTransaction: async (_db, callback) => {
     const changes = []
@@ -38,7 +46,7 @@ const sdk = {
   updateDoc: async (ref, fields) => apply(ref, fields),
   writeBatch: () => {
     const changes = []
-    return { set: (ref, fields) => changes.push(() => documents.set(ref.path, structuredClone(fields))), update: (ref, fields) => changes.push(() => apply(ref, fields)), delete: (ref) => changes.push(() => documents.delete(ref.path)), commit: async () => changes.forEach((commit) => commit()) }
+    return { set: (ref, fields) => changes.push(() => documents.set(ref.path, structuredClone(fields))), update: (ref, fields) => changes.push(() => apply(ref, fields)), delete: (ref) => changes.push(() => documents.delete(ref.path)), commit: async () => { batchCommitSizes.push(changes.length); inspectBatch?.(); if (failBatchNumber === batchCommitSizes.length) { failBatchNumber = 0; throw new Error('Falha de conexão simulada') } changes.forEach((commit) => commit()) } }
   },
   serverTimestamp: () => useCurrentTimestamp ? new Date() : new Date('2026-11-06T12:00:00Z'),
   Timestamp: { fromDate: (date) => date },
@@ -61,6 +69,10 @@ registerHooks({
 })
 const { normalizeGame, startGame, updateLiveScore, finalizeGame, reopenGame, closeGame, saveGame, canEditPrediction, savePlayer, deletePlayer, deleteTeam, importPlayers, saveAnnouncement, changeMatchCondition, saveMatchReport, loadMatchReport, calculateGroupStandings, saveMatchAttendance, saveBroadcastSettings, saveGamePreparation, startPreparedGames, controlMatchClock, saveSportRegulation, saveSport, recordLiveEvent, undoLiveEvent, redistributeTournamentSchedule, saveTeam, saveGames } = await import('../src/services/firestoreService.js')
 const { createThirdPlaceGame, saveDisciplinaryRecord, resolveDisciplinaryRecord } = await import('../src/services/firestoreService.js')
+const { ensureAutomaticPredictionDeadlines, getPredictionDeadline, isPredictionDeadlineOpen, savePrediction } = await import('../src/services/firestoreService.js')
+const { saveCalendarGame, deleteGamesBulk } = await import('../src/services/firestoreService.js')
+const { calendarCandidate, calendarConflicts, calendarConflictSignature, calendarFingerprint } = await import('../src/utils/visualSchedule.js')
+const { deletionFingerprint } = await import('../src/utils/bulkGameDeletion.js')
 const { planBracketSchedule } = await import('../src/utils/bracketSchedule.js')
 const original = {
   sportId: 'football', esporteNome: 'Futebol', fase: 'Fase de grupos', rodada: 'Rodada 1',
@@ -70,7 +82,180 @@ const original = {
 }
 const game = (id = 'one') => normalizeGame(id, documents.get(`games/${id}`))
 const preparationFor = (id, area = '') => ({ expectedTeamKey: attendanceTeamKey(game(id)), venue: 'Quadra principal', venueArea: area, vestA: 'Azul', vestB: 'Amarelo', responsible: 'Professor responsável', sides: { A: { status: 'present', players: {} }, B: { status: 'present', players: {} } } })
-beforeEach(() => { useCurrentTimestamp = false; documents.clear(); documents.set('games/one', structuredClone(original)) })
+beforeEach(() => { useCurrentTimestamp = false; failBatchNumber = 0; batchCommitSizes = []; inspectBatch = null; documents.clear(); documents.set('games/one', structuredClone(original)) })
+
+test('visual scheduling rechecks other sports, requires the reviewed conflict signature and preserves match identity and betting status', async () => {
+  documents.set('games/one', { ...original, turno: 'manha', tournamentId: 'cup', timeA: '9º A', timeB: '9º B', preparation: { key: 'old' } })
+  documents.set('games/volley', { ...original, sportId: 'volley', esporteNome: 'Vôlei', timeA: '9A', timeB: '1A', turno: 'manha', dataHora: '2099-11-10T10:15', venue: 'Quadra 2' })
+  const source = game(), change = { dataHora: '2099-11-10T10:00', venue: 'Quadra 1', venueArea: '', durationMinutes: 30 }
+  const expectedFingerprint = calendarFingerprint(source)
+  const before = structuredClone(documents.get('games/one'))
+  await assert.rejects(saveCalendarGame({ gameId: 'one', expectedFingerprint, change }), /conflitos/)
+  assert.deepEqual(documents.get('games/one'), before)
+  const conflicts = calendarConflicts(calendarCandidate(source, change), [source, game('volley')], [])
+  await saveCalendarGame({ gameId: 'one', expectedFingerprint, change, acceptedConflicts: calendarConflictSignature(conflicts) })
+  assert.equal(game().dataHora, change.dataHora)
+  assert.equal(game().limitePalpites, '2099-11-10T09:55')
+  assert.equal(game().tournamentId, 'cup')
+  assert.equal(game().status, 'aberto')
+  assert.equal(game().preparation, null)
+  await assert.rejects(saveCalendarGame({ gameId: 'one', expectedFingerprint, change }), /partida mudou/)
+})
+
+test('the calendar schedules undated closed games without opening guesses and cannot move a started match', async () => {
+  documents.set('games/one', { ...original, tournamentId: 'cup', dataHora: '', limitePalpites: null, status: 'encerrado' })
+  const change = { dataHora: '2099-11-10T10:00', venue: 'Quadra principal', venueArea: 'Mesa 1', durationMinutes: 20 }
+  await saveCalendarGame({ gameId: 'one', expectedFingerprint: calendarFingerprint(game()), change })
+  assert.equal(game().status, 'encerrado')
+  assert.equal(game().durationMinutes, 20)
+  documents.set('games/one', { ...documents.get('games/one'), liveStatus: 'live' })
+  await assert.rejects(saveCalendarGame({ gameId: 'one', expectedFingerprint: calendarFingerprint(game()), change }), /não começaram/)
+})
+
+test('bulk deletion removes linked predictions, every private document and more than one batch of events, then recalculates ranking', async () => {
+  documents.set('games/two', { ...original, status: 'finalizado', placarA: 2, placarB: 1 })
+  documents.set('games/keep', { ...original, sportId: 'volley' })
+  documents.set('users/student', { role: 'user', participaRanking: true, nome: 'Aluno', pontos: 100 })
+  documents.set('predictions/student_two', { gameId: 'two', userId: 'student', palpiteA: 2, palpiteB: 1, pontos: 100 })
+  documents.set('games/one/documents/attendance', { private: 'presença' })
+  documents.set('games/one/documents/extra', { private: 'documento' })
+  for (let index = 0; index < 455; index++) documents.set(`games/one/events/event-${index}`, { value: index })
+  let sawFrozen = false
+  inspectBatch = () => { if (documents.has('games/one')) { sawFrozen = Boolean(game().deletionPending); assert.equal(canEditPrediction(game()), false) } }
+  const expectedGames = ['one', 'two'].map((id) => ({ id, fingerprint: deletionFingerprint(game(id)) }))
+  const keep = structuredClone(documents.get('games/keep'))
+  assert.deepEqual(await deleteGamesBulk({ expectedGames, includePredictions: true }), { deleted: 2 })
+  assert.equal(sawFrozen, true)
+  assert.equal([...documents.keys()].some((path) => path.startsWith('games/one') || path.startsWith('games/two') || path.startsWith('predictions/')), false)
+  assert.deepEqual(documents.get('games/keep'), keep)
+  assert.equal(documents.get('users/student').pontos, 0)
+  assert.ok(batchCommitSizes.every((size) => size <= 400))
+  assert.ok([...documents.values()].some((value) => value.type === 'bulk-game-deletion' && value.status === 'complete' && value.deletedCount === 2))
+})
+
+test('bulk deletion rejects stale selections, live games, linked outside fixtures and unconfirmed predictions before writing', async () => {
+  const expected = () => [{ id: 'one', fingerprint: deletionFingerprint(game()) }]
+  documents.set('predictions/student_one', { gameId: 'one', userId: 'student' })
+  let before = structuredClone([...documents])
+  await assert.rejects(deleteGamesBulk({ expectedGames: expected() }), /palpites/)
+  assert.deepEqual([...documents], before)
+  await assert.rejects(deleteGamesBulk({ expectedGames: [{ id: 'one', fingerprint: 'old' }], includePredictions: true }), /seleção mudou/)
+  documents.set('games/one', { ...original, liveStatus: 'live' })
+  before = structuredClone([...documents])
+  await assert.rejects(deleteGamesBulk({ expectedGames: expected(), includePredictions: true }), /ao vivo/)
+  assert.deepEqual([...documents], before)
+  documents.set('games/one', original)
+  documents.set('games/final', { ...original, sourceGameIdA: 'one' })
+  before = structuredClone([...documents])
+  await assert.rejects(deleteGamesBulk({ expectedGames: expected(), includePredictions: true }), /torneio completo/)
+  assert.deepEqual([...documents], before)
+})
+
+test('a game locked for deletion cannot accept guesses, edits, attendance, reports or reopening', async () => {
+  documents.set('games/one', { ...original, deletionPending: 'running-operation' })
+  assert.equal(canEditPrediction(game()), false)
+  await assert.rejects(saveGame(game()), /em exclusão/)
+  await assert.rejects(reopenGame('one'), /em exclusão/)
+  await assert.rejects(saveMatchReport('one', {}), /em exclusão/)
+  await assert.rejects(saveMatchAttendance({ gameId: 'one', sides: {} }), /em exclusão/)
+})
+
+test('bulk deletion reports partial completion accurately, restores remaining games and can retry without duplicating deletions', async () => {
+  documents.clear()
+  for (let index = 0; index < 25; index++) {
+    documents.set(`games/test-${index}`, { ...original, turno: 'manha' })
+    documents.set(`games/test-${index}/events/one`, { value: 1 })
+  }
+  const expected = () => [...documents.keys()].filter((path) => /^games\/[^/]+$/.test(path)).map((path) => ({ id: path.split('/')[1], fingerprint: deletionFingerprint(game(path.split('/')[1])) }))
+  failBatchNumber = 2
+  await assert.rejects(deleteGamesBulk({ expectedGames: expected(), includePredictions: true }), /20 jogo\(s\) excluído/)
+  const remaining = expected()
+  assert.equal(remaining.length, 5)
+  for (const item of remaining) { assert.equal(game(item.id).status, 'aberto'); assert.equal(game(item.id).deletionPending, null) }
+  assert.deepEqual(await deleteGamesBulk({ expectedGames: remaining, includePredictions: true }), { deleted: 5 })
+  assert.equal(expected().length, 0)
+})
+
+test('new and edited matches derive the deadline automatically from kickoff, overriding supplied limits', async () => {
+  await saveGame({ ...original, id: 'one', dataHora: '2099-11-10T10:00', limitePalpites: '2099-11-10T11:00' })
+  assert.equal(documents.get('games/one').limitePalpites.toISOString(), '2099-11-10T12:55:00.000Z')
+  assert.equal(game().limitePalpites, '2099-11-10T09:55')
+  await saveGame({ ...game(), dataHora: '2099-11-11T08:30', limitePalpites: '' })
+  assert.equal(game().limitePalpites, '2099-11-11T08:25')
+})
+
+test('new and existing predictions are rejected at the exact cutoff and a stale open page cannot bypass a reschedule', async (context) => {
+  context.mock.timers.enable({ apis: ['Date'], now: new Date('2099-11-10T12:54:59.999Z') })
+  const data = { ...original, dataHora: '2099-11-10T10:00', limitePalpites: '2099-11-10T10:30' }
+  documents.set('games/one', data)
+  const args = { user: { uid: 'student' }, profile: { role: 'user', participaRanking: true, nome: 'Aluno' }, game: { ...game(), dataHora: '2099-11-10T14:00' }, palpiteA: 2, palpiteB: 1 }
+  assert.equal(getPredictionDeadline(data).toISOString(), '2099-11-10T12:55:00.000Z')
+  assert.equal(isPredictionDeadlineOpen(data), true)
+  await savePrediction(args)
+  const saved = structuredClone(documents.get('predictions/student_one'))
+  context.mock.timers.tick(1)
+  assert.equal(isPredictionDeadlineOpen(data), false)
+  assert.equal(canEditPrediction(game()), false)
+  await assert.rejects(savePrediction({ ...args, palpiteA: 3 }), /5 minutos/)
+  await assert.rejects(savePrediction({ ...args, user: { uid: 'other' } }), /5 minutos/)
+  assert.deepEqual(documents.get('predictions/student_one'), saved)
+  assert.equal(documents.has('predictions/other_one'), false)
+  documents.set('games/one', { ...data, dataHora: '2099-11-10T09:00' })
+  await assert.rejects(savePrediction(args), /5 minutos/)
+  assert.equal(isPredictionDeadlineOpen({ status: 'aberto' }), false)
+})
+
+test('the master sync updates legacy deadlines idempotently, preserving schedules, predictions, undated games and match results', async () => {
+  documents.set('games/undated', { ...original, tournamentId: 'cup', status: 'encerrado', dataHora: '', limitePalpites: null })
+  documents.set('games/finished', { ...original, status: 'finalizado', placarA: 2, placarB: 1 })
+  documents.set('games/live', { ...original, status: 'encerrado', liveStatus: 'live', startedAt: new Date() })
+  documents.set('predictions/student_one', { userId: 'student', gameId: 'one', palpiteA: 2, palpiteB: 1 })
+  const before = structuredClone([...documents])
+  assert.deepEqual(await ensureAutomaticPredictionDeadlines(), { updated: 1 })
+  assert.equal(documents.get('games/one').dataHora, original.dataHora)
+  assert.equal(documents.get('games/one').limitePalpites.toISOString(), '2099-11-06T14:55:00.000Z')
+  for (const [path, value] of before.filter(([path]) => path !== 'games/one')) assert.deepEqual(documents.get(path), value)
+  assert.deepEqual(await ensureAutomaticPredictionDeadlines(), { updated: 0 })
+})
+
+test('a bracket can be saved without a schedule, keeps predictions closed and can be scheduled manually later', async () => {
+  const base = { ...original, turno: 'manha', tournamentId: 'unscheduled-cup', tournamentName: 'Interclasse', status: 'encerrado', dataHora: '', limitePalpites: '', venue: '', vestA: '', vestB: '' }
+  const drafts = [
+    { ...base, id: 'semi-a', stageType: 'knockout', fase: 'Semifinal' },
+    { ...base, id: 'semi-b', stageType: 'knockout', fase: 'Semifinal', timeA: 'Verde', timeB: 'Amarelo' },
+    { ...base, id: 'cup-final', stageType: 'knockout', fase: 'Final', timeA: 'Vencedor semifinal A', timeB: 'Vencedor semifinal B', sourceGameIdA: 'semi-a', sourceGameIdB: 'semi-b', seedLabelA: 'Vencedor semifinal A', seedLabelB: 'Vencedor semifinal B' },
+  ]
+  await saveGames(drafts, { checkSchedule: true })
+  for (const draft of drafts) {
+    const saved = game(draft.id)
+    assert.equal(saved.dataHora, '')
+    assert.equal(saved.limitePalpites, '')
+    assert.equal(saved.status, 'encerrado')
+    assert.equal(saved.tournamentId, base.tournamentId)
+    assert.equal(saved.venue, '')
+    assert.equal(canEditPrediction(saved), false)
+  }
+  assert.equal(documents.get('games/semi-a').limitePalpites, null)
+  assert.equal(game('cup-final').sourceGameIdB, 'semi-b')
+  await assert.rejects(reopenGame('semi-a'), /Defina a data/)
+  await assert.rejects(saveGames(drafts, { checkSchedule: true }), /já cadastrada/)
+  await saveGame({ ...game('semi-a'), dataHora: '2099-12-01T08:00', limitePalpites: '2099-12-01T07:00' })
+  assert.equal(game('semi-a').dataHora, '2099-12-01T08:00')
+  assert.equal(game('semi-a').status, 'encerrado')
+  assert.equal(canEditPrediction(game('semi-a')), false)
+  await reopenGame('semi-a')
+  assert.equal(canEditPrediction(game('semi-a')), true)
+  assert.equal(game('cup-final').dataHora, '')
+})
+
+test('unscheduled creation requires a closed tournament and rejects partial or invalid dates without writing a partial batch', async () => {
+  const draft = { ...original, id: 'new-game', turno: 'manha', tournamentId: 'cup', status: 'encerrado', dataHora: '', limitePalpites: '' }
+  for (const override of [{ status: 'aberto' }, { tournamentId: '' }, { dataHora: 'bad-date' }, { limitePalpites: '2099-12-01T08:00' }, { status: 'finalizado', placarA: 1, placarB: 0 }]) {
+    const before = structuredClone([...documents])
+    await assert.rejects(saveGames([{ ...draft, id: 'valid-draft' }, { ...draft, ...override }]))
+    assert.deepEqual([...documents], before)
+  }
+})
 
 test('saving a generated bracket rechecks the latest cross-sport calendar without silently moving or overwriting fixtures', async () => {
   const draft = { ...original, id: 'generated', turno: 'manha', timeA: '9º A', timeB: '9º B', tournamentId: 'new-cup', stageType: 'league', venue: '', dataHora: '2099-11-30T08:00', limitePalpites: '2099-11-30T07:00' }
@@ -322,7 +507,7 @@ test('redistributing existing games preserves IDs, predictions, match metadata a
   for (const match of selected.filter((item) => item.stageType === 'group')) {
     const saved = documents.get(`games/${match.id}`)
     for (const field of ['timeA', 'timeB', 'tournamentId', 'groupName', 'stageType', 'status', 'venue', 'vestA', 'vestB']) assert.equal(saved[field], before[`games/${match.id}`][field])
-    assert.equal(new Date(saved.dataHora) - saved.limitePalpites, 3600000)
+    assert.equal(new Date(saved.dataHora) - saved.limitePalpites, 300000)
     if (plan.changes.some((change) => change.id === match.id)) assert.equal(saved.preparation, null)
   }
 })
@@ -657,13 +842,14 @@ test('postponing a live match preserves its score and resumes without reopening 
   assert.deepEqual(getMatchScore(game()), [3, 1])
 })
 
-test('cancelled matches can be rescheduled with an explicit valid prediction window', async () => {
+test('cancelled matches can be rescheduled and always recalculate the five-minute prediction window', async () => {
   await assert.rejects(changeMatchCondition({ gameId: 'one', action: 'cancel', reason: ' ' }))
   await changeMatchCondition({ gameId: 'one', action: 'cancel', reason: 'Quadra interditada' })
   assert.equal(getMatchState(game()), MATCH_STATE.CANCELLED)
   assert.equal(canEditPrediction(game()), false)
-  await assert.rejects(changeMatchCondition({ gameId: 'one', action: 'reschedule', reason: 'Novo local', dataHora: '2099-11-07T10:00', limitePalpites: '2099-11-07T11:00' }))
+  await assert.rejects(changeMatchCondition({ gameId: 'one', action: 'reschedule', reason: 'Novo local', dataHora: 'invalid' }))
   await changeMatchCondition({ gameId: 'one', action: 'reschedule', reason: 'Novo local', dataHora: '2099-11-07T10:00', limitePalpites: '2099-11-07T09:30', reopenPredictions: true })
+  assert.equal(game().limitePalpites, '2099-11-07T09:55')
   assert.equal(getMatchState(game()), MATCH_STATE.SCHEDULED)
   assert.equal(canEditPrediction(game()), true)
   assert.equal(game().placarA, null)

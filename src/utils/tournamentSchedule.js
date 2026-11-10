@@ -3,6 +3,7 @@ import { getMatchState, MATCH_STATE } from './match.js'
 import { eventDate, schoolDay } from './tvSchedule.js'
 import { venueKey } from './matchVenue.js'
 import { getGameShift } from './schoolShifts.js'
+import { automaticPredictionDeadline } from './predictionDeadline.js'
 
 const teamName = (team) => typeof team === 'string' ? team : team?.nome || ''
 const key = (value) => normalizeFilterText(teamName(value)).trim()
@@ -86,8 +87,7 @@ export function buildScheduleRedistribution(games, now = new Date()) {
     ordered.forEach((game, index) => {
       const target = slots[index]
       const delta = millis(target.dataHora) - millis(game.dataHora)
-      const deadline = millis(game.limitePalpites)
-      const next = { ...game, dataHora: target.dataHora, limitePalpites: deadline == null ? game.limitePalpites : new Date(deadline + delta) }
+      const next = { ...game, dataHora: target.dataHora, limitePalpites: automaticPredictionDeadline(target) }
       after.push(next)
       if (delta) changes.push({ id: game.id, dataHora: target.dataHora, expected: scheduleFingerprint(game) })
     })

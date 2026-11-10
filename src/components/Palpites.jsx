@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import usePredictionClock from '../hooks/usePredictionClock.js'
 import { getMatchCondition, isPredictionVoided } from '../utils/match.js'
 import { useAuth } from '../context/useAuth.js'
 import { canEditPrediction, GAME_STATUS, subscribeGames, subscribeUserPredictions } from '../services/bolaoService.js'
@@ -7,10 +8,13 @@ import { getGameStageLabel } from '../utils/game.js'
 import EmptyState from './EmptyState.jsx'
 import LoadingState from './LoadingState.jsx'
 import PendingGuessBanner from './PendingGuessBanner.jsx'
+import MatchScore from './MatchScore.jsx'
+import { getMatchState, MATCH_STATE } from '../utils/match.js'
 
 export default function Palpites({ onNavigate }) {
   const { user, isParticipant } = useAuth()
   const [games, setGames] = useState([])
+  const now = usePredictionClock(games)
   const [predictions, setPredictions] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -39,7 +43,7 @@ export default function Palpites({ onNavigate }) {
     return new Map(games.map((game) => [game.id, game]))
   }, [games])
   const predictionsByGame = useMemo(() => new Map(predictions.map((prediction) => [prediction.gameId, prediction])), [predictions])
-  const pendingGuessCount = games.filter((game) => canEditPrediction(game) && !predictionsByGame.has(game.id)).length
+  const pendingGuessCount = games.filter((game) => canEditPrediction(game, now) && !predictionsByGame.has(game.id)).length
 
   if (!user) {
     return null
@@ -95,6 +99,7 @@ export default function Palpites({ onNavigate }) {
                   <strong>
                     Palpite: {prediction.palpiteA} x {prediction.palpiteB}
                   </strong>
+                  {game && [MATCH_STATE.LIVE, MATCH_STATE.FINISHED].includes(getMatchState(game)) ? <div className="prediction-official-score"><small>{getMatchState(game) === MATCH_STATE.LIVE ? 'Placar ao vivo' : 'Resultado final'}</small><MatchScore game={game} /></div> : null}
                 </div>
                 <div>
                   <span>Status</span>

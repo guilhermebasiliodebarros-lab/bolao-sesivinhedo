@@ -12,7 +12,9 @@ function TeamDiscipline({ team, games, user }) {
   const [records, setRecords] = useState([])
   const [players, setPlayers] = useState([])
   const [loading, setLoading] = useState({ records: true, players: true })
-  const [failed, setFailed] = useState(false)
+  const [feedErrors, setFeedErrors] = useState({})
+  const feedError = Object.values(feedErrors).find(Boolean) || ''
+  const failed = Boolean(feedError)
   const [actionFailed, setActionFailed] = useState(false)
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
@@ -21,9 +23,9 @@ function TeamDiscipline({ team, games, user }) {
   const [resolution, setResolution] = useState(null)
   const [page, setPage] = useState(0)
   useEffect(() => {
-    const error = (value) => { setFailed(true); setMessage(value) }
-    const stopRecords = subscribeTeamDiscipline(team.id, (items) => { setRecords(items); setLoading((value) => ({ ...value, records: false })) }, error)
-    const stopPlayers = subscribePlayers(team.id, (items) => { setPlayers(items); setLoading((value) => ({ ...value, players: false })) }, error)
+    const error = (field) => (value) => setFeedErrors((current) => ({ ...current, [field]: value }))
+    const stopRecords = subscribeTeamDiscipline(team.id, (items) => { setRecords(items); setLoading((value) => ({ ...value, records: false })) }, error('records'))
+    const stopPlayers = subscribePlayers(team.id, (items) => { setPlayers(items); setLoading((value) => ({ ...value, players: false })) }, error('players'))
     return () => { stopRecords(); stopPlayers() }
   }, [team.id])
   const teamGames = games.filter((game) => game.sportId === team.sportId && ['A', 'B'].some((side) => game[`teamId${side}`] ? game[`teamId${side}`] === team.id : game[`time${side}`] === team.nome)).sort((a, b) => eventDate(a.dataHora) - eventDate(b.dataHora))
@@ -35,11 +37,11 @@ function TeamDiscipline({ team, games, user }) {
     <div className="section-heading"><h3>{team.nome} · {team.esporteNome}</h3><span>{records.filter((record) => record.type === 'suspension' && record.status === 'active').length} suspensão(ões) ativa(s)</span></div>
     <p className="form-hint">Cartões e advertências são registros. A organização define as suspensões conforme o regulamento; não há suspensão automática por quantidade de cartões. Uma suspensão permanece ativa até ser marcada como cumprida ou anulada.</p>
     {next.some((game) => suspendedPlayers(records, game).size) ? <div className="schedule-warning"><strong>Conferir antes dos próximos jogos</strong>{next.filter((game) => suspendedPlayers(records, game).size).map((game) => <p key={game.id}>{game.timeA} × {game.timeB} · {formatDateTime(game.dataHora)}: {suspendedPlayers(records, game).size} atleta(s) com suspensão ativa.</p>)}</div> : null}
-    {message ? <p className={`alert ${failed || actionFailed ? 'alert-error' : 'alert-success'}`} role={failed || actionFailed ? 'alert' : 'status'}>{message}</p> : null}
+    {feedError || message ? <p className={`alert ${failed || actionFailed ? 'alert-error' : 'alert-success'}`} role={failed || actionFailed ? 'alert' : 'status'}>{feedError || message}</p> : null}
     {Object.values(loading).some(Boolean) && !failed ? <p role="status">Carregando ocorrências e elenco…</p> : null}
     <form className="discipline-form" onSubmit={async (event) => {
       event.preventDefault(); setBusy(true); setMessage(''); setActionFailed(false)
-      try { await saveDisciplinaryRecord(team.id, draft, user); setDraft(empty); setFailed(false); setMessage('Ocorrência registrada com sucesso.') }
+      try { await saveDisciplinaryRecord(team.id, draft, user); setDraft(empty); setMessage('Ocorrência registrada com sucesso.') }
       catch (error) { setActionFailed(true); setMessage(error.message) } finally { setBusy(false) }
     }}>
       <fieldset disabled={disabled}><legend>Registrar ocorrência</legend><div className="form-grid">

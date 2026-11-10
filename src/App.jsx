@@ -6,6 +6,11 @@ import { AuthProvider } from './context/AuthContext.jsx'
 import { useAuth } from './context/useAuth.js'
 import { firebaseEnvNames, isFirebaseConfigured, missingFirebaseConfig } from './config/firebase.js'
 import { readPreference, writePreference } from './utils/preferences.js'
+import { APP_VIEWS, resolveAppView } from './utils/navigation.js'
+import PredictionReminders from './components/PredictionReminders.jsx'
+import useAppUpdates from './hooks/useAppUpdates.js'
+import ConnectionStatus from './components/ConnectionStatus.jsx'
+import LiveScoresStrip from './components/LiveScoresStrip.jsx'
 
 const AdminPanel = lazy(() => import('./components/AdminPanel.jsx'))
 const Cadastro = lazy(() => import('./components/Cadastro.jsx'))
@@ -21,11 +26,9 @@ const Regulations = lazy(() => import('./components/Regulations.jsx'))
 const AthleteStatistics = lazy(() => import('./components/AthleteStatistics.jsx'))
 const TournamentExplorer = lazy(() => import('./components/TournamentExplorer.jsx'))
 
-const protectedViews = ['dashboard', 'jogos', 'palpites', 'classificacao', 'admin']
-const allViews = ['home', 'calendario', 'regulamentos', 'estatisticas', 'chaveamento', 'simulador', 'login', 'cadastro', 'tv', ...protectedViews]
 const viewFromHash = () => {
   const requested = window.location.hash.slice(1)
-  return allViews.includes(requested) ? requested : 'home'
+  return APP_VIEWS.includes(requested) ? requested : 'home'
 }
 
 function ConfigNotice() {
@@ -53,25 +56,11 @@ function AppShell() {
 
     return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   })
-  const { user, isMaster, loading, profileLoading } = useAuth()
-  let activeView = view
+  const { user, isMaster, isParticipant, loading, profileLoading } = useAuth()
+  const activeView = resolveAppView(view, { signedIn: Boolean(user), isMaster })
   const authLoading = loading || profileLoading
-
-  if (!authLoading && !user && protectedViews.includes(view)) {
-    activeView = 'login'
-  }
-
-  if (!authLoading && user && isMaster && ['dashboard', 'jogos', 'palpites', 'classificacao'].includes(view)) {
-    activeView = 'admin'
-  }
-
-  if (!authLoading && user && view === 'admin' && !isMaster) {
-    activeView = 'dashboard'
-  }
-
-  if (!authLoading && user && ['login', 'cadastro'].includes(view)) {
-    activeView = isMaster ? 'admin' : 'dashboard'
-  }
+  const appUpdate = useAppUpdates({ enabled: !authLoading })
+  const updateNotice = appUpdate ? <div className="app-update-notice" role="status"><span>Nova versão pronta. A atualização será automática quando não houver edição em andamento. Salve seus dados antes de atualizar agora.</span><button type="button" className="btn btn-secondary" onClick={() => window.location.reload()}>Atualizar site</button></div> : null
 
   const navigate = (nextView) => {
     setView(nextView)
@@ -84,6 +73,10 @@ function AppShell() {
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [])
+
+  useEffect(() => {
+    if (!authLoading && activeView !== view) window.location.replace(`#${activeView}`)
+  }, [activeView, authLoading, view])
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -133,15 +126,21 @@ function AppShell() {
     return <Home onNavigate={navigate} />
   }
 
+  if (authLoading) return <div className="route-loading" role="status">Carregando sua conta…</div>
+
   if (activeView === 'tv') {
-    return <Suspense fallback={<div className="route-loading">Abrindo modo TV…</div>}><TVMode onNavigate={navigate} /></Suspense>
+    return <>{updateNotice}<Suspense fallback={<div className="route-loading">Abrindo modo TV…</div>}><TVMode onNavigate={navigate} /></Suspense></>
   }
 
   return (
     <div className="app">
       <Header activeView={activeView} onNavigate={navigate} theme={theme} onToggleTheme={toggleTheme} />
+      <ConnectionStatus />
       <ConfigNotice />
       <main>
+        {updateNotice}
+        <LiveScoresStrip />
+        {isParticipant ? <PredictionReminders key={user.uid} userId={user.uid} showSettings={activeView === 'dashboard'} onNavigate={navigate} /> : null}
         <Suspense fallback={<div className="route-loading">Carregando tela...</div>}>{renderView()}</Suspense>
       </main>
       <Footer />

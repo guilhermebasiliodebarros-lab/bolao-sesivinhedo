@@ -11,12 +11,12 @@ import {
 } from '../services/bolaoService.js'
 import { formatDateTime } from '../utils/format.js'
 import { gameMatchesSearch, getGameStageLabel, getUniqueGamePhases, groupGamesBySport } from '../utils/game.js'
-import { getMatchState, getMatchCondition, getMatchScore, MATCH_STATE } from '../utils/match.js'
+import { getMatchState, MATCH_STATE } from '../utils/match.js'
+import MatchScore from './MatchScore.jsx'
 import MatchNotice from './MatchNotice.jsx'
 import MatchBadge from './MatchBadge.jsx'
 import SportFilter from './SportFilter.jsx'
 import MatchDetails from './MatchDetails.jsx'
-import { formatSportScore } from '../utils/sportRules.js'
 import EmptyState from './EmptyState.jsx'
 import LoadingState from './LoadingState.jsx'
 import PendingGuessBanner from './PendingGuessBanner.jsx'
@@ -291,7 +291,7 @@ export default function Calendario({ onNavigate }) {
                     <MatchDetails game={game} />
                     <MatchNotice game={game} />
                   </div>
-                  {[MATCH_STATE.LIVE, MATCH_STATE.FINISHED].includes(getMatchState(game)) ? <strong className="calendar-score">{getMatchCondition(game) === 'walkover' ? 'W.O.' : getMatchScore(game).map(formatSportScore).join(' × ')}</strong> : null}
+                  {[MATCH_STATE.LIVE, MATCH_STATE.FINISHED].includes(getMatchState(game)) ? <strong className="calendar-score"><MatchScore game={game} /></strong> : null}
                   <time>{formatDateTime(game.dataHora)}</time>
                 </article>
               ))}

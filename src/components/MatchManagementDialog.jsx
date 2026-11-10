@@ -11,6 +11,7 @@ import { attendanceTeamKey } from '../utils/attendance.js'
 import MatchScoreForm from './MatchScoreForm.jsx'
 import RefereePanel from './RefereePanel.jsx'
 import useModalDialog from '../hooks/useModalDialog.js'
+import { predictionDeadlineInput } from '../utils/predictionDeadline.js'
 
 function MatchReportForm({ game, teams, user }) {
   const [source] = useState(() => ({ game, teams }))
@@ -63,7 +64,6 @@ function MatchConditionForm({ game, games, teams, user, onSaved }) {
   const [score, setScore] = useState({ placarA: '', placarB: '' })
   const [useScore, setUseScore] = useState(false)
   const [date, setDate] = useState('')
-  const [deadline, setDeadline] = useState('')
   const [reopen, setReopen] = useState(false)
   const [review, setReview] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -74,21 +74,21 @@ function MatchConditionForm({ game, games, teams, user, onSaved }) {
   const summary = action === 'walkover' ? `${game[`time${winner}`] || 'Selecione a equipe'} vence por W.O. Os palpites serão anulados, e o resultado atualizará a classificação e o chaveamento.`
     : action === 'postpone' ? 'A partida sai dos jogos ao vivo e dos próximos jogos. Os palpites ficam bloqueados até a organização reagendar.'
       : action === 'cancel' ? 'A partida será identificada como cancelada, sem pontuar na classificação. Os palpites ficam anulados e o jogo sai da agenda de próximos jogos.'
-        : `Novo horário: ${formatDateTime(date)}. ${reopen ? 'Os palpites serão reabertos até o prazo informado.' : 'Os palpites continuarão bloqueados.'}${game.startedAt ? ' Ao retomar, o placar parcial será preservado.' : ''}`
+        : `Novo horário: ${formatDateTime(date)}. ${reopen ? 'Os palpites serão reabertos até 5 minutos antes do jogo.' : 'Os palpites continuarão bloqueados.'}${game.startedAt ? ' Ao retomar, o placar parcial será preservado.' : ''}`
   if (finished) return <div className="alert">Esta partida já tem resultado final. Para corrigir a situação, reabra o resultado pela lista de jogos. A correção fica bloqueada se a próxima fase já começou.</div>
   return <form className="match-condition-form" onSubmit={async (event) => {
     event.preventDefault()
     if (!review) { setReview(true); return }
     setBusy(true); setMessage('')
     try {
-      await changeMatchCondition({ gameId: game.id, action, reason, winnerSide: winner, placarA: useScore ? score.placarA : undefined, placarB: useScore ? score.placarB : undefined, dataHora: date, limitePalpites: deadline || date, reopenPredictions: reopen, user })
+      await changeMatchCondition({ gameId: game.id, action, reason, winnerSide: winner, placarA: useScore ? score.placarA : undefined, placarB: useScore ? score.placarB : undefined, dataHora: date, reopenPredictions: reopen, user })
       onSaved('Situação da partida atualizada com sucesso.')
     } catch (error) { setMessage(error.message); setReview(false) } finally { setBusy(false) }
   }}>
     <fieldset disabled={busy || review}><legend>Situação da partida</legend>
       <label>Ação<select value={action} onChange={(event) => { setAction(event.target.value); setMessage('') }}><option value="postpone">Adiar partida</option><option value="cancel">Cancelar partida</option><option value="walkover">Registrar W.O.</option>{['postponed', 'cancelled'].includes(condition) ? <option value="reschedule">Reagendar / retomar</option> : null}</select></label>
       {action === 'walkover' ? <><label>Equipe vencedora do W.O.<select required value={winner} onChange={(event) => setWinner(event.target.value)}><option value="">Selecione a vencedora</option><option value="A">{game.timeA}</option><option value="B">{game.timeB}</option></select></label><label className="match-checkbox"><input type="checkbox" checked={useScore} onChange={(event) => setUseScore(event.target.checked)} />Informar placar regulamentar do W.O.</label><p>Sem placar regulamentar, a vencedora recebe os pontos por vitória e o saldo não muda. Os palpites do W.O. ficam anulados.</p>{useScore ? <SportScoreInputs game={game} partials={false} value={score} onChange={(field, value) => setScore((current) => ({ ...current, [field]: value }))} /> : null}</> : null}
-      {action === 'reschedule' ? <><div className="form-grid"><label>Novo dia e horário<input type="datetime-local" required value={date} onChange={(event) => setDate(event.target.value)} /></label><label>Novo prazo de palpites<input type="datetime-local" required={reopen} value={deadline} onChange={(event) => setDeadline(event.target.value)} /></label></div>{!game.startedAt ? <label className="match-checkbox"><input type="checkbox" checked={reopen} onChange={(event) => setReopen(event.target.checked)} />Reabrir os palpites</label> : <p>Esta partida já começou. Os palpites continuarão bloqueados e o placar parcial será preservado.</p>}</> : null}
+      {action === 'reschedule' ? <><div className="form-grid"><label>Novo dia e horário<input type="datetime-local" required value={date} onChange={(event) => setDate(event.target.value)} /></label><label>Palpites até (5 minutos antes)<input type="datetime-local" readOnly value={predictionDeadlineInput({ dataHora: date })} /></label></div>{!game.startedAt ? <label className="match-checkbox"><input type="checkbox" checked={reopen} onChange={(event) => setReopen(event.target.checked)} />Reabrir os palpites</label> : <p>Esta partida já começou. Os palpites continuarão bloqueados e o placar parcial será preservado.</p>}</> : null}
       <label>Motivo público<textarea minLength="3" maxLength="500" required rows="3" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Ex.: chuva na quadra, ausência da equipe, mudança na programação." /></label><small>Este motivo aparece no calendário e na TV. Use as observações da súmula para informações restritas à organização.</small>
       {conflicts.length ? <div className="schedule-warning" role="status"><strong>Atenção: {conflicts.length} conflito(s) no novo horário</strong>{conflicts.slice(0, 5).map(({ game: other, reasons }) => <p key={other.id}>{reasons.join(' e ')}: {other.timeA} × {other.timeB} · {formatDateTime(other.dataHora)}</p>)}</div> : null}
     </fieldset>

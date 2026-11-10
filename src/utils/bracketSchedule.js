@@ -5,6 +5,7 @@ import { eventDate, nextSchoolDay, schoolDay, SCHOOL_TIMEZONE } from './tvSchedu
 import { scheduleResources, sharesScheduleResources } from './scheduleConflicts.js'
 import { venuesOverlap } from './matchVenue.js'
 import { sourceParticipant } from './thirdPlace.js'
+import { PREDICTION_CUTOFF_MINUTES } from './predictionDeadline.js'
 
 const MINUTE = 60000
 const key = (value) => normalizeFilterText(value).trim()
@@ -77,8 +78,6 @@ function settings(options) {
   const durationMinutes = integer(options.durationMinutes ?? 30, 1, 480, 'Duração prevista')
   const spacing = integer(options.intervaloMinutos ?? 30, 0, 480, 'Intervalo entre inícios')
   const rest = integer(options.descansoMinutos ?? 10, 0, 240, 'Descanso mínimo')
-  const hours = Number(options.limiteHorasAntes ?? 1)
-  if (!Number.isFinite(hours) || hours < 0 || hours > 720) throw new Error('Informe um prazo de palpites entre 0 e 720 horas antes do jogo.')
   const start = time(options.dataInicial)
   if (!Number.isFinite(start)) throw new Error('Informe uma data inicial válida para distribuir os horários.')
   const startClock = localTime(start).slice(11, 16)
@@ -93,7 +92,7 @@ function settings(options) {
     if (rounded < open) return open
     return rounded + durationMinutes * MINUTE <= close ? rounded : time(`${nextSchoolDay(day)}T${startClock}`)
   }
-  return { start, durationMinutes, cadence: Math.max(durationMinutes, spacing) * MINUTE, rest: rest * MINUTE, deadline: hours * 3600000, fitDay }
+  return { start, durationMinutes, cadence: Math.max(durationMinutes, spacing) * MINUTE, rest: rest * MINUTE, deadline: PREDICTION_CUTOFF_MINUTES * MINUTE, fitDay }
 }
 
 function firstSlot(game, earliest, busy, resources, config) {

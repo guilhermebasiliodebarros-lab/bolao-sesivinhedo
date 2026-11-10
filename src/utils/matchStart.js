@@ -21,7 +21,7 @@ export function matchStartChecklist(game, { games = [], attendance = null, disci
   const participants = Boolean(game.timeA && game.timeB && key(game.timeA) !== key(game.timeB) && !game.seedLabelA && !game.seedLabelB)
   const rosterChecked = !attendance || ['A', 'B'].every((side) => !attendance[side]?.players?.length || (attendance[side].players.every((player) => ['present', 'absent'].includes(player.status)) && attendance[side].players.some((player) => player.status === 'present')))
   return [
-    { id: 'state', label: 'Partida disponível para iniciar', done: getMatchState(game) === MATCH_STATE.SCHEDULED },
+    { id: 'state', label: 'Partida disponível para iniciar', done: !game.deletionPending && getMatchState(game) === MATCH_STATE.SCHEDULED },
     { id: 'teams', label: 'Duas equipes definidas', done: participants },
     { id: 'presence', label: 'Duas equipes presentes', done: hasConfirmedTeams(game) },
     { id: 'players', label: 'Jogadores conferidos', done: rosterChecked },

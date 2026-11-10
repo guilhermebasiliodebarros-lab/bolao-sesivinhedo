@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import usePredictionClock from '../hooks/usePredictionClock.js'
+import usePredictionDraft from '../hooks/usePredictionDraft.js'
 import { useAuth } from '../context/useAuth.js'
 import {
   canEditPrediction,
@@ -10,20 +12,20 @@ import {
 } from '../services/bolaoService.js'
 import { formatDateTime, formatPoints, formatTimeRemaining, minutesUntil } from '../utils/format.js'
 import { getGameStageLabel, getSportIcon, getSportVisualClass } from '../utils/game.js'
-import { POINTS, calculateGuessScore, getScoreTypeLabel, hasFinalScore } from '../utils/scoring.js'
-import { getMatchCondition, getMatchScore, getMatchState, isPredictionVoided, MATCH_STATE } from '../utils/match.js'
+import { POINTS, calculateGuessScore, getScoreTypeLabel } from '../utils/scoring.js'
+import { getMatchCondition, getMatchState, isPredictionVoided, MATCH_STATE } from '../utils/match.js'
+import MatchScore from './MatchScore.jsx'
 import MatchBadge from './MatchBadge.jsx'
 import MatchDetails from './MatchDetails.jsx'
 import MatchNotice from './MatchNotice.jsx'
-import { formatSportScore, getSportProfile, scoreLabel } from '../utils/sportRules.js'
+import { getSportProfile, scoreLabel } from '../utils/sportRules.js'
 
 export default function GameCard({ game, existingPrediction, existingGuess, compact = false, onGuessSaved, onNavigate }) {
   const { user, profile, isParticipant, isMaster } = useAuth()
-  const [draft, setDraft] = useState(null)
   const [message, setMessage] = useState('')
   const [saving, setSaving] = useState(false)
   const [savedFeedback, setSavedFeedback] = useState(false)
-  const [now, setNow] = useState(() => new Date())
+  const now = usePredictionClock([game])
 
   const prediction = existingPrediction || existingGuess
   const deadline = getPredictionDeadline(game)
@@ -32,6 +34,9 @@ export default function GameCard({ game, existingPrediction, existingGuess, comp
   const minutesToDeadline = minutesUntil(deadline, now)
   const isDeadlineUrgent = deadlineOpen && minutesToDeadline !== null && minutesToDeadline <= 30
   const canEdit = Boolean(user && isParticipant && canEditPrediction(game, now))
+  const savedDraft = usePredictionDraft({ userId: isParticipant ? user?.uid : '', game, prediction, editable: canEdit })
+  const draft = savedDraft.value
+  const visibleStatus = game.status === GAME_STATUS.OPEN && !deadlineOpen ? GAME_STATUS.CLOSED : game.status
   const result = prediction ? calculateGuessScore(game, prediction) : null
   const palpiteA = draft?.palpiteA ?? prediction?.palpiteA ?? ''
   const palpiteB = draft?.palpiteB ?? prediction?.palpiteB ?? ''
@@ -57,19 +62,7 @@ export default function GameCard({ game, existingPrediction, existingGuess, comp
         ? 'Palpites bloqueados para este jogo.'
         : 'Entre para registrar seu palpite.'
 
-  useEffect(() => {
-    const interval = window.setInterval(() => setNow(new Date()), 30000)
-
-    return () => window.clearInterval(interval)
-  }, [])
-
-  const updateDraft = (field, value) => {
-    setDraft((current) => ({
-      palpiteA: current?.palpiteA ?? prediction?.palpiteA ?? '',
-      palpiteB: current?.palpiteB ?? prediction?.palpiteB ?? '',
-      [field]: value,
-    }))
-  }
+  const updateDraft = savedDraft.update
 
   const handleSubmit = async (event) => {
     event.preventDefault()
@@ -88,6 +81,7 @@ export default function GameCard({ game, existingPrediction, existingGuess, comp
     try {
       setSaving(true)
       await savePrediction({ user, profile, game, palpiteA, palpiteB })
+      savedDraft.clear()
       setMessage('Palpite salvo com sucesso.')
       setSavedFeedback(true)
       window.setTimeout(() => setSavedFeedback(false), 1200)
@@ -116,7 +110,7 @@ export default function GameCard({ game, existingPrediction, existingGuess, comp
         </span>
         <span>{getGameStageLabel(game)}</span>
         {getMatchState(game) === MATCH_STATE.LIVE || getMatchCondition(game) !== 'normal' ? <MatchBadge game={game} /> : null}
-        <span className={`status-badge status-${game.status}`}>{STATUS_LABELS[game.status]}</span>
+        <span className={`status-badge status-${visibleStatus}`}>{STATUS_LABELS[visibleStatus]}</span>
         <span>Jogo: {formatDateTime(game.dataHora)}</span>
         <span>Palpites até: {formatDateTime(deadline)}</span>
       </div>
@@ -137,12 +131,12 @@ export default function GameCard({ game, existingPrediction, existingGuess, comp
       <div className="scoreboard">
         <strong>{game.timeA}</strong>
         <span className="score-display">
-          {getMatchCondition(game) === 'walkover' && !hasFinalScore(game) ? 'W.O.' : game.status === GAME_STATUS.FINISHED && hasFinalScore(game) ? `${formatSportScore(game.placarA)} x ${formatSportScore(game.placarB)}` : getMatchState(game) === MATCH_STATE.LIVE ? getMatchScore(game).map(formatSportScore).join(' x ') : 'x'}
+          <MatchScore game={game} />
         </span>
         <strong>{game.timeB}</strong>
       </div>
 
-      <p className="game-score-unit">{scoreLabel(game)}</p>
+      <p className="game-score-unit">{getSportProfile(game).scoringMode === 'sets' ? 'Palpites e resultado final em sets' : scoreLabel(game)}</p>
       <MatchDetails game={game} />
       <MatchNotice game={game} />
 
@@ -168,6 +162,8 @@ export default function GameCard({ game, existingPrediction, existingGuess, comp
         </div>
       ) : null}
 
+      {canEdit && savedDraft.hasDraft ? <div className="prediction-draft-note" role="status"><strong>Rascunho · ainda não enviado</strong><span>Recuperado neste navegador. Confira o placar e clique em {prediction ? 'Atualizar' : 'Enviar'} para confirmar.</span><button className="link-button" type="button" disabled={saving} onClick={() => savedDraft.clear()}>Descartar rascunho</button></div> : null}
+      {canEdit && savedDraft.error ? <p className="alert alert-error" role="status">{savedDraft.error}</p> : null}
       {canEdit ? (
         <form className="guess-form" onSubmit={handleSubmit}>
           <label>
@@ -178,6 +174,7 @@ export default function GameCard({ game, existingPrediction, existingGuess, comp
               step={getSportProfile(game).scoringMode === 'chess' ? '0.5' : '1'}
               max={getSportProfile(game).scoringMode === 'chess' ? 1 : undefined}
               value={palpiteA}
+              disabled={saving}
               onChange={(event) => updateDraft('palpiteA', event.target.value)}
               required
             />
@@ -191,6 +188,7 @@ export default function GameCard({ game, existingPrediction, existingGuess, comp
               step={getSportProfile(game).scoringMode === 'chess' ? '0.5' : '1'}
               max={getSportProfile(game).scoringMode === 'chess' ? 1 : undefined}
               value={palpiteB}
+              disabled={saving}
               onChange={(event) => updateDraft('palpiteB', event.target.value)}
               required
             />

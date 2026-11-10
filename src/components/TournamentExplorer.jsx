@@ -9,6 +9,7 @@ import { shiftLabel } from '../utils/schoolShifts.js'
 import { tieBreakSummary } from '../utils/tieBreak.js'
 import { StandingsTable } from './InterclassTable.jsx'
 import LoadingState from './LoadingState.jsx'
+import { scorePresentation } from '../utils/scorePresentation.js'
 import './TournamentExplorer.css'
 
 const number = (value) => new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(value)
@@ -34,11 +35,12 @@ function BracketBoard({ games }) {
         {graph.nodes.map((node) => {
           const game = node.game; const outcome = getMatchOutcome(game); const state = getMatchState(game)
           const showScore = [MATCH_STATE.LIVE, MATCH_STATE.FINISHED].includes(state)
-          const score = getMatchScore(game)
+          const presentation = scorePresentation(game)
+          const score = presentation.values || getMatchScore(game)
           return <button type="button" key={node.id} className={`bracket-match ${selected === node.id ? 'is-selected' : ''} ${path.size && !path.has(node.id) ? 'is-muted' : ''}`} style={{ left: node.x, top: node.y }} onClick={() => setSelected((current) => current === node.id ? '' : node.id)} aria-pressed={selected === node.id} aria-label={`${game.rodada || game.fase}: ${bracketParticipant(node, 'A', graph)} contra ${bracketParticipant(node, 'B', graph)}. ${getMatchLabel(game)}`}>
             <span className="bracket-match-heading"><strong>{game.rodada || game.fase}</strong><small className={state === MATCH_STATE.LIVE ? 'is-live' : ''}>{getMatchLabel(game)}</small></span>
             {['A', 'B'].map((side, index) => <span key={side} className={`bracket-team ${outcome === side ? 'is-winner' : ''}`}><span title={bracketParticipant(node, side, graph)}>{bracketParticipant(node, side, graph)}</span><strong>{showScore ? formatSportScore(score[index]) : '–'}</strong></span>)}
-            <span className="bracket-match-footer">{tieBreakSummary(game) || (outcome === 'draw' ? 'Empate · vencedor ainda não definido' : game.dataHora ? formatDateTime(game.dataHora) : 'Horário a definir')}</span>
+            <span className="bracket-match-footer">{presentation.caption || tieBreakSummary(game) || (outcome === 'draw' ? 'Empate · vencedor ainda não definido' : game.dataHora ? formatDateTime(game.dataHora) : 'Horário a definir')}</span>
           </button>
         })}
       </div>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import usePredictionClock from '../hooks/usePredictionClock.js'
 import heroImage from '../assets/bolao-hero.png'
 import { COPY } from '../content/copy.js'
 import { useAuth } from '../context/useAuth.js'
@@ -10,6 +11,7 @@ import PendingGuessBanner from './PendingGuessBanner.jsx'
 export default function Home({ onNavigate }) {
   const { user, isParticipant } = useAuth()
   const [games, setGames] = useState([])
+  const now = usePredictionClock(games)
   const [ranking, setRanking] = useState([])
   const [predictions, setPredictions] = useState([])
   const [error, setError] = useState('')
@@ -34,7 +36,7 @@ export default function Home({ onNavigate }) {
     return subscribeUserPredictions(user.uid, setPredictions, setError)
   }, [isParticipant, user])
 
-  const openGames = useMemo(() => games.filter((game) => canEditPrediction(game)), [games])
+  const openGames = useMemo(() => games.filter((game) => canEditPrediction(game, now)), [games, now])
   const activeRanking = user ? ranking : []
   const predictionsByGame = useMemo(() => new Map((user && isParticipant ? predictions : []).map((prediction) => [prediction.gameId, prediction])), [user, isParticipant, predictions])
   const pendingGuessCount = isParticipant ? openGames.filter((game) => !predictionsByGame.has(game.id)).length : Number.NaN

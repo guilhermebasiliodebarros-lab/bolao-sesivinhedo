@@ -2,9 +2,11 @@
 import { createPortal } from 'react-dom'
 import { COPY } from '../content/copy.js'
 import { useAuth } from '../context/useAuth.js'
+import { PARTICIPANT_VIEWS } from '../utils/navigation.js'
 
 export default function Header({ activeView, onNavigate, theme, onToggleTheme }) {
-  const { user, profile, isMaster, isParticipant, logout } = useAuth()
+  const { user, profile, isMaster, logout } = useAuth()
+  const participantAccount = Boolean(user && !isMaster)
   const [menuOpen, setMenuOpen] = useState(false)
   const [logoLoaded, setLogoLoaded] = useState(true)
   const drawerRef = useRef(null)
@@ -43,15 +45,10 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
     { id: 'estatisticas', label: 'Estatísticas' },
     { id: 'tv', label: 'Modo TV' },
   ]
-  const participantItems = isParticipant ? [
-    { id: 'dashboard', label: COPY.nav.dashboard },
-    { id: 'jogos', label: COPY.nav.jogos },
-    { id: 'palpites', label: COPY.nav.palpites },
-    { id: 'classificacao', label: COPY.nav.classificacao },
-  ] : []
+  const participantItems = participantAccount ? PARTICIPANT_VIEWS.map((id) => ({ id, label: COPY.nav[id] })) : []
   const adminItems = isMaster ? [{ id: 'admin', label: 'Painel master' }] : []
   const navItems = [
-    ...publicItems,
+    ...(participantAccount ? [] : publicItems),
     ...(!user ? [{ id: 'classificacao', label: COPY.nav.classificacao }] : []),
     ...participantItems,
     ...adminItems,
@@ -81,7 +78,7 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
     <>
       <header ref={headerRef} className="site-header commerce-header">
         <div className="header-topbar">
-          <button className="brand" type="button" onClick={() => handleNavigate('home')}>
+          <button className="brand" type="button" onClick={() => handleNavigate(participantAccount ? 'dashboard' : 'home')}>
             {logoLoaded ? (
               <img className="brand-logo" src="/logo-interclasse.png" alt="Interclasse SESI Vinhedo" onError={() => setLogoLoaded(false)} />
             ) : (
@@ -149,11 +146,11 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
           </div>
           <div className="drawer-scroll">
             <nav aria-label="Menu lateral">
-              <section className="drawer-section">
+              {!participantAccount ? <section className="drawer-section">
                 <h2>Explore o bolão</h2>
                 {renderLinks(publicItems)}
                 {!user ? renderLinks([{ id: 'classificacao', label: COPY.nav.classificacao }]) : null}
-              </section>
+              </section> : null}
               {participantItems.length ? (
                 <section className="drawer-section"><h2>Sua participação</h2>{renderLinks(participantItems)}</section>
               ) : null}

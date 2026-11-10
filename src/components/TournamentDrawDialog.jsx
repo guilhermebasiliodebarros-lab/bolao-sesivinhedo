@@ -14,10 +14,10 @@ function useReducedMotion() {
   return reduced
 }
 
-const EJECTION_DURATION = 1800
-const OPENING_DURATION = 6500
-const READING_DURATION = 4500
-const FLIGHT_DURATION = 5500
+const EJECTION_DURATION = 900
+const OPENING_DURATION = 3250
+const READING_DURATION = 2250
+const FLIGHT_DURATION = 2750
 
 function readMotionPreference() {
   try {
@@ -75,7 +75,7 @@ function OpeningMatches({ games, active, reduced }) {
     <div className="draw-opening-heading"><div><span className="draw-eyebrow">O próximo capítulo</span><h3>Primeiros confrontos</h3></div><span>{current + 1} de {available.length}</span></div>
     <div className="draw-opening-card" key={`${game.id}-${current}`} aria-live={automatic ? 'off' : 'polite'}><span>{game.groupName || game.fase}</span><div><strong>{game.timeA}</strong><span aria-hidden="true">×</span><strong>{game.timeB}</strong></div></div>
     {available.length > 1 ? <div className="draw-match-controls"><button type="button" className="draw-button" onClick={() => { setPaused(true); setIndex((value) => (value + available.length - 1) % available.length) }}>Confronto anterior</button>{!reduced ? <button type="button" className="draw-button" onClick={() => setPaused((value) => !value)}>{paused ? 'Continuar confrontos' : 'Pausar confrontos'}</button> : null}<button type="button" className="draw-button" onClick={() => { setPaused(true); setIndex((value) => value + 1) }}>Próximo confronto</button></div> : null}
-    <p className="draw-note">Confrontos da programação prevista. Confira os horários ao usar o resultado na prévia.</p>
+    <p className="draw-note">Confrontos definidos pelo sorteio. Os dias e horários serão preenchidos depois.</p>
   </section>
 }
 
@@ -109,13 +109,13 @@ export default function TournamentDrawDialog({ draw, teams, config, openingGames
   useEffect(() => {
     if (stale) return
     const timing = {
-      mixing: ['show', reduced ? 80 : 1800],
+      mixing: ['show', reduced ? 80 : 900],
       ejecting: ['ready', reduced ? 100 : EJECTION_DURATION],
       opening: ['reveal', reduced ? 100 : OPENING_DURATION],
       revealing: ['fly', READING_DURATION],
-      flying: ['land', reduced ? 20 : FLIGHT_DURATION + 80],
-      landing: ['settle', 1200],
-      settled: ['advance', 1500],
+      flying: ['land', reduced ? 20 : FLIGHT_DURATION + 40],
+      landing: ['settle', 600],
+      settled: ['advance', 750],
     }[state.phase]
     if (!timing || (state.phase === 'settled' && !advancing)) return
     const timer = window.setTimeout(() => dispatch({ type: timing[0], cycle: state.cycle }), timing[1])
@@ -177,7 +177,7 @@ export default function TournamentDrawDialog({ draw, teams, config, openingGames
         const value = event.target.value
         setMotionPreference(value)
         try { localStorage.setItem('bolao-draw-motion', value) } catch { /* Keep the selected mode for this presentation. */ }
-      }}><option value="full">Completa e bem lenta</option><option value="system">Seguir preferência do dispositivo</option><option value="reduced">Sem movimentos</option></select></label>{reduced ? <p>Modo sem movimentos ativo. Para ver a bolinha abrindo e o voo da turma, selecione “Completa e bem lenta”.</p> : <p>Abertura de 6,5 s · Equipe em destaque por 4,5 s · Voo de 5,5 s</p>}</div>
+      }}><option value="full">Completa e suave</option><option value="system">Seguir preferência do dispositivo</option><option value="reduced">Sem movimentos</option></select></label>{reduced ? <p>Modo sem movimentos ativo. Para ver a bolinha abrindo e o voo da turma, selecione “Completa e suave”.</p> : <p>Abertura de 3,25 s · Equipe em destaque por 2,25 s · Voo de 2,75 s</p>}</div>
       {stale ? <p className="draw-alert" role="alert">As turmas ou a configuração mudaram. Feche e inicie um novo sorteio antes de usar o resultado.</p> : null}
       {fullscreenError ? <p className="draw-note" role="status">{fullscreenError}</p> : null}
       {finished ? <section className="draw-finale" ref={finaleRef}><div className="draw-finale-title" role="status"><span aria-hidden="true">★</span><div><span className="draw-eyebrow">O caminho está traçado</span><h3>{draw.config.formato === 'grupos-mata-mata' ? 'Grupos definidos. Prepare a torcida!' : 'Turmas definidas. Que venham os jogos!'}</h3><p>{state.total} turmas reveladas · {sections.length} {draw.config.formato === 'sorteio' ? 'confronto(s)' : 'grupo(s)'}</p></div></div>{controls}</section> : null}
