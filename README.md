@@ -235,6 +235,16 @@ Na lista de partidas, use **Definir data e horário** ou **Mais opções → Edi
 Local, área, duração, presença e coletes continuam em **Preparar partida**. Ao preencher a agenda, considere as outras modalidades, a duração e o descanso das turmas. O sorteio não altera jogos existentes; os grupos e vínculos de semifinal, final e terceiro lugar são preservados ao preencher as datas.
 
 
+## Palpite rápido no celular
+
+No celular, o acesso inicial e o login do participante abrem automaticamente o **Palpite rápido**, dentro de **Jogos**. A tela tem cabeçalho compacto, um jogo por vez e as abas **Faltam** e **Enviados**. Mostra somente partidas que ainda podem receber palpite na primeira aba, priorizando o prazo mais próximo. Os filtros de modalidade e turno são opcionais. O participante pode escolher outro jogo, avançar ou voltar sem perder o rascunho.
+
+Futebol, handebol e basquete oferecem campos com teclado numérico e botões grandes de **+** e **−**. Os campos começam vazios: nenhum placar é enviado por padrão. Vôlei oferece os placares finais válidos em sets para melhor de três ou cinco; xadrez oferece vitória de cada equipe e empate. Após **Enviar palpite**, a confirmação aparece e o próximo jogo é apresentado. **Enviados** permite conferir os palpites e editar os que ainda estiverem dentro do prazo. Partidas encerradas permanecem apenas para consulta.
+
+O modo usa o mesmo login, os mesmos rascunhos e a mesma transação de envio do site completo. A gravação confere a partida atual no servidor e bloqueia o envio cinco minutos antes do início. Sem conexão ou enquanto os dados ainda estiverem sincronizando, é possível preencher um rascunho, mas o botão de envio fica bloqueado. Não há envio automático quando a internet volta. Toques repetidos não criam envios simultâneos.
+
+**Site completo** volta à lista normal de Jogos e guarda a preferência por conta neste navegador. Para reabrir, use **Jogos → Palpite rápido**; essa opção também funciona no computador. Para compartilhar o acesso direto, acrescente `?modo=palpite#jogos` ao endereço do site (por exemplo, `/?modo=palpite#jogos`). O link pede login quando necessário e abre o modo rápido depois da autenticação. O acesso master mantém o painel administrativo. Os quatro menus do participante continuam disponíveis no site completo.
+
 ## Rascunhos e lembretes de palpites
 
 Ao preencher um placar em **Painel** ou **Jogos**, o navegador guarda um rascunho por conta e partida. Recarregar a página ou trocar de tela recupera os campos. **Rascunho · ainda não enviado** não é um palpite registrado: é necessário clicar em **Enviar** ou **Atualizar** antes do fechamento. O envio confirmado limpa o rascunho; erros de envio preservam os campos. Fechar a partida ou atingir o prazo remove o rascunho editável. Se as equipes ou o palpite salvo mudarem em outro dispositivo, um rascunho antigo não substitui os dados atuais. Limpar os dados do navegador remove os rascunhos locais; falhas de armazenamento são informadas na tela.

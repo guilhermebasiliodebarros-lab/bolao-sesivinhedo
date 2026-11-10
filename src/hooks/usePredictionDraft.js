@@ -22,8 +22,9 @@ export default function usePredictionDraft({ userId, game, prediction, editable 
     if (!editable && key && raw && raw !== '!unavailable') { clearPredictionDraft(key, raw); announce() }
   }, [editable, key, raw])
 
-  const update = (field, input) => {
-    const next = { palpiteA: String(value?.palpiteA ?? prediction?.palpiteA ?? ''), palpiteB: String(value?.palpiteB ?? prediction?.palpiteB ?? ''), [field]: input }
+  const updateValues = (fields) => {
+    const next = { palpiteA: String(value?.palpiteA ?? prediction?.palpiteA ?? ''), palpiteB: String(value?.palpiteB ?? prediction?.palpiteB ?? '') }
+    for (const field of ['palpiteA', 'palpiteB']) if (Object.hasOwn(fields, field)) next[field] = String(fields[field])
     const error = writePredictionDraft(key, next, scope)
     setSession({ scope, value: error ? next : null, error })
     announce()
@@ -33,5 +34,5 @@ export default function usePredictionDraft({ userId, game, prediction, editable 
     setSession({ scope, value: null, error })
     announce()
   }
-  return { value, update, clear, raw, hasDraft: Boolean(value), error: fallback?.error || recovered.error }
+  return { value, update: (field, input) => updateValues({ [field]: input }), updateValues, clear, raw, hasDraft: Boolean(value), error: fallback?.error || recovered.error }
 }

@@ -24,11 +24,12 @@ const filters = [
   { id: GAME_STATUS.FINISHED, label: 'Finalizados' },
 ]
 
-export default function Jogos({ onNavigate }) {
+export default function Jogos({ onNavigate, onQuickMode }) {
   const { user, isParticipant, isMaster } = useAuth()
   const [games, setGames] = useState([])
   const now = usePredictionClock(games)
   const [predictions, setPredictions] = useState([])
+  const [predictionUser, setPredictionUser] = useState(null)
   const [activeFilter, setActiveFilter] = useState(ALL_ITEMS_FILTER)
   const [sportFilter, setSportFilter] = useState(ALL_ITEMS_FILTER)
   const [turno, setTurno] = useState('')
@@ -54,12 +55,12 @@ export default function Jogos({ onNavigate }) {
       return () => {}
     }
 
-    return subscribeUserPredictions(user.uid, setPredictions, setError)
+    return subscribeUserPredictions(user.uid, (items) => { setPredictions(items); setPredictionUser(user.uid) }, setError)
   }, [user])
 
   const predictionsByGame = useMemo(() => {
-    return new Map((user ? predictions : []).map((prediction) => [prediction.gameId, prediction]))
-  }, [predictions, user])
+    return new Map((user && predictionUser === user.uid ? predictions : []).map((prediction) => [prediction.gameId, prediction]))
+  }, [predictions, predictionUser, user])
   const openGamesAll = useMemo(() => games.filter((game) => canEditPrediction(game, now)), [games, now])
   const pendingOpenGames = useMemo(
     () => openGamesAll.filter((game) => !predictionsByGame.has(game.id)),
@@ -114,7 +115,7 @@ export default function Jogos({ onNavigate }) {
     return [...groups.values()]
   }, [visibleGames])
 
-  if (loading) {
+  if (loading || (isParticipant && predictionUser !== user?.uid)) {
     return <LoadingState label="Buscando jogos..." error={error} />
   }
 
@@ -132,6 +133,7 @@ export default function Jogos({ onNavigate }) {
           </button>
         ) : null}
         {isMaster ? <span className="master-route-note">Logado como usuário master</span> : null}
+        {isParticipant && onQuickMode ? <button className="btn btn-primary" type="button" onClick={onQuickMode}>Palpite rápido</button> : null}
       </div>
 
       {user && !isParticipant && !isMaster ? (

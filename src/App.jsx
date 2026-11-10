@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import './App.css'
+import './components/QuickPredictions.css'
 import Footer from './components/Footer.jsx'
 import Header from './components/Header.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
@@ -11,6 +12,7 @@ import PredictionReminders from './components/PredictionReminders.jsx'
 import useAppUpdates from './hooks/useAppUpdates.js'
 import ConnectionStatus from './components/ConnectionStatus.jsx'
 import LiveScoresStrip from './components/LiveScoresStrip.jsx'
+import useQuickPredictionMode from './hooks/useQuickPredictionMode.js'
 
 const AdminPanel = lazy(() => import('./components/AdminPanel.jsx'))
 const Cadastro = lazy(() => import('./components/Cadastro.jsx'))
@@ -25,6 +27,7 @@ const TVMode = lazy(() => import('./components/TVMode.jsx'))
 const Regulations = lazy(() => import('./components/Regulations.jsx'))
 const AthleteStatistics = lazy(() => import('./components/AthleteStatistics.jsx'))
 const TournamentExplorer = lazy(() => import('./components/TournamentExplorer.jsx'))
+const QuickPredictions = lazy(() => import('./components/QuickPredictions.jsx'))
 
 const viewFromHash = () => {
   const requested = window.location.hash.slice(1)
@@ -56,8 +59,10 @@ function AppShell() {
 
     return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   })
-  const { user, isMaster, isParticipant, loading, profileLoading } = useAuth()
-  const activeView = resolveAppView(view, { signedIn: Boolean(user), isMaster })
+  const { user, profile, isMaster, isParticipant, loading, profileLoading, logout } = useAuth()
+  const { quick, setQuick } = useQuickPredictionMode(user?.uid)
+  const activeView = resolveAppView(view, { signedIn: Boolean(user), isMaster, participantHome: quick ? 'jogos' : 'dashboard' })
+  const quickShell = quick && ((isParticipant && activeView === 'jogos') || (!user && ['home', 'login', 'cadastro'].includes(activeView)))
   const authLoading = loading || profileLoading
   const appUpdate = useAppUpdates({ enabled: !authLoading })
   const updateNotice = appUpdate ? <div className="app-update-notice" role="status"><span>Nova versão pronta. A atualização será automática quando não houver edição em andamento. Salve seus dados antes de atualizar agora.</span><button type="button" className="btn btn-secondary" onClick={() => window.location.reload()}>Atualizar site</button></div> : null
@@ -87,13 +92,17 @@ function AppShell() {
     setTheme((current) => (current === 'dark' ? 'light' : 'dark'))
   }
 
+  const afterLogin = (nextView) => navigate(nextView === 'admin' ? 'admin' : quick ? 'jogos' : nextView || 'dashboard')
+  const openQuickMode = () => { setQuick(true); navigate('jogos') }
+  const leaveQuickMode = () => { setQuick(false); navigate(user ? 'jogos' : 'home') }
+
   const renderView = () => {
     if (activeView === 'login') {
-      return <Login onNavigate={navigate} onSuccess={(nextView) => navigate(nextView || 'dashboard')} />
+      return <Login onNavigate={navigate} onSuccess={afterLogin} />
     }
 
     if (activeView === 'cadastro') {
-      return <Cadastro onNavigate={navigate} onSuccess={() => navigate('dashboard')} />
+      return <Cadastro onNavigate={navigate} onSuccess={() => afterLogin('dashboard')} />
     }
 
     if (activeView === 'dashboard') {
@@ -101,7 +110,7 @@ function AppShell() {
     }
 
     if (activeView === 'jogos') {
-      return <Jogos onNavigate={navigate} />
+      return <Jogos onNavigate={navigate} onQuickMode={openQuickMode} />
     }
 
     if (activeView === 'calendario') {
@@ -127,6 +136,13 @@ function AppShell() {
   }
 
   if (authLoading) return <div className="route-loading" role="status">Carregando sua conta…</div>
+
+  if (quickShell) return <div className="app quick-app">
+    <header className="quick-app-header"><img src="/logo-interclasse.png" alt="Interclasse SESI Vinhedo" /><div><strong>Palpite rápido</strong><span>{user ? `Olá, ${profile?.nome || user.displayName || 'participante'}` : 'Entre na sua conta para palpitar'}</span></div><button type="button" className="btn btn-outline" onClick={leaveQuickMode}>Site completo</button>{user ? <button type="button" className="quick-logout" onClick={async () => { await logout(); navigate('login') }}>Sair</button> : null}</header>
+    <ConnectionStatus /><ConfigNotice />
+    <main>{updateNotice}{isParticipant ? <PredictionReminders key={user.uid} userId={user.uid} showSettings={false} onNavigate={navigate} /> : null}<Suspense fallback={<div className="route-loading">Abrindo palpites…</div>}>{user ? <QuickPredictions key={user.uid} /> : activeView === 'cadastro' ? <Cadastro onNavigate={navigate} onSuccess={() => afterLogin('dashboard')} /> : <Login onNavigate={navigate} onSuccess={afterLogin} />}</Suspense></main>
+    <footer className="quick-app-footer">Bolão SESI Vinhedo · confira o placar antes de enviar.</footer>
+  </div>
 
   if (activeView === 'tv') {
     return <>{updateNotice}<Suspense fallback={<div className="route-loading">Abrindo modo TV…</div>}><TVMode onNavigate={navigate} /></Suspense></>
