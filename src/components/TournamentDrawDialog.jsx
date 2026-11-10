@@ -17,7 +17,7 @@ function useReducedMotion() {
 const EJECTION_DURATION = 900
 const OPENING_DURATION = 3250
 const READING_DURATION = 2250
-const FLIGHT_DURATION = 2750
+const FLIGHT_DURATION = 1200
 
 function readMotionPreference() {
   try {
@@ -177,7 +177,7 @@ export default function TournamentDrawDialog({ draw, teams, config, openingGames
         const value = event.target.value
         setMotionPreference(value)
         try { localStorage.setItem('bolao-draw-motion', value) } catch { /* Keep the selected mode for this presentation. */ }
-      }}><option value="full">Completa e suave</option><option value="system">Seguir preferência do dispositivo</option><option value="reduced">Sem movimentos</option></select></label>{reduced ? <p>Modo sem movimentos ativo. Para ver a bolinha abrindo e o voo da turma, selecione “Completa e suave”.</p> : <p>Abertura de 3,25 s · Equipe em destaque por 2,25 s · Voo de 2,75 s</p>}</div>
+      }}><option value="full">Completa e suave</option><option value="system">Seguir preferência do dispositivo</option><option value="reduced">Sem movimentos</option></select></label>{reduced ? <p>Modo sem movimentos ativo. Para ver a bolinha abrindo e o voo da turma, selecione “Completa e suave”.</p> : <p>Abertura de 3,25 s · Equipe em destaque por 2,25 s · Voo de {(FLIGHT_DURATION / 1000).toLocaleString('pt-BR')} s</p>}</div>
       {stale ? <p className="draw-alert" role="alert">As turmas ou a configuração mudaram. Feche e inicie um novo sorteio antes de usar o resultado.</p> : null}
       {fullscreenError ? <p className="draw-note" role="status">{fullscreenError}</p> : null}
       {finished ? <section className="draw-finale" ref={finaleRef}><div className="draw-finale-title" role="status"><span aria-hidden="true">★</span><div><span className="draw-eyebrow">O caminho está traçado</span><h3>{draw.config.formato === 'grupos-mata-mata' ? 'Grupos definidos. Prepare a torcida!' : 'Turmas definidas. Que venham os jogos!'}</h3><p>{state.total} turmas reveladas · {sections.length} {draw.config.formato === 'sorteio' ? 'confronto(s)' : 'grupo(s)'}</p></div></div>{controls}</section> : null}
