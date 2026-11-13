@@ -97,7 +97,7 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
-      allow read: if signedIn();
+      allow read: if signedIn() && (request.auth.uid == uid || isMaster() || isParticipant());
 
       allow create: if signedIn()
         && request.auth.uid == uid
@@ -109,7 +109,7 @@ service cloud.firestore {
         && request.resource.data.acertosResultado == 0;
 
       allow update: if isMaster()
-        || (signedIn() && request.auth.uid == uid && userCannotChangeScoreOrRole());
+        || (signedIn() && currentUser().role == "user" && request.auth.uid == uid && userCannotChangeScoreOrRole());
 
       allow delete: if isMaster();
     }

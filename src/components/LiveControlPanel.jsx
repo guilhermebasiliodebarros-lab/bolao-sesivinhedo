@@ -13,6 +13,7 @@ import TieBreakInputs from './TieBreakInputs.jsx'
 import { hasConfirmedTeams } from '../utils/attendance.js'
 import PreparedMatches from './PreparedMatches.jsx'
 import { liveStartConflicts } from '../utils/matchStart.js'
+import ScoreboardSelector from './ScoreboardSelector.jsx'
 
 export default function LiveControlPanel({ games, conflictGames = games, teams, sports, onFinish, onNavigate, saving, onManage, onStart }) {
   const [sport, setSport] = useState('')
@@ -42,8 +43,9 @@ export default function LiveControlPanel({ games, conflictGames = games, teams, 
     <section className="live-control-panel" aria-label="Controle das partidas ao vivo">
       <div className="section-heading">
         <div><span className="eyebrow">Central de transmissão</span><h2>Ao vivo e modo TV</h2><p>Inicie partidas, atualize os placares e publique o resultado ao encerrar.</p></div>
-        <button className="btn btn-outline" type="button" onClick={() => onNavigate('tv')}>Abrir modo TV</button>
+        <div className="form-actions"><a className="btn btn-primary" href="/#placar" target="_blank" rel="noreferrer">Abrir placar para TV ↗</a><button className="btn btn-outline" type="button" onClick={() => onNavigate('tv')}>Abrir modo TV</button></div>
       </div>
+      <ScoreboardSelector games={conflictGames} disabled={disabled} />
       <PreparedMatches games={games} teams={teams} disabled={disabled} sport={sport} />
       <div className="live-start-panel">
         <label>Filtrar esporte<select value={sport} onChange={(event) => { setSport(event.target.value); setSelectedGame('') }}><option value="">Todos os esportes</option>{sports.map((item) => <option value={item.id} key={item.id}>{item.nome}</option>)}</select></label>
@@ -67,7 +69,7 @@ export default function LiveControlPanel({ games, conflictGames = games, teams, 
             <details className="score-manual-editor"><summary>Correção manual do placar e parciais</summary><p>Alterar o placar manualmente reinicia os lances e autores exibidos na TV.</p><SportScoreInputs game={game} value={scores(game)} disabled={disabled} onChange={(field, value) => update(game, field, value)} /><TieBreakInputs game={game} value={scores(game)} disabled={disabled} onChange={(value) => update(game, 'tieBreak', value)} /><button className="btn btn-outline" type="submit" disabled={disabled || scores(game).expectedScoreRevision !== scoreRevision(game)}>Salvar correção manual</button></details>
             <div className="form-actions"><button className="btn btn-primary" type="button" disabled={disabled || scores(game).expectedScoreRevision !== scoreRevision(game)} onClick={(event) => { if (event.currentTarget.form.reportValidity()) onFinish(game, scores(game)) }}>Encerrar partida</button></div>
           </form>
-          <small>Encerrar confirma o placar final e recalcula a classificação do bolão.</small>
+          <small>Encerrar confirma o placar final e recalcula a classificação do Interclasse.</small>
           <div className="form-actions"><button type="button" className="btn btn-outline btn-small" disabled={disabled} onClick={() => onManage(game, 'condition')}>Situação da partida</button><button type="button" className="btn btn-outline btn-small" disabled={disabled} onClick={() => onManage(game, 'attendance')}>Presença</button><button type="button" className="btn btn-outline btn-small" disabled={disabled} onClick={() => onManage(game, 'report')}>Súmula / PDF</button></div>
         </article>
       ))}</div> : <div className="live-control-empty"><strong>Nenhuma partida ao vivo neste filtro.</strong><p>Escolha uma partida acima e clique em Iniciar jogo.</p></div>}

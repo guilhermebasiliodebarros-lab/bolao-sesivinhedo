@@ -6,6 +6,7 @@ import { getMatchCondition, getMatchState, MATCH_STATE } from '../utils/match.js
 import { attendanceTeamKey } from '../utils/attendance.js'
 import { useAuth } from '../context/useAuth.js'
 import './QuickScoring.css'
+import MatchCardsControl from './MatchCardsControl.jsx'
 
 const requestId = () => globalThis.crypto?.randomUUID?.() || `live-${Date.now().toString(36)}-${Array.from(globalThis.crypto.getRandomValues(new Uint32Array(3)), (value) => value.toString(36)).join('-')}`
 const amountLabel = (value, goal = false) => `${value} ${goal ? value === 1 ? 'gol' : 'gols' : value === 1 ? 'ponto' : 'pontos'}`
@@ -32,7 +33,7 @@ export default function QuickScoring({ game, teams = [], disabled = false, expan
     if (chess) return
     let active = true
     readPlayers().then((result) => {
-      if (active) setPlayersFeed({ key: rosterKey, players: Object.fromEntries(['A', 'B'].map((side) => [side, result.attendance?.[side]?.players?.filter((player) => player.status === 'present') || []])), error: '' })
+      if (active) setPlayersFeed({ key: rosterKey, players: Object.fromEntries(['A', 'B'].map((side) => [side, result.attendance?.[side]?.players?.filter((player) => player.status === 'present') || []])), cardPlayers: { A: result.playersA, B: result.playersB }, error: '' })
     }).catch(() => { if (active) setPlayersFeed({ key: rosterKey, players: { A: [], B: [] }, error: 'Não foi possível carregar os alunos. Atualize a lista ou registre sem autor.' }) })
     return () => { active = false }
   }, [chess, rosterKey, reload])
@@ -46,6 +47,7 @@ export default function QuickScoring({ game, teams = [], disabled = false, expan
   const loading = !feed
   const isSets = profile.scoringMode === 'sets'
   const goal = profile.scoringMode === 'goals'
+  const interval = game.period?.phase === 'interval'
   const set = currentSetScore(game)
   const ended = isSets && Math.max(game.liveScoreA || 0, game.liveScoreB || 0) >= Math.ceil(profile.volleyballBestOf / 2)
   const available = online && getMatchState(game) === MATCH_STATE.LIVE && getMatchCondition(game) === 'normal' && !game.deletionPending
@@ -58,7 +60,7 @@ export default function QuickScoring({ game, teams = [], disabled = false, expan
     try { await operation(); setSetReview(null); setCorrection(null); setMessage(success) } catch (error) { setFailed(true); setMessage(error.message) } finally { lock.current = false; setBusy(false) }
   }
   const score = (side, playerId = '') => {
-    if (blocked) return
+    if (blocked || interval) return
     const author = players[side].find((player) => player.id === playerId)
     act(() => recordLiveEvent({ gameId: game.id, requestId: requestId(), side, playerId, value: isBasketball(game) ? points : 1, expectedScoreRevision: scoreRevision(game) }), `${goal ? 'Gol' : 'Ponto'} ${author ? `de ${author.nome} ` : ''}registrado para ${game[`time${side}`]}.`)
   }
@@ -69,6 +71,7 @@ export default function QuickScoring({ game, teams = [], disabled = false, expan
     <div className="quick-scoring-heading"><strong>{isSets ? ended ? 'Sets encerrados' : `${set.number}º set · pontos` : 'Gols e pontos ao vivo'}</strong><span>{isSets ? `${set.a} × ${set.b} · sets ${game.liveScoreA || 0} × ${game.liveScoreB || 0}` : `${game.liveScoreA || 0} × ${game.liveScoreB || 0}`}</span></div>
     <p className="quick-author-hint">Escolha o aluno e toque no botão da equipe. Os botões com nomes registram o lance em um toque.</p>
     {!online ? <p className="alert alert-error" role="status">Sem internet. Aguarde a conexão voltar antes de lançar ou corrigir pontos.</p> : null}
+    {interval ? <p className="schedule-warning" role="status">Intervalo. Inicie o próximo período antes de lançar gols ou pontos. As correções e os cartões continuam disponíveis.</p> : null}
     {isBasketball(game) ? <div className="quick-point-values" aria-label="Valor da cesta">{[1, 2, 3].map((value) => <button type="button" className={points === value ? 'is-active' : ''} aria-pressed={points === value} disabled={blocked} key={value} onClick={() => setPoints(value)}>+{amountLabel(value)}</button>)}</div> : null}
     {!ended ? <div className="quick-team-columns">{['A', 'B'].map((side) => {
       const chosen = players[side].find((player) => player.id === authors[side])
@@ -77,13 +80,14 @@ export default function QuickScoring({ game, teams = [], disabled = false, expan
       return <div className={`quick-team quick-team-${side}`} key={side}>
         <div className="quick-team-score"><h4>{game[`time${side}`]}</h4><strong>{isSets ? set[side.toLowerCase()] : game[`liveScore${side}`] || 0}</strong></div>
         <label>Quem marcou para {game[`time${side}`]}?<select value={authors[side]} disabled={blocked || loading} onChange={(event) => setAuthors((current) => ({ ...current, [side]: event.target.value }))}>{invalidAuthor ? <option value={authors[side]} disabled>Autor indisponível · escolha outro</option> : null}<option value="">Sem autor / ponto coletivo</option>{players[side].map((player) => <option key={player.id} value={player.id}>{player.nome}</option>)}</select></label>
-        <button type="button" className="quick-score-button" disabled={blocked || invalidAuthor} onClick={() => score(side, chosen?.id || '')} aria-label={`Adicionar ${goal ? 'gol' : amountLabel(isBasketball(game) ? points : 1)} para ${game[`time${side}`]}`}><span>{goal ? '⚽ +1 GOL' : `+${isBasketball(game) ? points : 1} PONTO${isBasketball(game) && points > 1 ? 'S' : ''}`}</span><small>{chosen?.nome || 'Sem autor'} · {game[`time${side}`]}</small></button>
+        <button type="button" className="quick-score-button" disabled={blocked || interval || invalidAuthor} onClick={() => score(side, chosen?.id || '')} aria-label={`Adicionar ${goal ? 'gol' : amountLabel(isBasketball(game) ? points : 1)} para ${game[`time${side}`]}`}><span>{goal ? '⚽ +1 GOL' : `+${isBasketball(game) ? points : 1} PONTO${isBasketball(game) && points > 1 ? 'S' : ''}`}</span><small>{chosen?.nome || 'Sem autor'} · {game[`time${side}`]}</small></button>
         {invalidAuthor && !loading ? <small role="status">O aluno selecionado não está mais na lista de presentes. Escolha outro autor ou Sem autor.</small> : null}
         <button type="button" className="quick-remove-score" disabled={blocked || !removable} title={removable ? `Excluir lance de ${removable.playerName || 'sem autor'}` : 'Sem lance recente disponível para excluir nesta equipe'} onClick={() => remove(removable)} aria-label={`Excluir último ${goal ? 'gol' : 'lance de ponto'} de ${game[`time${side}`]}`}>{goal ? '− Excluir gol' : `− Excluir ${amountLabel(removable?.value || 1)}`}</button>
-        <details open={expandedPlayers || undefined}><summary>Marcar por jogador ({players[side].length})</summary><div className="quick-player-buttons">{players[side].map((player) => <button type="button" disabled={blocked} key={player.id} onClick={() => score(side, player.id)} aria-label={`${goal ? 'Gol' : 'Ponto'} de ${player.nome} · equipe ${side}`}>{goal ? '⚽' : `+${isBasketball(game) ? points : 1}`} {player.nome}</button>)}</div>{!players[side].length ? <small>{loading ? 'Carregando jogadores…' : 'Nenhum jogador presente na conferência desta equipe.'}</small> : null}</details>
+        <details open={expandedPlayers || undefined}><summary>Marcar por jogador ({players[side].length})</summary><div className="quick-player-buttons">{players[side].map((player) => <button type="button" disabled={blocked || interval} key={player.id} onClick={() => score(side, player.id)} aria-label={`${goal ? 'Gol' : 'Ponto'} de ${player.nome} · equipe ${side}`}>{goal ? '⚽' : `+${isBasketball(game) ? points : 1}`} {player.nome}</button>)}</div>{!players[side].length ? <small>{loading ? 'Carregando jogadores…' : 'Nenhum jogador presente na conferência desta equipe.'}</small> : null}</details>
       </div>
     })}</div> : <p className="alert alert-success">O placar de sets indica um vencedor. Confira e encerre a partida.</p>}
     <div className="quick-roster-actions"><small>Na TV aparece só o primeiro nome. Sem autor pode ser usado para ponto coletivo ou erro do adversário.</small><button type="button" className="btn btn-outline btn-small" disabled={busy || loading} onClick={() => { setPlayersFeed(null); setReload((value) => value + 1) }}>Atualizar alunos</button></div>
+    <MatchCardsControl game={game} teams={teams} players={feed?.cardPlayers || players} disabled={busy || disabled || !available || loading || Boolean(correction) || Boolean(setReview)} />
     {feed?.error ? <p className="alert alert-error" role="status">{feed.error}</p> : null}
     {last ? <div className="quick-last-event"><span>Último lance</span><strong>{last.kind === 'set' ? `Set ${last.setNumber} encerrado: ${last.setScore.a} × ${last.setScore.b}` : `${last.playerName || 'Sem autor'} · ${game[`time${last.side}`]} · +${amountLabel(last.value, goal)}`}</strong><div className="form-actions"><button type="button" className="btn btn-outline" disabled={blocked || !canCorrectLiveEvent(game, last)} onClick={() => reviewTransfer(last)}>Equipe errada? Corrigir</button><button type="button" className="btn btn-outline" disabled={busy || disabled || !available || Boolean(correction) || Boolean(setReview) || !game.lastScoreEventId} onClick={() => act(() => undoLiveEvent({ gameId: game.id, eventId: game.lastScoreEventId, expectedScoreRevision: scoreRevision(game) }), 'Último lance desfeito. Placar e autoria atualizados.')}>Desfazer último lance</button></div></div> : null}
     <div className="form-actions">{isSets && !ended ? <button type="button" className="btn btn-outline" disabled={blocked || set.a === set.b} onClick={() => setSetReview({ a: set.a, b: set.b, revision: scoreRevision(game) })}>Encerrar set</button> : null}{busy ? <span role="status">Atualizando placar…</span> : null}</div>

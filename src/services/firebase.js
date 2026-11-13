@@ -1,8 +1,12 @@
 import { initializeApp } from 'firebase/app'
-import { getAuth } from 'firebase/auth'
-import { initializeFirestore } from 'firebase/firestore'
+import { connectAuthEmulator, getAuth } from 'firebase/auth'
+import { connectFirestoreEmulator, initializeFirestore } from 'firebase/firestore'
+import { isRehearsal, REHEARSAL_PROJECT } from '../config/rehearsal.js'
 
-const firebaseConfig = {
+const firebaseConfig = isRehearsal ? {
+  apiKey: 'demo-interclasse-key', authDomain: `${REHEARSAL_PROJECT}.firebaseapp.com`, projectId: REHEARSAL_PROJECT,
+  storageBucket: `${REHEARSAL_PROJECT}.appspot.com`, messagingSenderId: '1234567890', appId: '1:1234567890:web:ensaio',
+} : {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
@@ -32,3 +36,8 @@ export const db = app ? initializeFirestore(app, {
   experimentalForceLongPolling: true,
   experimentalLongPollingOptions: { timeoutSeconds: 10 },
 }) : null
+
+if (isRehearsal) {
+  connectAuthEmulator(auth, 'http://127.0.0.1:9909', { disableWarnings: true })
+  connectFirestoreEmulator(db, '127.0.0.1', 8180)
+}

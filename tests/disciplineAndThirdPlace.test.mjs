@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { disciplineForGame, normalizeDisciplineInput, suspendedPlayers } from '../src/utils/discipline.js'
+import { disciplineForGame, normalizeDisciplineInput, publicCardEvent, suspendedPlayers } from '../src/utils/discipline.js'
 import { matchStartChecklist } from '../src/utils/matchStart.js'
 import { sourceParticipant, thirdPlaceParticipants, thirdPlaceSemifinals } from '../src/utils/thirdPlace.js'
 import { buildBracket, bracketParticipant } from '../src/utils/tournamentExplorer.js'
@@ -19,6 +19,18 @@ test('suspensions respect sport, shift, tournament and explicit resolution, with
 })
 
 const semi = (id, timeA, timeB, fields = {}) => ({ id, sportId: 'football', turno: 'manha', tournamentId: 'cup', stageType: 'knockout', fase: 'Semifinal', rodada: `Semifinal ${id}`, timeA, timeB, teamIdA: `${id}-a`, teamIdB: `${id}-b`, ...fields })
+
+test('public cards use the match clock or an explicit minute and exclude private disciplinary details', () => {
+  const now = new Date('2026-11-13T14:00:00Z')
+  const game = semi('g', '9A', '9B', { status: 'encerrado', liveStatus: 'live', clock: { elapsedMs: 305000, runningSince: null } })
+  const input = { id: 'card', type: 'yellow', teamId: 'g-a', playerName: 'Ana Beatriz Silva', reason: 'Private decision', createdBy: 'private', minute: null }
+  assert.deepEqual(publicCardEvent(game, input, now), { id: 'card', kind: 'yellow', side: 'A', playerName: 'Ana', elapsedMs: 305000, recordedAt: now.getTime() })
+  assert.equal(publicCardEvent(game, { ...input, minute: 12 }, now).elapsedMs, 720000)
+  assert.equal(publicCardEvent({ ...game, status: 'finalizado' }, input, now).elapsedMs, null)
+  assert.equal(publicCardEvent(game, { ...input, type: 'suspension' }, now), null)
+  assert.throws(() => publicCardEvent(game, { ...input, teamId: 'other' }, now), /equipe/)
+  for (const minute of ['abc', '-1', '1.5', '1000']) assert.throws(() => normalizeDisciplineInput({ playerId: 'ana', type: 'red', reason: 'Infração', minute }), /minuto/)
+})
 
 test('third place follows the losing side including penalties and walkovers, and unresolved or cancelled matches stay as seeds', () => {
   const a = semi('1', 'A', 'B', { status: 'finalizado', placarA: 1, placarB: 1, tieBreak: { method: 'penalties', scoreA: 4, scoreB: 5 } })

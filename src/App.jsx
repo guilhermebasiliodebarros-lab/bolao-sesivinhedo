@@ -13,6 +13,7 @@ import useAppUpdates from './hooks/useAppUpdates.js'
 import ConnectionStatus from './components/ConnectionStatus.jsx'
 import LiveScoresStrip from './components/LiveScoresStrip.jsx'
 import useQuickPredictionMode from './hooks/useQuickPredictionMode.js'
+import { isRehearsal } from './config/rehearsal.js'
 
 const AdminPanel = lazy(() => import('./components/AdminPanel.jsx'))
 const Cadastro = lazy(() => import('./components/Cadastro.jsx'))
@@ -24,6 +25,7 @@ const Jogos = lazy(() => import('./components/Jogos.jsx'))
 const Login = lazy(() => import('./components/Login.jsx'))
 const Palpites = lazy(() => import('./components/Palpites.jsx'))
 const TVMode = lazy(() => import('./components/TVMode.jsx'))
+const TVScoreboard = lazy(() => import('./components/TVScoreboard.jsx'))
 const Regulations = lazy(() => import('./components/Regulations.jsx'))
 const AthleteStatistics = lazy(() => import('./components/AthleteStatistics.jsx'))
 const TournamentExplorer = lazy(() => import('./components/TournamentExplorer.jsx'))
@@ -59,9 +61,9 @@ function AppShell() {
 
     return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   })
-  const { user, profile, isMaster, isParticipant, loading, profileLoading, logout } = useAuth()
+  const { user, profile, isMaster, isViewer, isParticipant, loading, profileLoading, logout } = useAuth()
   const { quick, setQuick } = useQuickPredictionMode(user?.uid)
-  const activeView = resolveAppView(view, { signedIn: Boolean(user), isMaster, participantHome: quick ? 'jogos' : 'dashboard' })
+  const activeView = resolveAppView(view, { signedIn: Boolean(user), isMaster, isViewer, participantHome: quick ? 'jogos' : 'dashboard' })
   const quickShell = quick && ((isParticipant && activeView === 'jogos') || (!user && ['home', 'login', 'cadastro'].includes(activeView)))
   const authLoading = loading || profileLoading
   const appUpdate = useAppUpdates({ enabled: !authLoading })
@@ -92,7 +94,7 @@ function AppShell() {
     setTheme((current) => (current === 'dark' ? 'light' : 'dark'))
   }
 
-  const afterLogin = (nextView) => navigate(nextView === 'admin' ? 'admin' : quick ? 'jogos' : nextView || 'dashboard')
+  const afterLogin = (nextView) => navigate(['admin', 'calendario'].includes(nextView) ? nextView : quick ? 'jogos' : nextView || 'dashboard')
   const openQuickMode = () => { setQuick(true); navigate('jogos') }
   const leaveQuickMode = () => { setQuick(false); navigate(user ? 'jogos' : 'home') }
 
@@ -138,11 +140,15 @@ function AppShell() {
   if (authLoading) return <div className="route-loading" role="status">Carregando sua conta…</div>
 
   if (quickShell) return <div className="app quick-app">
-    <header className="quick-app-header"><img src="/logo-interclasse.png" alt="Interclasse SESI Vinhedo" /><div><strong>Palpite rápido</strong><span>{user ? `Olá, ${profile?.nome || user.displayName || 'participante'}` : 'Entre na sua conta para palpitar'}</span></div><button type="button" className="btn btn-outline" onClick={leaveQuickMode}>Site completo</button>{user ? <button type="button" className="quick-logout" onClick={async () => { await logout(); navigate('login') }}>Sair</button> : null}</header>
+    <header className="quick-app-header"><img src="/logo-interclasse.png" alt="Interclasse SESI Vinhedo" /><div><strong>{user ? 'Palpite rápido' : 'Acesso ao Interclasse'}</strong><span>{user ? `Olá, ${profile?.nome || user.displayName || 'participante'}` : 'Entre com o login fornecido pela organização'}</span></div><button type="button" className="btn btn-outline" onClick={leaveQuickMode}>Site completo</button>{user ? <button type="button" className="quick-logout" onClick={async () => { await logout(); navigate('login') }}>Sair</button> : null}</header>
     <ConnectionStatus /><ConfigNotice />
-    <main>{updateNotice}{isParticipant ? <PredictionReminders key={user.uid} userId={user.uid} showSettings={false} onNavigate={navigate} /> : null}<Suspense fallback={<div className="route-loading">Abrindo palpites…</div>}>{user ? <QuickPredictions key={user.uid} /> : activeView === 'cadastro' ? <Cadastro onNavigate={navigate} onSuccess={() => afterLogin('dashboard')} /> : <Login onNavigate={navigate} onSuccess={afterLogin} />}</Suspense></main>
-    <footer className="quick-app-footer">Bolão SESI Vinhedo · confira o placar antes de enviar.</footer>
+    <main>{updateNotice}{isParticipant ? <PredictionReminders key={user.uid} userId={user.uid} showSettings={false} onNavigate={navigate} /> : null}<Suspense fallback={<div className="route-loading">{user ? 'Abrindo palpites…' : 'Abrindo acesso…'}</div>}>{user ? <QuickPredictions key={user.uid} /> : activeView === 'cadastro' ? <Cadastro onNavigate={navigate} onSuccess={() => afterLogin('dashboard')} /> : <Login onNavigate={navigate} onSuccess={afterLogin} />}</Suspense></main>
+    <footer className="quick-app-footer">{user ? 'Interclasse SESI Vinhedo · confira o placar antes de enviar.' : 'Interclasse SESI Vinhedo · jogos, resultados e informações do evento.'}</footer>
   </div>
+
+  if (activeView === 'placar') {
+    return <>{updateNotice}<Suspense fallback={<div className="route-loading">Preparando o placar ao vivo…</div>}><TVScoreboard onNavigate={navigate} /></Suspense></>
+  }
 
   if (activeView === 'tv') {
     return <>{updateNotice}<Suspense fallback={<div className="route-loading">Abrindo modo TV…</div>}><TVMode onNavigate={navigate} /></Suspense></>
@@ -159,7 +165,7 @@ function AppShell() {
         {isParticipant ? <PredictionReminders key={user.uid} userId={user.uid} showSettings={activeView === 'dashboard'} onNavigate={navigate} /> : null}
         <Suspense fallback={<div className="route-loading">Carregando tela...</div>}>{renderView()}</Suspense>
       </main>
-      <Footer />
+      <Footer accessOnly={!user && activeView === 'login'} />
     </div>
   )
 }
@@ -167,6 +173,7 @@ function AppShell() {
 function App() {
   return (
     <AuthProvider>
+      {isRehearsal ? <div className="rehearsal-ribbon" role="status">ENSAIO LOCAL · DADOS FICTÍCIOS · O SITE OFICIAL NÃO É ALTERADO</div> : null}
       <AppShell />
     </AuthProvider>
   )

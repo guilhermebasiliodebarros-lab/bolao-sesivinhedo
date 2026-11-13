@@ -10,6 +10,8 @@ import { toDate } from '../utils/format.js'
 import './TVMode.css'
 import { buildAutomaticCalls, DEFAULT_BROADCAST_SETTINGS } from '../utils/automaticCalls.js'
 import { readPreference, writePreference } from '../utils/preferences.js'
+import TVConnectionStatus from './TVConnectionStatus.jsx'
+import { transmissionHealth } from '../utils/transmissionHealth.js'
 
 const clockFormat = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', second: '2-digit' })
 const dateFormat = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit' })
@@ -23,6 +25,7 @@ export default function TVMode({ onNavigate }) {
   const [announcementError, setAnnouncementError] = useState('')
   const [settingsError, setSettingsError] = useState('')
   const [lastSync, setLastSync] = useState(null)
+  const [healthStartedAt] = useState(() => Date.now())
   const [synced, setSynced] = useState(false)
   const [online, setOnline] = useState(() => navigator.onLine)
   const [now, setNow] = useState(() => new Date())
@@ -36,7 +39,7 @@ export default function TVMode({ onNavigate }) {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [density, setDensity] = useState(() => Number(readPreference('tv-density')) === 4 ? 4 : 2)
   const [rotating, setRotating] = useState(() => readPreference('tv-rotating') !== 'false')
-  const [fullscreen, setFullscreen] = useState(false)
+  const [fullscreen, setFullscreen] = useState(() => Boolean(document.fullscreenElement))
   const [compactLive, setCompactLive] = useState(() => window.innerHeight < 1000)
   const [screenMessage, setScreenMessage] = useState('')
 
@@ -59,7 +62,10 @@ export default function TVMode({ onNavigate }) {
   useEffect(() => {
     const clock = window.setInterval(() => setNow(new Date()), 1000)
     const network = () => setOnline(navigator.onLine)
-    const screen = () => setFullscreen(Boolean(document.fullscreenElement))
+    const screen = () => {
+      setFullscreen(Boolean(document.fullscreenElement))
+      setSettingsOpen(false)
+    }
     const resize = () => setCompactLive(window.innerHeight < 1000)
     window.addEventListener('online', network)
     window.addEventListener('offline', network)
@@ -134,26 +140,35 @@ export default function TVMode({ onNavigate }) {
     onNavigate('calendario')
   }
 
+  const health = transmissionHealth({ now, startedAt: healthStartedAt, online, connected: synced, error: Boolean(error), feeds: [{ name: 'Placares e programação', lastServerAt: lastSync, maxAgeMs: 75000 }] })
   return (
     <section className="tv-page" aria-label="Modo TV">
       <header className="tv-header">
         <div className="tv-brand"><img src="/logo-interclasse.png" alt="Interclasse SESI Vinhedo" /><div><span>SESI VINHEDO · ESPORTES</span><h1>Interclasse</h1></div></div>
-        <div className="tv-clock"><time>{clockFormat.format(now)}</time><span>{new Intl.DateTimeFormat('pt-BR', { dateStyle: 'full', timeZone: SCHOOL_TIMEZONE }).format(now)}</span></div>
-      <button type="button" className="tv-settings-toggle" aria-expanded={settingsOpen} onClick={() => setSettingsOpen((value) => !value)}>{settingsOpen ? 'Fechar ajustes' : 'Ajustes da TV'}</button></header>
-      <div className="tv-toolbar" hidden={!settingsOpen}>
-        <ShiftSelector value={turno} onChange={(value) => { setTurno(value); writePreference('tv-turno', value); setCursor('') }} />
-        <div className={online && synced && !error ? 'tv-connection' : 'tv-connection is-offline'} role="status"><span />{error ? 'Atualização indisponível' : !online ? 'Sem conexão · exibindo últimos dados' : synced ? 'Atualizado em tempo real' : 'Aguardando sincronização'}</div>
-        <label className="tv-sport-select">Esporte<select value={sport} onChange={(event) => { setSport(event.target.value); setCursor('') }}><option value="">Todos os esportes</option>{sports.map((item) => <option value={item.id} key={item.id}>{item.nome}</option>)}</select></label>
-        <label className="tv-interval-select">Intervalo<select value={duration} onChange={(event) => { const seconds = Number(event.target.value); setDuration(seconds); writePreference('tv-interval', String(seconds)) }}>{[8, 12, 20, 30].map((seconds) => <option key={seconds} value={seconds}>{seconds} s</option>)}</select></label>
-        <label className="tv-density-select">Jogos ao vivo por tela<select value={density} onChange={(event) => { const value = Number(event.target.value); setDensity(value); writePreference('tv-density', String(value)) }}><option value="2">2 (maior destaque)</option><option value="4">4 (telas grandes)</option></select></label><div className="tv-controls">
-          <button type="button" onClick={() => setRotating((current) => !current)}>{rotating ? 'Pausar rotação' : 'Retomar rotação'}</button>
-          <button type="button" onClick={() => step(-1)} disabled={pages.length < 2}>Anterior</button>
-          <button type="button" onClick={() => step(1)} disabled={pages.length < 2}>Próxima tela</button>
-          <button type="button" onClick={toggleFullscreen}>{fullscreen ? 'Sair da tela cheia' : 'Tela cheia'}</button>
-          <button type="button" onClick={leave}>Sair do modo TV</button>
+        <div id="tv-toolbar" className="tv-toolbar" role="group" aria-label="Ajustes da transmissão" hidden={fullscreen && !settingsOpen}>
+          <div className="tv-filters">
+            <ShiftSelector value={turno} onChange={(value) => { setTurno(value); writePreference('tv-turno', value); setCursor('') }} />
+            <label className="tv-sport-select">Esporte<select value={sport} onChange={(event) => { setSport(event.target.value); setCursor('') }}><option value="">Todos os esportes</option>{sports.map((item) => <option value={item.id} key={item.id}>{item.nome}</option>)}</select></label>
+            <label className="tv-interval-select">Intervalo<select value={duration} onChange={(event) => { const seconds = Number(event.target.value); setDuration(seconds); writePreference('tv-interval', String(seconds)) }}>{[8, 12, 20, 30].map((seconds) => <option key={seconds} value={seconds}>{seconds} s</option>)}</select></label>
+            <label className="tv-density-select" title="Jogos ao vivo por tela">Jogos por tela<select value={density} onChange={(event) => { const value = Number(event.target.value); setDensity(value); writePreference('tv-density', String(value)) }}><option value="2">2 jogos</option><option value="4">4 jogos</option></select></label>
+            <TVConnectionStatus health={health} now={now} compact />
+          </div>
+          <div className="tv-controls">
+            <button type="button" aria-label={rotating ? 'Pausar rotação' : 'Retomar rotação'} title={rotating ? 'Pausar rotação' : 'Retomar rotação'} onClick={() => setRotating((current) => !current)}>{rotating ? 'Pausar' : 'Retomar'}</button>
+            <button type="button" className="tv-step-button" aria-label="Anterior" title="Página anterior" onClick={() => step(-1)} disabled={pages.length < 2}>‹</button>
+            <button type="button" className="tv-step-button" aria-label="Próxima tela" title="Próxima tela" onClick={() => step(1)} disabled={pages.length < 2}>›</button>
+            <button type="button" onClick={toggleFullscreen}>{fullscreen ? 'Sair da tela cheia' : 'Tela cheia'}</button>
+            <button type="button" aria-label="Sair do modo TV" title="Sair do modo TV" onClick={leave}>Sair</button>
+            <button type="button" aria-label="Abrir placar fixo para TV" title="Abrir placar fixo para TV" onClick={() => onNavigate('placar')}>Placar fixo</button>
+          </div>
         </div>
-      </div>
+        <div className="tv-header-end">
+          <div className="tv-clock"><time>{clockFormat.format(now)}</time><span>{new Intl.DateTimeFormat('pt-BR', { dateStyle: 'full', timeZone: SCHOOL_TIMEZONE }).format(now)}</span></div>
+          {fullscreen && <button type="button" className="tv-settings-toggle" aria-controls="tv-toolbar" aria-expanded={settingsOpen} onClick={() => setSettingsOpen((value) => !value)}>{settingsOpen ? 'Fechar ajustes' : 'Ajustes da TV'}</button>}
+        </div>
+      </header>
       {error || announcementError || settingsError || screenMessage ? <div className="tv-notice" role="alert">{error || announcementError || settingsError || screenMessage}{error || announcementError || settingsError ? ' Tentando reconectar automaticamente…' : ''}</div> : null}
+      {health.state === 'stale' ? <div className="tv-notice" role="status">A confirmação do servidor está demorando. Mantendo a última programação. Abra o diagnóstico da TV para conferir a conexão.</div> : null}
       {announcement ? <aside className={`tv-announcement tv-announcement-${announcement.type}`} role="status"><strong>{announcement.type === 'chamada' ? 'CHAMADA' : announcement.type === 'atraso' ? 'ATENÇÃO' : 'AVISO'}</strong><span>{announcement.text}</span></aside> : null}
       <nav className="tv-section-nav" aria-label="Páginas da transmissão">{TV_SECTIONS.filter((section) => counts[section.id]).map((section) => <button key={section.id} type="button" className={page?.kind === section.id ? 'is-active' : ''} aria-pressed={page?.kind === section.id} disabled={!counts[section.id]} onClick={() => setCursor(pages.find((item) => item.kind === section.id)?.id || '')}>{section.label}<span>{counts[section.id]}</span></button>)}</nav>
       {live.length ? <aside className="tv-live-ticker" aria-label="Placares ao vivo"><strong><span className="live-dot" />AO VIVO · {live.length}</strong><div>{ticker.map((game) => <span key={game.id}><b>{game.esporteNome}</b> {game.timeA} <strong><MatchScore game={game} /></strong> {game.timeB}</span>)}</div>{live.length > ticker.length ? <small>+{live.length - ticker.length} partida(s)</small> : null}</aside> : null}
@@ -165,7 +180,7 @@ export default function TVMode({ onNavigate }) {
           </div>
         </div>
       ) : <div className="tv-empty"><span aria-hidden="true">🏆</span><h2>{loading ? 'Carregando programação…' : 'Aguardando a programação'}</h2><p>Os jogos aparecerão aqui assim que forem cadastrados.</p></div>}
-      <footer className={online && synced && !error ? 'tv-footer' : 'tv-footer is-offline'}><strong>INTERCLASSE SESI VINHEDO <span>{!online ? 'Sem conexão · últimos dados' : error ? 'Reconectando' : synced ? 'Ao vivo · atualizado' : 'Sincronizando'}{lastSync ? ` · conferido às ${clockFormat.format(new Date(lastSync))}` : ''}</span></strong><span>{rotating ? `Rotação automática · ${duration} s por página` : 'Rotação pausada'} · Tela {pages.length ? pageIndex + 1 : 0}/{pages.length}</span></footer>
+      <footer className={health.connected ? 'tv-footer' : 'tv-footer is-offline'}><strong>INTERCLASSE SESI VINHEDO <span>{health.label}{lastSync ? ` · conferido às ${clockFormat.format(new Date(lastSync))}` : ''}</span></strong><span>{rotating ? `Rotação automática · ${duration} s por página` : 'Rotação pausada'} · Tela {pages.length ? pageIndex + 1 : 0}/{pages.length}</span></footer>
     </section>
   )
 }

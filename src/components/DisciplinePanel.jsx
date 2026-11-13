@@ -6,7 +6,7 @@ import { formatDateTime } from '../utils/format.js'
 import { eventDate } from '../utils/tvSchedule.js'
 import './DisciplinePanel.css'
 
-const empty = { playerId: '', type: 'warning', gameId: '', reason: '', scope: 'modality' }
+const empty = { playerId: '', type: 'warning', gameId: '', reason: '', scope: 'modality', minute: '' }
 
 function TeamDiscipline({ team, games, user }) {
   const [records, setRecords] = useState([])
@@ -46,10 +46,12 @@ function TeamDiscipline({ team, games, user }) {
     }}>
       <fieldset disabled={disabled}><legend>Registrar ocorrência</legend><div className="form-grid">
         <label>Atleta<select required value={draft.playerId} onChange={(event) => setDraft((value) => ({ ...value, playerId: event.target.value }))}><option value="">Selecione um atleta</option>{players.map((player) => <option key={player.id} value={player.id}>{player.nome}</option>)}</select></label>
-        <label>Tipo de ocorrência<select value={draft.type} onChange={(event) => setDraft((value) => ({ ...value, type: event.target.value, scope: 'modality' }))}>{Object.entries(DISCIPLINE_TYPES).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
-        <label>Partida da ocorrência (opcional)<select value={draft.gameId} onChange={(event) => setDraft((value) => ({ ...value, gameId: event.target.value, scope: 'modality' }))}><option value="">Sem partida vinculada</option>{teamGames.map((game) => <option key={game.id} value={game.id}>{game.tournamentName || 'Sem torneio'} · {game.timeA} × {game.timeB} · {game.fase} · {formatDateTime(game.dataHora)}</option>)}</select></label>
+        <label>Tipo de ocorrência<select value={draft.type} onChange={(event) => setDraft((value) => ({ ...value, type: event.target.value, scope: 'modality', minute: '' }))}>{Object.entries(DISCIPLINE_TYPES).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
+        <label>Partida da ocorrência (opcional)<select value={draft.gameId} onChange={(event) => setDraft((value) => ({ ...value, gameId: event.target.value, scope: 'modality', minute: '' }))}><option value="">Sem partida vinculada</option>{teamGames.map((game) => <option key={game.id} value={game.id}>{game.tournamentName || 'Sem torneio'} · {game.timeA} × {game.timeB} · {game.fase} · {formatDateTime(game.dataHora)}</option>)}</select></label>
+        {draft.gameId && ['yellow', 'red'].includes(draft.type) ? <label>Minuto do cartão (opcional)<input type="number" min="0" max="999" step="1" value={draft.minute} placeholder="Usar cronômetro ao vivo" onChange={(event) => setDraft((value) => ({ ...value, minute: event.target.value }))} /></label> : null}
         {draft.type === 'suspension' ? <label>Abrangência da suspensão<select value={draft.scope} onChange={(event) => setDraft((value) => ({ ...value, scope: event.target.value }))}><option value="modality">Todas as partidas desta modalidade</option><option value="tournament" disabled={!teamGames.find((game) => game.id === draft.gameId)?.tournamentId}>Somente o torneio da partida selecionada</option></select></label> : null}
       </div><label>Motivo e orientação da organização<textarea required minLength={3} maxLength={1000} rows={3} value={draft.reason} onChange={(event) => setDraft((value) => ({ ...value, reason: event.target.value }))} /></label>
+        {['yellow', 'red'].includes(draft.type) ? <p className="form-hint">Vincule a partida para exibir o cartão no placar ao vivo. O minuto usa o cronômetro da partida; você também pode informar o minuto manualmente. Na TV aparecem o primeiro nome, o cartão e o minuto.</p> : null}
         {draft.type === 'suspension' ? <p className="schedule-warning">Ao registrar, o atleta ficará impedido de ser escalado como presente nas partidas abrangidas até a organização encerrar esta suspensão.</p> : null}
         <button type="submit" className="btn btn-primary" disabled={!players.length}>{busy ? 'Registrando…' : 'Registrar ocorrência'}</button>
       </fieldset>

@@ -24,8 +24,13 @@ service cloud.firestore {
       let game = get(/databases/$(database)/documents/games/$(gameId)).data;
 
       return game.status == "aberto"
+        && (!game.keys().hasAny(["deletionPending"]) || game.deletionPending == null)
         && (!game.keys().hasAny(["matchCondition"]) || game.matchCondition == "normal")
-        && (!game.keys().hasAny(["limitePalpites"]) || request.time <= game.limitePalpites);
+        && (!game.keys().hasAny(["liveStatus"]) || game.liveStatus != "live")
+        && (!game.keys().hasAny(["startedAt"]) || game.startedAt == null)
+        && game.keys().hasAny(["limitePalpites"])
+        && game.limitePalpites is timestamp
+        && request.time < game.limitePalpites;
     }
 
     function validNonNegativeScores() {
@@ -86,7 +91,7 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
-      allow read: if signedIn();
+      allow read: if signedIn() && (request.auth.uid == uid || isMaster() || isParticipant());
 
       allow create: if signedIn()
         && request.auth.uid == uid
@@ -98,7 +103,7 @@ service cloud.firestore {
         && request.resource.data.acertosResultado == 0;
 
       allow update: if isMaster()
-        || (signedIn() && request.auth.uid == uid && userCannotChangeScoreOrRole());
+        || (signedIn() && currentUser().role == "user" && request.auth.uid == uid && userCannotChangeScoreOrRole());
 
       allow delete: if isMaster();
     }
@@ -145,6 +150,7 @@ service cloud.firestore {
 
     match /predictions/{predictionId} {
       allow read: if signedIn() && (isMaster() || resource.data.userId == request.auth.uid);
+      allow get: if signedIn() && !exists(/databases/$(database)/documents/predictions/$(predictionId));
       allow create: if isParticipant() && predictionCreatedByOwner();
       allow update: if isMaster() || (isParticipant() && predictionEditedByOwner());
       allow delete: if isMaster();

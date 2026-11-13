@@ -54,6 +54,7 @@ import TournamentScheduleDialog from './TournamentScheduleDialog.jsx'
 import TournamentDrawDialog from './TournamentDrawDialog.jsx'
 import ThirdPlaceDialog from './ThirdPlaceDialog.jsx'
 import DisciplinePanel from './DisciplinePanel.jsx'
+import RehearsalGuide from './RehearsalGuide.jsx'
 import { thirdPlaceParticipants, thirdPlaceSemifinals } from '../utils/thirdPlace.js'
 import { drawFingerprint, drawTeamOrder } from '../utils/tournamentDraw.js'
 import { ShiftTabs } from './ShiftSelector.jsx'
@@ -151,6 +152,7 @@ const ADMIN_TABS = [
   { id: 'disciplina', label: 'Central disciplinar' },
   { id: 'jogos', label: 'Jogos' },
   { id: 'ao-vivo', label: 'Ao vivo / TV' },
+  { id: 'ensaio', label: 'Ensaio geral' },
   { id: 'avisos', label: 'Avisos TV' },
   { id: 'interclasse', label: 'Classificação por grupo' },
   { id: 'participantes', label: 'Participantes' },
@@ -1190,9 +1192,9 @@ export default function AdminPanel({ onNavigate }) {
         <div>
           <span className="eyebrow">Administração</span>
           <h1>Painel master</h1>
-          <p>Crie jogos, encerre palpites, lance placares finais e acompanhe todos os dados do bolão.</p>
+          <p>Crie jogos, encerre palpites, lance placares finais e acompanhe todos os dados do Interclasse.</p>
         </div>
-        <div className="form-actions"><button className="btn btn-outline" type="button" onClick={() => onNavigate('tv')}>Abrir modo TV</button><span className="master-badge">Logado como usuário master</span></div>
+        <div className="form-actions"><a className="btn btn-primary" href="/#placar" target="_blank" rel="noreferrer">Placar para TV ↗</a><button className="btn btn-outline" type="button" onClick={() => onNavigate('tv')}>Abrir modo TV</button><span className="master-badge">Logado como usuário master</span></div>
       </div>
 
       {message ? (
@@ -1244,7 +1246,7 @@ export default function AdminPanel({ onNavigate }) {
       <aside className="admin-navigation">
         <div className="admin-navigation-heading">
           <span className="eyebrow">Administração</span>
-          <h2>Gerenciar bolão</h2>
+          <h2>Gerenciar Interclasse</h2>
         </div>
       <nav className="admin-section-links" aria-label="Seções do painel master">
         {ADMIN_TABS.map((tab) => {
@@ -1295,6 +1297,7 @@ export default function AdminPanel({ onNavigate }) {
       {activeAdminTab === 'pendencias' ? <PendingCenter games={shiftGames} teams={shiftTeams} sports={sports} saving={saving} onPrepare={(game) => setStartingMatchId(game.id)} onManage={(game, tab) => setManagedMatch({ id: game.id, tab })} onStart={(game) => runAdminAction(() => startPreparedGames([game.id]), 'Partida iniciada. Palpites bloqueados e TV atualizada.')} onLive={() => setActiveAdminTab('ao-vivo')} /> : null}
       {activeAdminTab === 'programacao' ? <><VisualSchedule key={selectedShift} games={games} teams={teams} sports={sports} turno={selectedShift} /><DailySchedule games={shiftGames} sports={sports} /></> : null}
       {activeAdminTab === 'disciplina' ? <DisciplinePanel teams={shiftTeams} games={shiftGames} user={user} /> : null}
+      {activeAdminTab === 'ensaio' ? <RehearsalGuide onLive={() => setActiveAdminTab('ao-vivo')} /> : null}
       {activeAdminTab === 'regulamentos' ? <RegulationsAdmin sports={sports} onNavigate={onNavigate} /> : null}
       {activeAdminTab === 'estatisticas' ? <AthleteStatisticsPanel games={shiftGames} turno={selectedShift} /> : null}
       {activeAdminTab === 'ao-vivo' ? <LiveControlPanel games={shiftGames} conflictGames={games} teams={shiftTeams} sports={sports} onFinish={handleFinalize} onNavigate={onNavigate} saving={saving} onStart={(game) => setStartingMatchId(game.id)} onManage={(game, tab) => setManagedMatch({ id: game.id, tab })} /> : null}

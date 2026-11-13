@@ -1,7 +1,7 @@
 export const COPY = {
   brand: {
-    name: 'Bolão SESI Vinhedo',
-    shortMark: 'BV',
+    name: 'Interclasse SESI Vinhedo',
+    shortMark: 'IV',
   },
   nav: {
     home: 'Início',
@@ -30,7 +30,7 @@ export const COPY = {
   home: {
     eyebrow: 'Evento escolar com ranking ao vivo',
     intro:
-      'Participe do bolão, registre seus palpites antes dos jogos e acompanhe sua pontuação subir conforme os resultados forem finalizados pela organização.',
+      'Participe do Interclasse, registre seus palpites antes dos jogos e acompanhe sua pontuação subir conforme os resultados forem finalizados pela organização.',
     heroSignal: ['Palpites com prazo', 'Ranking ao vivo', 'Painel master'],
     cards: [
       {
@@ -64,8 +64,8 @@ export const COPY = {
   auth: {
     login: {
       eyebrow: 'Acesso seguro',
-      title: 'Entrar no bolão',
-      description: 'Participantes entram no painel do bolão. Usuários master entram direto na administração.',
+      title: 'Entrar no Interclasse',
+      description: 'Entre com sua conta para participar, consultar o Interclasse ou acessar a administração.',
       missingFields: 'Informe e-mail ou login e senha para entrar.',
       emailLabel: 'E-mail ou login',
       emailPlaceholder: 'voce@email.com ou suporte',
@@ -77,7 +77,7 @@ export const COPY = {
     cadastro: {
       eyebrow: 'Novo participante',
       title: 'Cadastrar conta',
-      description: 'Crie seu acesso para participar do Bolão SESI Vinhedo e acompanhar sua pontuação.',
+      description: 'Crie seu acesso para participar do Interclasse SESI Vinhedo e acompanhar sua pontuação.',
       missingFields: 'Preencha nome, e-mail e senha.',
       shortPassword: 'A senha precisa ter pelo menos 6 caracteres.',
       nameLabel: 'Nome',

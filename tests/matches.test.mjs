@@ -72,6 +72,49 @@ const { createThirdPlaceGame, saveDisciplinaryRecord, resolveDisciplinaryRecord 
 const { ensureAutomaticPredictionDeadlines, getPredictionDeadline, isPredictionDeadlineOpen, savePrediction } = await import('../src/services/firestoreService.js')
 const { saveCalendarGame, deleteGamesBulk } = await import('../src/services/firestoreService.js')
 const { correctLiveEvent } = await import('../src/services/firestoreService.js')
+const { saveScoreboardSelection } = await import('../src/services/firestoreService.js')
+
+test('publishing one or two TV games updates only the shared selection and supports clearing without altering matches or clock settings', async () => {
+  documents.set('games/tv-a', { esporteNome: 'Basquete', timeA: '9º A', timeB: '9º B', status: 'encerrado', liveStatus: 'live', liveScoreA: 15 })
+  documents.set('games/tv-b', { esporteNome: 'Basquete', timeA: '8º A', timeB: '8º B', status: 'aberto' })
+  documents.set('broadcastSettings/tv', { showMatchClock: false, leadMinutes: 10 })
+  const before = structuredClone(documents.get('games/tv-a'))
+  assert.deepEqual(await saveScoreboardSelection(['tv-a'], 0), { gameIds: ['tv-a'], revision: 1 })
+  assert.deepEqual(await saveScoreboardSelection(['tv-b', 'tv-a'], 1), { gameIds: ['tv-b', 'tv-a'], revision: 2 })
+  assert.deepEqual(documents.get('games/tv-a'), before)
+  assert.equal(documents.get('broadcastSettings/tv').showMatchClock, false)
+  await assert.rejects(saveScoreboardSelection([], 1), /Outro responsável/)
+  assert.deepEqual(await saveScoreboardSelection([], 2), { gameIds: [], revision: 3 })
+})
+
+test('TV selection rejects extra games, stale results, invalid IDs, removed matches and unresolved teams without publishing a partial selection', async () => {
+  for (const ids of [['a', 'b', 'c'], ['a', 'a'], ['a/path']]) await assert.rejects(saveScoreboardSelection(ids, 0), /no máximo dois/)
+  await assert.rejects(saveScoreboardSelection(['missing'], 0), /removido/)
+  for (const change of [{ matchCondition: 'cancelled' }, { matchCondition: 'postponed' }, { status: 'finalizado' }, { deletionPending: { requested: true } }, { seedLabelA: 'Vencedor 1' }]) {
+    documents.set('games/rejected', { timeA: 'A', timeB: 'B', status: 'aberto', ...change })
+    await assert.rejects(saveScoreboardSelection(['rejected'], 0))
+    assert.equal(documents.has('broadcastSettings/scoreboard'), false)
+  }
+})
+
+test('a selected final result can remain beside a newly chosen live game, but unrelated old results cannot be added', async () => {
+  documents.set('broadcastSettings/scoreboard', { gameIds: ['final'], revision: 1 })
+  documents.set('games/final', { timeA: 'A', timeB: 'B', status: 'finalizado', placarA: 2, placarB: 1 })
+  documents.set('games/live', { timeA: 'C', timeB: 'D', status: 'encerrado', liveStatus: 'live' })
+  documents.set('games/old-final', { timeA: 'E', timeB: 'F', status: 'finalizado', placarA: 0, placarB: 1 })
+  assert.deepEqual(await saveScoreboardSelection(['final', 'live'], 1), { gameIds: ['final', 'live'], revision: 2 })
+  await assert.rejects(saveScoreboardSelection(['old-final'], 2), /agendadas ou em andamento/)
+  assert.deepEqual(documents.get('broadcastSettings/scoreboard').gameIds, ['final', 'live'])
+})
+const { normalizeUserProfile, isRankingProfile } = await import('../src/services/firestoreService.js')
+
+test('consultation profiles preserve their role and cannot enter the participant ranking', () => {
+  const viewer = normalizeUserProfile('consultation', { role: 'viewer', participaRanking: true })
+  assert.equal(viewer.role, 'viewer')
+  assert.equal(viewer.participaRanking, false)
+  assert.equal(isRankingProfile(viewer), false)
+  assert.equal(isRankingProfile(normalizeUserProfile('participant', { role: 'user' })), true)
+})
 const { calendarCandidate, calendarConflicts, calendarConflictSignature, calendarFingerprint } = await import('../src/utils/visualSchedule.js')
 const { deletionFingerprint } = await import('../src/utils/bulkGameDeletion.js')
 const { planBracketSchedule } = await import('../src/utils/bracketSchedule.js')
@@ -303,6 +346,28 @@ test('disciplinary records validate team, player and tournament; decisions prese
   await assert.rejects(resolveDisciplinaryRecord({ teamId: 'a', recordId: id, expectedRevision: 1, status: 'void', reason: 'Correção' }), /ocorrência mudou/)
 })
 
+test('linked cards publish only match incidents; goal undo preserves cards and revoking one card preserves the others', async () => {
+  documents.set('teams/a', { sportId: 'football', nome: 'Azul', turno: 'manha' })
+  documents.set('teams/a/players/ana', { nome: 'Ana Júlia Silva' })
+  documents.set('games/one', { ...original, turno: 'manha', liveStatus: 'live', status: 'encerrado', clock: { elapsedMs: 425000, runningSince: null } })
+  const input = { playerId: 'ana', type: 'yellow', reason: 'Motivo privado.', gameId: 'one' }
+  const yellow = await saveDisciplinaryRecord('a', input, { uid: 'master' })
+  const red = await saveDisciplinaryRecord('a', { ...input, type: 'red', minute: '9' })
+  assert.equal(game().publicCardEvents.length, 2)
+  assert.equal(game().publicCardEvents[0].elapsedMs, 425000)
+  assert.equal(game().publicCardEvents[1].elapsedMs, 540000)
+  assert.equal(game().publicCardEvents[0].playerName, 'Ana')
+  assert(!JSON.stringify(game().publicCardEvents).includes('privado'))
+  assert(!JSON.stringify(game().publicCardEvents).includes('Silva'))
+  await recordLiveEvent({ gameId: 'one', requestId: 'goal-test-card', side: 'A', expectedScoreRevision: 0 })
+  await undoLiveEvent({ gameId: 'one', eventId: 'goal-test-card', expectedScoreRevision: 1 })
+  assert.equal(game().publicCardEvents.length, 2)
+  await resolveDisciplinaryRecord({ teamId: 'a', recordId: yellow, status: 'void', reason: 'Registro duplicado.', expectedRevision: 1 })
+  assert.deepEqual(game().publicCardEvents.map((event) => event.id), [red])
+  assert.equal(documents.get(`operations/${yellow}`).status, 'void')
+  assert.equal(documents.get(`operations/${yellow}`).reason, input.reason)
+})
+
 test('active suspensions are checked again at preparation and batch start, while yellow cards never impose a suspension', async () => {
   documents.set('teams/a', { sportId: 'football', nome: 'Azul', turno: 'manha', playerCount: 2 })
   documents.set('teams/a/players/ana', { nome: 'Ana Júlia' })
@@ -436,6 +501,30 @@ test('persisted clocks pause, resume, reject stale controls and stop on finaliza
   await assert.rejects(controlMatchClock({ gameId: 'one', action: 'resume', expectedRevision: game().clock.revision }), /ao vivo/)
   await reopenGame('one')
   assert.equal(game().clock, null)
+})
+
+test('period transitions atomically pause and resume, reject concurrent clock edits, and block new goals during intervals', async (context) => {
+  const { changeMatchPeriod } = await import('../src/services/firestoreService.js')
+  context.mock.timers.enable({ apis: ['Date'], now: new Date('2026-11-06T12:00:00Z') })
+  useCurrentTimestamp = true
+  await startGame('one')
+  context.mock.timers.tick(425000)
+  await changeMatchPeriod({ gameId: 'one', action: 'interval', expectedRevision: 0, expectedClockRevision: 1 })
+  assert.equal(game().clock.elapsedMs, 425000); assert.equal(game().clock.runningSince, null)
+  assert.equal(game().period.phase, 'interval')
+  await assert.rejects(recordLiveEvent({ gameId: 'one', requestId: 'interval-goal', side: 'A', expectedScoreRevision: 0 }), /intervalo/)
+  await assert.rejects(controlMatchClock({ gameId: 'one', action: 'resume', expectedRevision: 2 }), /próximo período/)
+  await assert.rejects(changeMatchPeriod({ gameId: 'one', action: 'next', expectedRevision: 0, expectedClockRevision: 1 }), /Outro responsável/)
+  context.mock.timers.tick(300000)
+  await changeMatchPeriod({ gameId: 'one', action: 'next', expectedRevision: 1, expectedClockRevision: 2 })
+  assert.equal(game().period.number, 2); assert.equal(game().period.startedElapsedMs, 425000)
+  context.mock.timers.tick(65000)
+  await recordLiveEvent({ gameId: 'one', requestId: 'period-two-goal', side: 'A', expectedScoreRevision: 0 })
+  assert.equal(game().liveEvents[0].elapsedMs, 490000)
+  await assert.rejects(reopenGame('one'), /Encerre a partida ao vivo/)
+  await finalizeGame({ gameId: 'one', placarA: 1, placarB: 0 })
+  await reopenGame('one')
+  assert.equal(game().period, null)
 })
 
 test('postponement freezes play time until a prepared match resumes', async (context) => {

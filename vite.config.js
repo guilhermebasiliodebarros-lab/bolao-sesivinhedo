@@ -13,6 +13,7 @@ export default defineConfig({
     {
       name: 'validate-firebase-config',
       configResolved(config) {
+        if (config.command === 'build' && config.mode === 'rehearsal') throw new Error('O ensaio é apenas local. Use npm run ensaio para praticar.')
         if (config.command !== 'build') return
 
         const requiredFirebaseEnv = [

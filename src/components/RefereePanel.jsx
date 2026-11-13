@@ -5,11 +5,14 @@ import { formatSportScore, getSportProfile, scoreLabel } from '../utils/sportRul
 import MatchBadge from './MatchBadge.jsx'
 import MatchDetails from './MatchDetails.jsx'
 import MatchScoreForm from './MatchScoreForm.jsx'
+import MatchAttendanceForm from './MatchAttendanceForm.jsx'
+import { attendanceTeamKey } from '../utils/attendance.js'
 
 export default function RefereePanel({ game, teams, user, onSaved }) {
   const [online, setOnline] = useState(navigator.onLine)
   const [fullscreen, setFullscreen] = useState(Boolean(document.fullscreenElement))
   const [message, setMessage] = useState('')
+  const [presenceOpen, setPresenceOpen] = useState(false)
   const ownsFullscreen = useRef(false)
   const live = getMatchState(game) === MATCH_STATE.LIVE
   const sets = getSportProfile(game).scoringMode === 'sets'
@@ -60,6 +63,6 @@ export default function RefereePanel({ game, teams, user, onSaved }) {
     <p className="referee-score-caption">{sets ? live && !setEnded ? `${set.number}º set · pontos · sets ${score.join(' × ')}` : `Sets ${score.join(' × ')}` : scoreLabel(game)}</p>
     {sets && game.setScores?.length ? <p className="referee-partials">Parciais: {game.setScores.map((partial, index) => `${index + 1}º: ${partial.a} × ${partial.b}`).join(' · ')}</p> : null}
     <MatchDetails game={game} />
-    {live ? <fieldset className="referee-controls" disabled={!online}><legend className="sr-only">Controles da arbitragem</legend><MatchScoreForm game={game} teams={teams} user={user} onSaved={onSaved} referee /></fieldset> : <p className="schedule-warning" role="status">Esta partida não está mais ao vivo. Os lançamentos foram encerrados. Volte à administração para consultar a situação.</p>}
+    {live ? <fieldset className="referee-controls" disabled={!online}><legend className="sr-only">Controles da arbitragem</legend><details className="referee-presence" onToggle={(event) => setPresenceOpen(event.currentTarget.open)}><summary>Conferir alunos e presença</summary>{presenceOpen ? <MatchAttendanceForm key={attendanceTeamKey(game)} game={game} teams={teams} user={user} /> : null}</details><MatchScoreForm game={game} teams={teams} user={user} onSaved={onSaved} referee /></fieldset> : <p className="schedule-warning" role="status">Esta partida não está mais ao vivo. Os lançamentos foram encerrados. Volte à administração para consultar a situação.</p>}
   </section>
 }

@@ -22,6 +22,7 @@ import { getMatchState, getMatchCondition, getMatchOutcome, isPredictionVoided, 
 import { normalizeMatchReportInput } from '../utils/matchReport.js'
 import { eventDate } from '../utils/tvSchedule.js'
 import { clockRevision, matchClockValue, stoppedMatchClock } from '../utils/matchClock.js'
+import { periodRevision, planPeriodChange } from '../utils/matchPeriods.js'
 import { applyLiveEvent, canCorrectLiveEvent, rebuildLiveEvents, scoringSnapshot, scoreRevision } from '../utils/liveEvents.js'
 import { normalizeRegulation } from '../utils/regulations.js'
 import { buildScheduleRedistribution, scheduleFingerprint, schedulePlanFingerprint } from '../utils/tournamentSchedule.js'
@@ -30,9 +31,10 @@ import { SCHOOL_CLASSES_VERSION, schoolClassPlan, synchronizeSchoolClasses } fro
 import { normalizeTieBreak } from '../utils/tieBreak.js'
 import { attendanceTeamKey, currentAttendance, normalizeAttendanceSide } from '../utils/attendance.js'
 import { normalizeBroadcastSettings } from '../utils/automaticCalls.js'
+import { normalizeScoreboardSelection, validScoreboardGameIds } from '../utils/scoreboardSelection.js'
 import { isMatchPrepared, matchStartChecklist, preparationKey } from '../utils/matchStart.js'
 import { normalizePlayerInput } from '../utils/player.js'
-import { normalizeDisciplineInput } from '../utils/discipline.js'
+import { normalizeDisciplineInput, publicCardEvent } from '../utils/discipline.js'
 import { sourceParticipant, thirdPlaceParticipants, thirdPlaceSemifinals } from '../utils/thirdPlace.js'
 import { bracketScheduleConflicts } from '../utils/bracketSchedule.js'
 import { automaticPredictionDeadline, predictionDeadlineInput } from '../utils/predictionDeadline.js'
@@ -83,6 +85,7 @@ function numberOrZero(value) {
 }
 
 function normalizeRole(role) {
+  if (role === 'viewer') return 'viewer'
   if (role === 'master' || role === 'admin') {
     return 'master'
   }
@@ -218,7 +221,7 @@ export function normalizeUserProfile(id, data = {}) {
     email: data.email || '',
     avatarUrl: data.avatarUrl || data.photoURL || data.fotoUrl || '',
     role,
-    participaRanking: role === 'master' ? false : data.participaRanking !== false,
+    participaRanking: role === 'user' && data.participaRanking !== false,
     pontos: numberOrZero(data.pontos ?? data.score),
     acertosExatos: numberOrZero(data.acertosExatos ?? data.exactHits),
     acertosResultado: numberOrZero(data.acertosResultado ?? data.resultHits),
@@ -292,9 +295,11 @@ export function normalizeGame(id, data = {}) {
     liveScoreB: asNumberOrNull(data.liveScoreB) ?? 0,
     startedAt: data.startedAt || null,
     clock: data.clock || null,
+    period: data.period || null,
     scoreRevision: Number(data.scoreRevision) || 0,
     currentSet: data.currentSet || null,
     liveEvents: Array.isArray(data.liveEvents) ? data.liveEvents : [],
+    publicCardEvents: Array.isArray(data.publicCardEvents) ? data.publicCardEvents : [],
     scorerStats: Array.isArray(data.scorerStats) ? data.scorerStats : [],
     lastScoreEventId: data.lastScoreEventId || null,
     eventsAdjusted: data.eventsAdjusted === true,
@@ -1041,8 +1046,11 @@ export async function saveDisciplinaryRecord(teamId, value, user) {
     const game = match?.exists() ? normalizeGame(match.id, match.data()) : null
     if (payload.gameId && (!game || game.sportId !== teamData.sportId || (game.turno && getTeamShift(teamData) && game.turno !== getTeamShift(teamData)) || !['A', 'B'].some((side) => game[`teamId${side}`] ? game[`teamId${side}`] === teamId : game[`time${side}`] === teamData.nome))) throw new Error('A partida precisa pertencer à equipe e à modalidade selecionadas.')
     if (payload.scope === 'tournament' && !game?.tournamentId) throw new Error('Escolha uma partida vinculada a um torneio.')
-    transaction.set(recordRef, { ...payload, recordKind: 'discipline', teamId, playerName: player.data().nome, sportId: teamData.sportId, turno: getTeamShift(teamData), tournamentId: game?.tournamentId || '', tournamentName: game?.tournamentName || '', matchLabel: game ? `${game.timeA} × ${game.timeB} · ${game.fase}` : '', status: 'active', revision: 1, createdAt: serverTimestamp(), createdBy: user?.uid || null })
+    if (game?.deletionPending) throw new Error('A partida está sendo removida. Atualize a lista antes de registrar a ocorrência.')
+    const card = publicCardEvent(game, { ...payload, id: recordRef.id, teamId, teamName: teamData.nome, playerName: player.data().nome })
+    transaction.set(recordRef, { ...payload, ...(card ? { elapsedMs: card.elapsedMs } : {}), recordKind: 'discipline', teamId, playerName: player.data().nome, sportId: teamData.sportId, turno: getTeamShift(teamData), tournamentId: game?.tournamentId || '', tournamentName: game?.tournamentName || '', matchLabel: game ? `${game.timeA} × ${game.timeB} · ${game.fase}` : '', status: 'active', revision: 1, createdAt: serverTimestamp(), createdBy: user?.uid || null })
     transaction.update(teamRef, { disciplineRevision: (Number(teamData.disciplineRevision) || 0) + 1 })
+    if (card) transaction.update(doc(firestore, 'games', game.id), { publicCardEvents: [...game.publicCardEvents, card], updatedAt: serverTimestamp() })
   })
   return recordRef.id
 }
@@ -1059,8 +1067,11 @@ export async function resolveDisciplinaryRecord({ teamId, recordId, status, reas
     if (current.recordKind !== 'discipline' || current.teamId !== teamId) throw new Error('A ocorrência não pertence à equipe selecionada.')
     if (current.status !== 'active' || current.revision !== expectedRevision) throw new Error('A ocorrência mudou. Confira a lista atualizada.')
     if (status === 'served' && current.type !== 'suspension') throw new Error('Somente uma suspensão pode ser marcada como cumprida.')
+    const gameRef = current.gameId && ['yellow', 'red'].includes(current.type) ? doc(firestore, 'games', current.gameId) : null
+    const game = gameRef ? await transaction.get(gameRef) : null
     transaction.update(recordRef, { status, revision: current.revision + 1, resolvedReason: note, resolvedAt: serverTimestamp(), resolvedBy: user?.uid || null })
     transaction.update(teamRef, { disciplineRevision: (Number(team.data().disciplineRevision) || 0) + 1 })
+    if (game?.exists()) transaction.update(gameRef, { publicCardEvents: (game.data().publicCardEvents || []).filter((event) => event.id !== recordId), updatedAt: serverTimestamp() })
   })
 }
 
@@ -1123,6 +1134,36 @@ export function subscribeBroadcastSettings(onData, onError) {
 export async function saveBroadcastSettings(value) {
   if (typeof value.autoCallsEnabled !== 'boolean' || ![5, 10, 15, 20, 30].includes(Number(value.leadMinutes))) throw new Error('Escolha uma antecedência válida para as chamadas automáticas.')
   await setDoc(doc(ensureDb(), 'broadcastSettings', 'tv'), { ...normalizeBroadcastSettings(value), updatedAt: serverTimestamp() })
+}
+
+export function subscribeScoreboardSelection(onData, onError, onSync) {
+  return onSnapshot(doc(ensureDb(), 'broadcastSettings', 'scoreboard'),
+    (snapshot) => onData(normalizeScoreboardSelection(snapshot.exists() ? snapshot.data() : {})),
+    (error) => onError?.(error ? toFriendlyError(error) : ''), onSync)
+}
+
+export async function saveScoreboardSelection(gameIds, expectedRevision) {
+  if (!validScoreboardGameIds(gameIds)) throw new Error('Escolha no máximo dois jogos diferentes para o placar.')
+  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) throw new Error('Carregue a seleção atual do placar antes de transmitir.')
+  const firestore = ensureDb()
+  return runTransaction(firestore, async (transaction) => {
+    const ref = doc(firestore, 'broadcastSettings', 'scoreboard')
+    const snapshot = await transaction.get(ref)
+    const current = normalizeScoreboardSelection(snapshot.exists() ? snapshot.data() : {})
+    if (current.revision !== expectedRevision) throw new Error('Outro responsável alterou o placar da TV. Carregue a seleção atual e tente novamente.')
+    const matches = await Promise.all(gameIds.map((id) => transaction.get(doc(firestore, 'games', id))))
+    matches.forEach((match) => {
+      if (!match.exists() || match.data().deletionPending) throw new Error('Um dos jogos foi removido. Atualize a seleção do placar.')
+      const game = match.data()
+      const state = getMatchState(game)
+      const mayKeepResult = state === MATCH_STATE.FINISHED && current.gameIds.includes(match.id)
+      if (![MATCH_STATE.LIVE, MATCH_STATE.SCHEDULED].includes(state) && !mayKeepResult) throw new Error('Escolha partidas agendadas ou em andamento para transmitir.')
+      if (game.seedLabelA || game.seedLabelB || !game.timeA || !game.timeB) throw new Error('Aguarde a definição das duas equipes antes de transmitir este jogo.')
+    })
+    const next = { gameIds: [...gameIds], revision: current.revision + 1 }
+    transaction.set(ref, { ...next, updatedAt: serverTimestamp() })
+    return next
+  })
 }
 
 export async function saveAnnouncement({ text, type = 'aviso', minutes = 60 }) {
@@ -1329,6 +1370,7 @@ export async function reopenGame(gameId) {
       setScores: [],
       startedAt: null,
       clock: null,
+      period: null,
       scoreRevision: (Number(snapshot.data().scoreRevision) || 0) + 1,
       currentSet: null, liveEvents: [], scorerStats: [], lastScoreEventId: null,
       eventsAdjusted: false,
@@ -1424,7 +1466,7 @@ async function startSelectedGames(gameIds, submissions, requirePrepared) {
       transaction.update(doc(firestore, 'games', game.id), { ...fields, ...profile, status: GAME_STATUS.CLOSED, liveStatus: MATCH_STATE.LIVE,
         liveScoreA: game.startedAt ? game.liveScoreA : 0, liveScoreB: game.startedAt ? game.liveScoreB : 0,
         setScores: game.startedAt ? game.setScores : [], tieBreak: game.startedAt ? game.tieBreak : null, startedAt: game.startedAt || serverTimestamp(), endedAt: null,
-        clock: { elapsedMs: game.startedAt ? matchClockValue(game, new Date()).elapsedMs : 0, runningSince: serverTimestamp(), revision: clockRevision(game) + 1 },
+        clock: { elapsedMs: game.startedAt ? matchClockValue(game, new Date()).elapsedMs : 0, runningSince: game.period?.phase === 'interval' ? null : serverTimestamp(), revision: clockRevision(game) + 1 },
       })
     }
   })
@@ -1439,10 +1481,26 @@ export async function controlMatchClock({ gameId, action, expectedRevision }) {
     if (!snapshot.exists()) throw new Error('Jogo não encontrado.')
     const game = normalizeGame(snapshot.id, snapshot.data())
     if (getMatchState(game) !== MATCH_STATE.LIVE) throw new Error('O cronômetro só pode ser controlado em uma partida ao vivo.')
+    if (action === 'resume' && game.period?.phase === 'interval') throw new Error('A partida está em intervalo. Use Iniciar próximo período para retomar o jogo.')
     if (expectedRevision !== clockRevision(game)) throw new Error('Outro responsável alterou o cronômetro. Confira a atualização e tente novamente.')
     const value = matchClockValue(game, new Date())
     if ((action === 'pause') !== value.running) throw new Error('O estado do cronômetro mudou. Confira a atualização antes de continuar.')
     transaction.update(ref, { clock: { elapsedMs: value.elapsedMs, runningSince: action === 'resume' ? serverTimestamp() : null, revision: clockRevision(game) + 1 }, updatedAt: serverTimestamp() })
+  })
+}
+
+export async function changeMatchPeriod({ gameId, action, format, expectedRevision, expectedClockRevision }) {
+  const firestore = ensureDb()
+  const ref = doc(firestore, 'games', gameId)
+  await runTransaction(firestore, async (transaction) => {
+    const snapshot = await transaction.get(ref)
+    if (!snapshot.exists()) throw new Error('Jogo não encontrado.')
+    const game = normalizeGame(snapshot.id, snapshot.data())
+    if (periodRevision(game) !== expectedRevision || clockRevision(game) !== expectedClockRevision) throw new Error('Outro responsável alterou o período ou o relógio. Confira os dados atuais antes de continuar.')
+    const now = new Date()
+    const plan = planPeriodChange(game, { action, format }, now)
+    const clock = plan.clockAction ? { elapsedMs: matchClockValue(game, now).elapsedMs, runningSince: plan.clockAction === 'resume' ? serverTimestamp() : null, revision: clockRevision(game) + 1 } : null
+    transaction.update(ref, { period: plan.period, ...(clock ? { clock } : {}), updatedAt: serverTimestamp() })
   })
 }
 
@@ -1458,6 +1516,7 @@ export async function recordLiveEvent({ gameId, requestId, side, playerId = '', 
     if (!snapshot.exists()) throw new Error('Jogo não encontrado.')
     const game = normalizeGame(snapshot.id, snapshot.data())
     if (getMatchState(game) !== MATCH_STATE.LIVE) throw new Error('Registre lances somente enquanto a partida estiver ao vivo.')
+    if (game.period?.phase === 'interval') throw new Error('A partida está em intervalo. Inicie o próximo período antes de marcar gols ou pontos.')
     if (scoreRevision(game) !== expectedScoreRevision) throw new Error('O placar mudou em outro dispositivo. Confira o placar atual antes de registrar o lance.')
     let player = null
     if (playerId) {

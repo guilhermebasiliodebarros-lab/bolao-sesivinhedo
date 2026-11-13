@@ -99,6 +99,7 @@ export function AuthProvider({ children }) {
   }
 
   const isMaster = Boolean(user && profile?.role === 'master')
+  const isViewer = Boolean(user && profile?.role === 'viewer')
   const isParticipant = Boolean(user && isRankingProfile(profile))
   const value = {
     user,
@@ -107,6 +108,7 @@ export function AuthProvider({ children }) {
     profileLoading,
     error,
     isMaster,
+    isViewer,
     isParticipant,
     register,
     login,

@@ -10,6 +10,7 @@ import { createMasterProfile, createParticipantProfile, getUserProfile } from '.
 
 const LOGIN_ALIASES = {
   suporte: 'suporte@bolao-sesivinhedo.local',
+  sesivinhedo: 'sesivinhedo@interclasse-sesivinhedo.local',
 }
 
 function ensureAuth() {
@@ -27,7 +28,7 @@ function resolveLoginEmail(value) {
 }
 
 function isMasterLogin(email) {
-  return Object.values(LOGIN_ALIASES).includes(String(email || '').trim().toLowerCase())
+  return LOGIN_ALIASES.suporte === String(email || '').trim().toLowerCase()
 }
 
 export function watchAuthState(callback) {
@@ -65,6 +66,10 @@ export async function loginWithEmail({ email, password }) {
   let profile = await getUserProfile(credential.user.uid)
 
   if (!profile) {
+    if (resolvedEmail === LOGIN_ALIASES.sesivinhedo) {
+      await signOut(firebaseAuth)
+      throw new Error('A conta de consulta ainda não foi configurada pela organização.')
+    }
     const fallbackName = credential.user.displayName || credential.user.email?.split('@')[0] || 'Participante'
     if (isMasterLogin(resolvedEmail)) {
       await createMasterProfile(credential.user, 'Suporte')

@@ -2,11 +2,13 @@
 import { createPortal } from 'react-dom'
 import { COPY } from '../content/copy.js'
 import { useAuth } from '../context/useAuth.js'
-import { PARTICIPANT_VIEWS } from '../utils/navigation.js'
+import { CONSULTATION_VIEWS, PARTICIPANT_VIEWS } from '../utils/navigation.js'
 
 export default function Header({ activeView, onNavigate, theme, onToggleTheme }) {
-  const { user, profile, isMaster, logout } = useAuth()
-  const participantAccount = Boolean(user && !isMaster)
+  const { user, profile, isMaster, isViewer, logout } = useAuth()
+  const participantAccount = Boolean(user && !isMaster && !isViewer)
+  const accountHome = isViewer ? 'calendario' : isMaster ? 'admin' : user ? 'dashboard' : 'home'
+  const brandHome = isViewer ? 'calendario' : participantAccount ? 'dashboard' : 'home'
   const [menuOpen, setMenuOpen] = useState(false)
   const [logoLoaded, setLogoLoaded] = useState(true)
   const drawerRef = useRef(null)
@@ -44,10 +46,12 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
     { id: 'regulamentos', label: 'Regulamentos' },
     { id: 'estatisticas', label: 'Estatísticas' },
     { id: 'tv', label: 'Modo TV' },
+    { id: 'placar', label: 'Placar ao vivo' },
   ]
   const participantItems = participantAccount ? PARTICIPANT_VIEWS.map((id) => ({ id, label: COPY.nav[id] })) : []
+  const consultationItems = CONSULTATION_VIEWS.map((id) => publicItems.find((item) => item.id === id))
   const adminItems = isMaster ? [{ id: 'admin', label: 'Painel master' }] : []
-  const navItems = [
+  const navItems = isViewer ? consultationItems : [
     ...(participantAccount ? [] : publicItems),
     ...(!user ? [{ id: 'classificacao', label: COPY.nav.classificacao }] : []),
     ...participantItems,
@@ -78,7 +82,7 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
     <>
       <header ref={headerRef} className="site-header commerce-header">
         <div className="header-topbar">
-          <button className="brand" type="button" onClick={() => handleNavigate(participantAccount ? 'dashboard' : 'home')}>
+          <button className="brand" type="button" onClick={() => handleNavigate(brandHome)}>
             {logoLoaded ? (
               <img className="brand-logo" src="/logo-interclasse.png" alt="Interclasse SESI Vinhedo" onError={() => setLogoLoaded(false)} />
             ) : (
@@ -86,16 +90,16 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
             )}
           </button>
           <div className="header-event-label">
-            <strong>O seu palpite entra em jogo.</strong>
+            <strong>{isViewer || (!user && activeView === 'login') ? 'Acompanhe o Interclasse.' : 'O seu palpite entra em jogo.'}</strong>
             <span>Jogos, resultados e classificação em um só lugar.</span>
           </div>
           <div className="header-quick-actions">
             <button className="theme-toggle desktop-theme-toggle" type="button" onClick={onToggleTheme}>
               {theme === 'dark' ? COPY.header.lightMode : COPY.header.darkMode}
             </button>
-            <button className="header-account" type="button" onClick={() => handleNavigate(user ? (isMaster ? 'admin' : 'dashboard') : 'login')}>
+            <button className="header-account" type="button" onClick={() => handleNavigate(user ? accountHome : 'login')}>
               <span>{user ? `Olá, ${displayName}` : 'Olá, faça seu login'}</span>
-              <strong>{user ? (isMaster ? 'Painel master' : 'Minha participação') : 'Entre no bolão'} <span aria-hidden="true">›</span></strong>
+              <strong>{user ? (isViewer ? 'Somente consulta' : isMaster ? 'Painel master' : 'Minha participação') : 'Entre no Interclasse'} <span aria-hidden="true">›</span></strong>
             </button>
           </div>
         </div>
@@ -140,17 +144,18 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
             <span className="drawer-avatar" aria-hidden="true">{avatarUrl ? <img src={avatarUrl} alt="" /> : avatarLabel}</span>
             <div>
               <strong id="drawer-greeting">{user ? `Olá, ${displayName}` : 'Olá, boas-vindas!'}</strong>
-              <span>{isMaster ? 'Administração do bolão' : COPY.brand.name}</span>
+              <span>{isMaster ? 'Administração do Interclasse' : COPY.brand.name}</span>
             </div>
             <button className="drawer-close" type="button" aria-label={COPY.header.closeMenu} onClick={() => setMenuOpen(false)}>×</button>
           </div>
           <div className="drawer-scroll">
             <nav aria-label="Menu lateral">
-              {!participantAccount ? <section className="drawer-section">
-                <h2>Explore o bolão</h2>
+              {!participantAccount && !isViewer ? <section className="drawer-section">
+                <h2>Explore o Interclasse</h2>
                 {renderLinks(publicItems)}
                 {!user ? renderLinks([{ id: 'classificacao', label: COPY.nav.classificacao }]) : null}
               </section> : null}
+              {isViewer ? <section className="drawer-section"><h2>Consulta do Interclasse</h2>{renderLinks(consultationItems)}</section> : null}
               {participantItems.length ? (
                 <section className="drawer-section"><h2>Sua participação</h2>{renderLinks(participantItems)}</section>
               ) : null}
@@ -172,7 +177,7 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
                 )}
               </section>
             </nav>
-            <div className="drawer-footer">SESI Vinhedo <span>Todo jogo começa com um palpite.</span></div>
+            <div className="drawer-footer">SESI Vinhedo <span>{isViewer ? 'Jogos, resultados e estatísticas do Interclasse.' : 'Todo jogo começa com um palpite.'}</span></div>
           </div>
         </dialog>, document.body,
       )}

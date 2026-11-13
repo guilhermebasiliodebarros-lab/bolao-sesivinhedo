@@ -1,0 +1,21 @@
+.rehearsal-guide { display: grid; gap: 22px; padding: clamp(16px, 3vw, 28px); background: var(--surface); border: 1px solid var(--border); border-radius: 20px; min-width: 0; }
+.rehearsal-guide p { line-height: 1.6; }
+.rehearsal-setup { padding: 20px; border: 1px solid #449d8c66; border-radius: 12px; background: #449d8c0b; }
+.rehearsal-setup ol { padding-left: 22px; line-height: 1.7; }
+.rehearsal-setup p { margin-bottom: 0; }
+.rehearsal-roles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.rehearsal-roles article { min-width: 0; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-strong); }
+.rehearsal-roles h3 { margin-top: 0; font-size: 16px; }
+.rehearsal-roles p { overflow-wrap: anywhere; font-size: 13px; }
+.rehearsal-progress { display: flex; align-items: center; gap: 14px; font-size: 13px; }
+.rehearsal-progress progress { flex: 1; width: 100%; accent-color: #168e7b; height: 12px; }
+.rehearsal-tasks { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+.rehearsal-tasks li { padding: 16px; border: 1px solid var(--border); border-radius: 12px; }
+.rehearsal-tasks li.is-complete { border-color: #3a9e7966; background: #3a9e7909; }
+.rehearsal-tasks label { display: flex; align-items: start; gap: 12px; cursor: pointer; }
+.rehearsal-tasks input { width: 20px; height: 20px; margin-top: 2px; flex-shrink: 0; accent-color: #168e7b; }
+.rehearsal-tasks label > span { display: grid; gap: 6px; min-width: 0; }
+.rehearsal-tasks label > span > span { color: var(--muted); font-size: 13px; line-height: 1.6; }
+.rehearsal-guide > label { display: grid; gap: 8px; font-weight: 650; }
+.rehearsal-guide textarea { padding: 14px; width: 100%; resize: vertical; color: var(--text); background: var(--surface-strong); border: 1px solid var(--border); border-radius: 10px; font: inherit; }
+@media (max-width: 700px) { .rehearsal-roles { grid-template-columns: 1fr; } }

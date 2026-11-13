@@ -70,7 +70,7 @@ function getTournamentKnockoutGames(games) {
 }
 
 export default function Calendario({ onNavigate }) {
-  const { user, isParticipant } = useAuth()
+  const { user, isParticipant, isViewer } = useAuth()
   const [games, setGames] = useState([])
   const [predictions, setPredictions] = useState([])
   const [sportFilter, setSportFilter] = useState(ALL_ITEMS_FILTER)
@@ -134,14 +134,14 @@ export default function Calendario({ onNavigate }) {
       <div className="page-heading with-actions">
         <div>
           <span className="eyebrow">Calendário público</span>
-          <h1>Jogos do bolão</h1>
-          <p>Acompanhe horários, fases e confrontos antes de entrar para palpitar.</p>
+          <h1>Jogos do Interclasse</h1>
+          <p>{isViewer ? 'Acompanhe horários, fases, confrontos e resultados do Interclasse.' : 'Acompanhe horários, fases e confrontos antes de entrar para palpitar.'}</p>
         </div>
         <div className="form-actions">
-          <button className="btn btn-outline" type="button" onClick={() => onNavigate('tv')}>Abrir modo TV</button>
+          {!isViewer ? <button className="btn btn-outline" type="button" onClick={() => onNavigate('tv')}>Abrir modo TV</button> : null}
           <button className="btn btn-outline" type="button" onClick={() => onNavigate('regulamentos')}>Consultar regulamentos</button>
           <button className="btn btn-outline" type="button" onClick={() => onNavigate('estatisticas')}>Ver estatísticas dos atletas</button>
-          <button className="btn btn-primary" type="button" onClick={() => onNavigate('login')}>Entrar para palpitar</button>
+          {!isViewer ? <button className="btn btn-primary" type="button" onClick={() => onNavigate('login')}>Entrar para palpitar</button> : null}
         </div>
       </div>
 

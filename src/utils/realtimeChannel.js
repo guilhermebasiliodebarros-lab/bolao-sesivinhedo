@@ -73,6 +73,7 @@ export function createRealtimeChannel({ listen, read, interval = 30000, environm
     snapshot = undefined; synced = false; lastServerAt = null; lastError = null
   }
   return {
+    refresh: resume,
     subscribe(onData, onError, onSync) {
       const subscriber = { onData, onError, onSync, failed: false }
       subscribers.add(subscriber)

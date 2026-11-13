@@ -7,6 +7,7 @@ export default function Login({ onNavigate, onSuccess }) {
   const [form, setForm] = useState({ email: '', password: '' })
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
+  const consultationLogin = ['sesivinhedo', 'sesivinhedo@interclasse-sesivinhedo.local'].includes(form.email.trim().toLowerCase())
 
   const updateField = (field, value) => {
     setForm((current) => ({ ...current, [field]: value }))
@@ -24,7 +25,7 @@ export default function Login({ onNavigate, onSuccess }) {
     try {
       setLoading(true)
       const result = await login(form)
-      onSuccess(result.profile?.role === 'master' ? 'admin' : 'dashboard')
+      onSuccess(result.profile?.role === 'viewer' ? 'calendario' : result.profile?.role === 'master' ? 'admin' : 'dashboard')
     } catch (error) {
       setMessage(error.message)
     } finally {
@@ -35,9 +36,9 @@ export default function Login({ onNavigate, onSuccess }) {
   return (
     <section className="auth-page">
       <div className="auth-card">
-        <span className="eyebrow">{COPY.auth.login.eyebrow}</span>
-        <h1>{COPY.auth.login.title}</h1>
-        <p>{COPY.auth.login.description}</p>
+        <span className="eyebrow">{consultationLogin ? 'Acesso somente para consulta' : COPY.auth.login.eyebrow}</span>
+        <h1>{consultationLogin ? 'Consultar o Interclasse' : COPY.auth.login.title}</h1>
+        <p>{consultationLogin ? 'Visualize calendário, chaveamento, simulador, regulamentos e estatísticas do Interclasse.' : COPY.auth.login.description}</p>
 
         <form className="form-stack" onSubmit={handleSubmit}>
           <label>
@@ -70,12 +71,12 @@ export default function Login({ onNavigate, onSuccess }) {
           </button>
         </form>
 
-        <p className="auth-switch">
+        {!consultationLogin ? <p className="auth-switch">
           {COPY.auth.login.switchText}
           <button type="button" onClick={() => onNavigate('cadastro')}>
             {COPY.actions.criarCadastro}
           </button>
-        </p>
+        </p> : null}
       </div>
     </section>
   )

@@ -4,6 +4,8 @@ import { createSharedSubscriptions } from '../utils/sharedSubscriptions.js'
 import { updateRealtimeStatus } from './realtimeStatus.js'
 
 const databases = new WeakMap()
+const activeChannels = new Set()
+export const refreshRealtimeSubscriptions = () => activeChannels.forEach((channel) => channel.refresh())
 const sameSource = (first, second) => first.type === 'document' || second.type === 'document'
   ? first.type === second.type && refEqual(first, second)
   : queryEqual(first, second)
@@ -28,6 +30,7 @@ function subscribe(source, onData, onError, onSync) {
             : () => getDocsFromServer(target),
           interval: games ? 30000 : 60000,
         })
+        activeChannels.add(channel)
         return {
           subscribe(next, failed, sync) {
             return channel.subscribe(next, failed, (connected, info) => {
@@ -38,7 +41,7 @@ function subscribe(source, onData, onError, onSync) {
           channel,
         }
       },
-      onRemove: (wrapper) => updateRealtimeStatus(wrapper.channel, null),
+      onRemove: (wrapper) => { activeChannels.delete(wrapper.channel); updateRealtimeStatus(wrapper.channel, null) },
     })
     databases.set(source.firestore, pool)
   }

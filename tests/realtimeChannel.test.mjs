@@ -11,6 +11,21 @@ function setup(read) {
 const snap = (score, fromCache = false) => ({ score, metadata: { fromCache, hasPendingWrites: false } })
 const flush = () => new Promise((resolve) => setImmediate(resolve))
 
+test('manual TV verification refreshes the existing subscriptions and does not send reads while offline', async () => {
+  let reads = 0
+  const env = setup(async () => { reads++; return snap(2) })
+  const received = []
+  const stop = env.channel.subscribe((value) => received.push(value.score))
+  env.streams[0].next(snap(1))
+  env.channel.refresh(); await flush()
+  assert.equal(env.streams.length, 2)
+  assert.equal(reads, 1)
+  assert.deepEqual(received, [1, 2])
+  env.online(false); env.channel.refresh(); await flush()
+  assert.equal(reads, 1)
+  stop(); assert.equal(env.timers.size, 0)
+})
+
 test('shared listeners reconnect after terminal errors, preserve cached scores and release timers', () => {
   const env = setup(), first = [], second = [], errors = [], sync = []
   const offA = env.channel.subscribe((value) => first.push(value.score), (error) => errors.push(error), (value) => sync.push(value))

@@ -55,7 +55,7 @@ export default function GameCard({ game, existingPrediction, existingGuess, comp
     .filter(Boolean)
     .join(' ')
   const lockedMessage = isMaster
-    ? 'Usuário master não participa do bolão.'
+    ? 'Usuário master não participa do Interclasse.'
     : game.status === GAME_STATUS.OPEN && !deadlineOpen
       ? `Prazo encerrado em ${formatDateTime(deadline)}.`
       : user

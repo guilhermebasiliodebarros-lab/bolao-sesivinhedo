@@ -2,6 +2,12 @@
 
 Aplicação React + Vite para cadastro de participantes, login, palpites, ranking automático e painel master com Firebase Authentication e Firestore.
 
+## Ensaio antes do evento
+
+Use **Iniciar-Ensaio.cmd** ou `npm run ensaio` para praticar com autenticação, jogos, jogadores e palpites fictícios em um banco local. Abra `http://127.0.0.1:5179/#login`; a senha das contas de treino é `Ensaio2026!`. A organização usa `suporte`, o participante usa `professor@ensaio.local` e a consulta usa `sesivinhedo`. O projeto `demo-interclasse-ensaio` é separado do Firebase oficial e só é ativado no servidor de desenvolvimento em modo `rehearsal`.
+
+Com o ensaio aberto, `npm run validar:ensaio` repete o fluxo integrado pela interface. `npm run ensaio:reiniciar` restaura os dados fictícios. Veja o [guia de ensaio e operação](docs/guia-ensaio-e-operacao.md) e o [relatório de preparação](docs/validacao-completa-2026-11-13.md).
+
 ## Configuração do Firebase
 
 1. Crie um projeto no Firebase Console.
@@ -36,6 +42,8 @@ O usuário master serve apenas para administração. Para participar do bolão, 
 Contas de usuário autenticadas têm navegação restrita a **Painel**, **Jogos**, **Meus palpites** e **Classificação**, tanto no menu superior quanto no lateral. O logo leva ao Painel; links diretos para outras telas redirecionam ao Painel após o carregamento do perfil. Tema e saída da conta continuam disponíveis. Visitantes mantêm a navegação pública, e o master mantém suas telas de organização. Essa separação é da navegação do site; as permissões dos dados continuam sob as regras do Firestore.
 
 ## Coleções usadas
+
+A conta compartilhada de consulta usa o nome e login **sesivinhedo** (`sesivinhedo@interclasse-sesivinhedo.local`), perfil `role: "viewer"` e `participaRanking: false`. Ela abre o Calendário e tem somente os menus Calendário, Chaveamento, Simulador, Regulamentos e Estatísticas. Links diretos para outras telas retornam ao Calendário. O simulador modifica apenas cenários locais, sem salvar resultados oficiais. As regras do Firestore bloqueiam gravações e acesso aos perfis de outros usuários para essa conta. A senha é definida no Firebase Authentication e não fica no código.
 
 - `users`: perfil, role, pontos e flags de ranking.
 - `games`: jogos, status e placar final.
@@ -91,7 +99,7 @@ Todas as modalidades começam com as **14 turmas da escola**: 6º, 7º e 8º A/B
 
 A preparação é registrada por modalidade em `schoolClassesVersion`, com IDs estáveis para as turmas novas. Reabrir o painel ou executar novamente não duplica equipes. Remoções feitas posteriormente pelo master não são desfeitas automaticamente. A separação por turno continua sendo respeitada nos jogos, nas listas e no gerador de chaveamento.
 
-- **Logo:** a versão `public/logo-interclasse.png` troca Bolão por Interclasse preservando o escudo SESI Vinhedo. A área de palpites dos professores mantém o nome Bolão.
+- **Identidade:** todo o site usa o nome Interclasse SESI Vinhedo, incluindo a área de palpites dos professores. O logo `public/logo-interclasse.png` preserva o escudo SESI Vinhedo.
 - **Local e coletes:** em Jogos, informe quadra/sala, duração prevista e a cor de colete de cada equipe. Os dados aparecem nos jogos, no calendário e na TV.
 - **Conflitos:** o sorteio cria os confrontos sem horários. A organização preenche a agenda depois; o início verifica a disponibilidade do local e das equipes. O local, a área, a duração e os coletes são definidos em **Preparar partida**. Para identificar turmas entre modalidades, preencha **Turma** no cadastro de cada time com o mesmo nome.
 - **Placares por esporte:** em Esportes, configure gols, pontos, sets ou xadrez; no vôlei, melhor de 3 ou 5 sets. Em Ao vivo / TV, registre parciais de sets opcionais; xadrez aceita vitória, derrota ou empate de ½ ponto. Os pontos por vitória, empate e derrota são configuráveis para o regulamento escolar.
@@ -162,9 +170,23 @@ As correções dos oito lances recentes são gravadas com conferência de versã
 
 **Desfazer último lance** restaura o placar, os pontos do set, as parciais e os autores correspondentes, inclusive ao desfazer um set encerrado. O registro usa transações, identificadores de requisição e versão do placar para impedir duplicações por repetição e sobrescritas por outros dispositivos. Rascunhos de correção e confirmações de resultado precisam ser atualizados quando outro operador muda o placar. Uma correção manual reinicia os lances e autores exibidos na TV, mantendo os registros técnicos privados em `games/{gameId}/events/{eventId}`; essa coleção é restrita a master. Apenas os últimos oito lances e os resumos de autores, já com primeiro nome, ficam no jogo público. Não é publicada a lista completa de jogadores ou presenças.
 
-A TV destaca placar, local, pontos do set, cronômetro e último lance, com bola e minuto nos gols. Os autores dos gols aparecem por equipe. Os ajustes ficam recolhidos em **Ajustes da TV**; a programação e os placares ganham mais espaço. O padrão é duas partidas ao vivo por página, com opção de quatro em telas de pelo menos 1.000 pixels de altura. Telas menores usam quatro jogos de agenda por página; as maiores usam até seis. As páginas continuam alternando modalidades e trazendo os jogos ao vivo de volta à rotação. O logo Interclasse permanece.
+A TV destaca placar, local, pontos do set, cronômetro e último lance, com bola e minuto nos gols. Os autores dos gols aparecem por equipe. Logo, controles e relógio ficam em uma única linha no topo; em telas estreitas, a faixa de controles permite rolagem lateral. Em tela cheia, os controles ficam recolhidos em **Ajustes da TV**; ao sair da tela cheia, reaparecem automaticamente. O padrão é duas partidas ao vivo por página, com opção de quatro em telas de pelo menos 1.000 pixels de altura. Telas menores usam quatro jogos de agenda por página; as maiores usam até seis. As páginas continuam alternando modalidades e trazendo os jogos ao vivo de volta à rotação. O logo Interclasse permanece.
+
+## Placar fixo para TV
+
+Abra `https://bolao-sesivinhedo.web.app/#placar` no navegador da TV, sem exigir login, ou use **Painel master → Placar para TV**. A central **Ao vivo / TV** também abre o placar em outra aba, para continuar operando os jogos. O Modo TV com programação rotativa continua disponível.
+
+Em **Painel master → Ao vivo / TV → Escolher jogos do placar**, marque uma ou duas partidas e clique em **Transmitir seleção**. Um jogo ocupa a tela inteira; dois ficam lado a lado. A TV mostra somente as partidas escolhidas e recebe a troca em tempo real, inclusive quando a seleção é feita em outro computador ou celular. Os filtros de modalidade, turno e busca ajudam a localizar as partidas no seletor. Escolher uma partida para a TV não inicia nem encerra o jogo.
+
+O placar não inclui automaticamente outros jogos, agenda, resultados de partidas diferentes ou rotação de páginas. Ao encerrar uma partida selecionada, o resultado final permanece até a organização trocar a seleção. Para deixar a TV em espera, use **Limpar seleção → Colocar TV em espera**. A seleção compartilhada fica em `broadcastSettings/scoreboard`, separada das opções de cronômetro e chamadas. Apenas a conta master pode alterá-la. Uma revisão impede que dois operadores sobrescrevam escolhas concorrentes; partidas removidas, canceladas ou adiadas não são substituídas por outras.
+
+O vôlei mostra os pontos do set atual em tamanho grande, com sets conquistados e parciais separados. Os placares e a seleção usam assinaturas em tempo real e reconexão automática. A TV solicita manter a tela ligada quando o navegador permite. Sem conexão, preserva a última seleção e os últimos dados recebidos. Fora da tela cheia, os controles ficam visíveis; em tela cheia, reaparecem com mouse, toque ou teclado. **Ajustar placar da TV → Copiar link desta TV** compartilha o endereço público, que acompanha a mesma seleção da organização em todos os dispositivos. A conta `sesivinhedo` mantém seus cinco menus de consulta.
+
+O botão **Voltar** retorna ao Modo TV e encerra a tela cheia. Os lances ficam separados por equipe: bola, primeiro nome do aluno e minutos dos gols; pontos identificam o valor da cesta. Cartões amarelos e vermelhos registrados na **Central disciplinar**, com a partida vinculada, aparecem automaticamente com primeiro nome e minuto. O minuto usa o cronômetro ao vivo ou o valor informado pela organização. Anular o cartão remove sua exibição na TV, preservando o registro privado. Motivos e decisões disciplinares permanecem restritos à organização. Listas com mais de três linhas por equipe alternam páginas a cada dez segundos.
 
 ## Controle do tempo de jogo
+
+O controle de períodos permite tempo único, dois tempos ou quatro períodos. Futebol e handebol usam dois tempos por padrão; basquete, quatro períodos. A organização pode alterar o formato durante o primeiro período, antes de iniciar o intervalo. **Encerrar tempo/período → Confirmar intervalo** pausa o relógio e bloqueia novos gols/pontos, preservando cartões e correções. **Preparar próximo período → Iniciar** retoma o jogo com o relógio do período em zero. O acumulado e os minutos dos lances são preservados. A TV mostra o período ou intervalo e o tempo acumulado. O encerramento da partida continua manual. O vôlei permanece controlado pelos sets.
 
 Ao iniciar uma partida, o cronômetro começa automaticamente. Em **Ao vivo / TV** ou **Abrir placar**, use **Pausar cronômetro** e **Retomar cronômetro**. A pausa mantém a partida ao vivo, a área ocupada e os palpites bloqueados. O tempo acumulado e o instante da retomada ficam salvos no jogo; trocar de tela ou recarregar não reinicia a contagem. Não há gravações a cada segundo. Controles concorrentes verificam a versão atual antes de alterar a contagem. Encerrar, adiar, cancelar ou registrar W.O. interrompe a contagem; retomar uma partida adiada preserva o tempo já jogado, e reabrir uma partida concluída zera o cronômetro.
 
@@ -201,6 +223,8 @@ O editor guarda automaticamente um rascunho local por usuário e modalidade. Rea
 Na administração e na consulta pública, **Baixar regulamento em PDF** exporta o conteúdo salvo da modalidade. Também é possível baixar todos os regulamentos cadastrados em um arquivo, com logo Interclasse, versão, páginas numeradas e suporte a seções de 10.000 caracteres. Campos vazios e modalidades sem regulamento são omitidos. O arquivo pode ser aberto e impresso pelo navegador.
 
 ## Modo árbitro
+
+A operação reúne relógio, períodos, gols/pontos, cartões e **Conferir alunos e presença** na mesma tela. Em **Cartões da partida**, selecione equipe, aluno e cor e confirme o lançamento; o cartão é vinculado automaticamente ao jogo e aparece na TV e na Central disciplinar. A anulação exige motivo e retira apenas o cartão escolhido.
 
 Em **Ao vivo / TV → Abrir modo árbitro**, ou em **Jogos → Mais opções → Modo árbitro**, o master abre uma única partida com placar grande, cronômetro, coletes, local e botões ampliados. O painel também está disponível em **Abrir placar → Modo árbitro**. Cada partida simultânea tem seus próprios controles. O navegador tenta manter a tela ligada e oferece tela cheia; o painel continua utilizável quando o aparelho não permite essas funções.
 
@@ -258,6 +282,10 @@ Em **Painel → Lembretes de palpites**, cada participante pode ativar um aviso 
 Os avisos aparecem na página enquanto o site estiver aberto. **Permitir avisos do navegador** solicita a permissão somente ao clicar; a recusa mantém os avisos internos. Não há envio com o site fechado, por e-mail, WhatsApp ou push em segundo plano. Os lembretes desaparecem após o envio, fechamento ou cancelamento da partida e não são exibidos para master ou visitantes.
 
 ## Atualizações automáticas e TVs remotas
+
+Os indicadores de conexão do placar e do Modo TV abrem **Diagnóstico da TV**, com a última confirmação do servidor e a ação **Verificar conexão agora**. Confirmações são feitas mesmo sem lances novos. Sem confirmação por 75 segundos nos placares ou 135 segundos na seleção compartilhada, a tela indica dados atrasados e conserva o último conteúdo. O cronômetro não é usado como prova de conexão.
+
+Em **Painel master → Ensaio geral**, o roteiro orienta a equipe em partidas, TV, cartões, períodos, correções, palpites e queda de internet. No ambiente local fictício, permite marcar etapas, guardar pendências neste navegador e baixar o relatório. Inicie com **Iniciar-Ensaio.cmd**. Com o ensaio aberto, `npm run validar:operacao` executa as verificações da operação e grava o relatório em `artifacts/rehearsal/operations-result.json`. Execute separadamente de `npm run validar:ensaio`, pois ambos reiniciam os dados fictícios.
 
 Todas as telas recebem jogos, placares, classificação, palpites, regulamentos, equipes, elencos, avisos e configurações pela escuta em tempo real do Firestore. O sistema recupera a escuta após erros, retorno da internet ou retomada de uma aba. A conexão usa long polling para redes escolares que armazenam respostas de streaming. Há uma conferência adicional no servidor a cada 30 segundos para jogos e a cada 60 segundos para os demais dados, somente com a tela visível e conectada. Coleções com `updatedAt` usam alterações incrementais e contagem; exclusões ou diferenças provocam uma leitura completa. Consultas filtradas preservam os filtros e as permissões, sem exigir novos índices compostos. Consultas equivalentes compartilham a mesma conexão na aba e são descartadas quando o último componente deixa de usá-las. As conferências consomem leituras do Firestore. Os dados anteriores permanecem visíveis durante uma queda de conexão, e os erros são removidos ao recuperar o servidor.
 

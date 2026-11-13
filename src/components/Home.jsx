@@ -70,10 +70,10 @@ export default function Home({ onNavigate }) {
         </div>
       </div>
 
-      <section className="live-command-strip" aria-label="Destaques do bolão">
+      <section className="live-command-strip" aria-label="Destaques do Interclasse">
         <article>
           <span className="live-dot" aria-hidden="true" />
-          <small>Agora no bolão</small>
+          <small>Agora no Interclasse</small>
           <strong>Palpites abertos com prazo visível</strong>
         </article>
         <article>
@@ -90,7 +90,7 @@ export default function Home({ onNavigate }) {
 
       <PendingGuessBanner count={pendingGuessCount} onNavigate={onNavigate} />
 
-      <section className="home-event-panel" aria-label="Resumo do bolão">
+      <section className="home-event-panel" aria-label="Resumo do Interclasse">
         <article className="home-next-games">
           <span className="eyebrow">Próximos jogos</span>
           {nextGames.length ? (
