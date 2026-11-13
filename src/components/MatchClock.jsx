@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { controlMatchClock } from '../services/bolaoService.js'
+import { useMatchOperations } from '../context/useMatchOperations.js'
 import { clockRevision, formatMatchClock, matchClockValue } from '../utils/matchClock.js'
 import { matchPeriod } from '../utils/matchPeriods.js'
 import MatchPeriodControl from './MatchPeriodControl.jsx'
@@ -11,6 +11,7 @@ export function MatchClockDisplay({ game, now }) {
 }
 
 export default function MatchClockControl({ game, disabled = false }) {
+  const { controlMatchClock } = useMatchOperations()
   const [now, setNow] = useState(() => new Date())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')

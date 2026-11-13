@@ -1,0 +1,68 @@
+.local-test-mode { display: grid; gap: 18px; min-width: 0; }
+.local-test-heading { display: flex; justify-content: space-between; align-items: start; gap: 18px; }
+.local-test-heading h2 { margin: 6px 0; font-size: clamp(24px, 2.5vw, 34px); }
+.local-test-heading p, .local-test-how { color: var(--muted); font-size: 14px; line-height: 1.6; margin: 0; }
+.local-test-heading > button { flex-shrink: 0; }
+.local-test-notice { display: flex; flex-wrap: wrap; gap: 7px 18px; padding: 16px 18px; color: #76520b; border: 1px solid #c6963c80; border-radius: 12px; background: #fff0c5; }
+.local-test-notice strong { font-size: 12px; letter-spacing: .05em; }
+.local-test-notice span { font-size: 13px; line-height: 1.5; }
+.local-test-actions { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 14px; }
+.local-test-actions nav { flex-wrap: wrap; }
+.local-test-columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); align-items: start; gap: 18px; }
+.local-test-operation { min-width: 0; border: 1px solid var(--border); background: var(--surface); border-radius: 14px; }
+.local-test-operation-heading { display: grid; gap: 12px; padding: 16px; border-bottom: 1px solid var(--border); }
+.local-test-operation-heading h3 { margin: 0; font-size: 18px; }
+.local-test-operation-heading label { display: grid; gap: 6px; font-size: 13px; }
+.local-test-operation-heading select { width: 100%; min-width: 0; }
+.local-test-control-scroll { max-height: 770px; overflow: auto; padding: 16px; }
+.local-test-operation .referee-scoreboard strong { font-size: 58px; }
+.local-test-operation .referee-scoreboard > div > span { font-size: 24px; }
+.local-test-operation .quick-team-columns { grid-template-columns: 1fr; }
+.local-test-operation .quick-scoring { padding: 12px; }
+.local-test-operation .match-period-control .form-actions { align-items: stretch; }
+.local-test-operation .match-period-control .form-actions > label { width: 100%; }
+.local-test-operation .referee-controls > legend { display: none; }
+.local-test-preview-wrap { position: sticky; top: 12px; min-width: 0; }
+.local-test-preview { min-width: 0; }
+.local-test-preview.is-embedded { height: 700px; min-height: 0; padding: 12px; gap: 12px; border-radius: 14px; }
+.local-test-tv-badge { padding: 8px 12px; border: 1px solid #ffce6966; border-radius: 6px; background: #ffce6920; color: #ffdc91; text-align: center; font-size: 11px; font-weight: 850; letter-spacing: .08em; flex-shrink: 0; }
+.local-test-preview-header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; flex-shrink: 0; }
+.local-test-preview-header > img { width: 94px; height: 42px; padding: 4px; background: #fff; border-radius: 5px; object-fit: contain; }
+.local-test-preview-header > div:not(.local-test-tv-tools) { display: grid; gap: 3px; margin-right: auto; }
+.local-test-preview-header strong { font-size: 15px; }
+.local-test-preview-header span { color: #a6bdce; font-size: 11px; }
+.local-test-preview-header button { padding: 8px 10px; color: #e2f2f9; background: #243a4b; border: 1px solid #67869a; border-radius: 6px; cursor: pointer; font-size: 11px; }
+.local-test-tv-footer { color: #a5becc; font-size: 10px; text-align: center; flex-shrink: 0; }
+.is-embedded .sb-match { padding: 12px; gap: 8px; min-height: 0; }
+.is-embedded .sb-match .sb-team > h3 { font-size: 22px; }
+.is-embedded .sb-match { --sb-score-size: 76px; }
+.is-embedded .sb-grid[data-count='1'] .sb-match { --sb-score-size: 125px; }
+.is-embedded .sb-grid .sb-duel { gap: 78px; }
+.is-embedded .sb-grid .sb-duel-center { width: 78px; gap: 6px; }
+.is-embedded .sb-grid .sb-match-clock { font-size: 24px; }
+.is-embedded .sb-clock-label { font-size: 7px; }
+.is-embedded .sb-period-label { font-size: 10px; padding: 3px; }
+.is-embedded .sb-grid .sb-team-detail, .is-embedded .sb-grid .sb-team-detail b { font-size: 10px; }
+.is-embedded .sb-match-header { gap: 6px; flex-wrap: wrap; }
+.is-embedded .sb-sport > h2 { font-size: 16px; }
+.is-embedded .sb-sport > svg { width: 22px; height: 22px; }
+.is-embedded .sb-match-context { font-size: 9px; }
+.is-embedded .sb-grid .sb-incidents li { min-height: 24px; padding: 2px; gap: 4px; font-size: 12px; }
+.is-embedded .sb-incidents-teams { gap: 7px; }
+.is-embedded .sb-incidents-heading { flex-wrap: wrap; font-size: 8px; }
+.is-embedded .sb-incidents-heading > span:last-child:not(.sb-incident-flash) { font-size: 8px; }
+.is-embedded .sb-incidents-team-heading { font-size: 8px; }
+.is-embedded .sb-incident-flash { font-size: 9px; }
+.is-embedded .sb-incident-ball { width: 15px; font-size: 14px; }
+.is-embedded .sb-incident-card { width: 8px; height: 13px; margin-inline: 2px; }
+.is-embedded .sb-grid[data-count='2'] .sb-incidents-teams { grid-template-columns: 1fr; }
+.is-embedded .sb-grid[data-count='2'] .sb-incidents-team { min-height: 35px; }
+.is-embedded .sb-incidents-team > p { font-size: 9px; }
+.local-test-tv-dialog { width: 100vw; max-width: none; height: 100dvh; max-height: none; padding: 0; margin: 0; border: 0; border-radius: 0; background: #090e14; color: #f6f7f2; }
+.local-test-tv-dialog::backdrop { background: #090e14; }
+.local-test-tv-screen { width: 100%; min-height: 100dvh; background: #090e14; }
+.local-test-preview.is-full { height: 100dvh; min-height: 0; }
+.local-test-tv-tools { display: flex; gap: 8px; }
+.local-test-screen-message { position: fixed; bottom: 20px; left: 20px; background: #273748; padding: 12px; color: #fff; border-radius: 8px; }
+@media (max-width: 1100px) { .local-test-columns { grid-template-columns: 1fr; } .local-test-preview-wrap { position: static; } .local-test-control-scroll { max-height: 600px; } .local-test-preview.is-embedded { height: 650px; } }
+@media (max-width: 600px) { .local-test-heading { flex-direction: column; } .local-test-control-scroll { max-height: 600px; padding: 10px; } .local-test-preview.is-embedded { height: auto; min-height: 500px; } .is-embedded .sb-match { min-height: 330px; } .local-test-preview.is-full { height: auto; min-height: 100dvh; } .local-test-tv-tools { flex-wrap: wrap; } }

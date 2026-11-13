@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react'
-import { changeMatchPeriod } from '../services/bolaoService.js'
+import { useMatchOperations } from '../context/useMatchOperations.js'
 import { clockRevision } from '../utils/matchClock.js'
 import { matchPeriod, PERIOD_FORMATS, periodLabel } from '../utils/matchPeriods.js'
 import './MatchOperationTools.css'
 
 export default function MatchPeriodControl({ game, disabled = false }) {
+  const { changeMatchPeriod } = useMatchOperations()
   const period = matchPeriod(game)
   const [formatDraft, setFormat] = useState(null)
   const format = formatDraft || period.format

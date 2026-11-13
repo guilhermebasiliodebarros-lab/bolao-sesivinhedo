@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { loadMatchReport, saveMatchAttendance } from '../services/bolaoService.js'
+import { useMatchOperations } from '../context/useMatchOperations.js'
 import { attendanceTeamKey, ATTENDANCE_LABELS } from '../utils/attendance.js'
 
 const options = Object.entries(ATTENDANCE_LABELS)
 export default function MatchAttendanceForm({ game, teams, user }) {
+  const { loadMatchReport, saveMatchAttendance } = useMatchOperations()
   const [source] = useState(() => ({ game, teams }))
   const [sides, setSides] = useState({ A: { status: 'pending', players: {} }, B: { status: 'pending', players: {} } })
   const [rosters, setRosters] = useState({ A: [], B: [] })
@@ -21,7 +22,7 @@ export default function MatchAttendanceForm({ game, teams, user }) {
       setLoading(false)
     }).catch((error) => { if (active) { setNotice(error.message); setFailed(true); setLoadFailed(true); setLoading(false) } })
     return () => { active = false }
-  }, [source])
+  }, [source, loadMatchReport])
   const update = (side, fields) => setSides((current) => ({ ...current, [side]: { ...current[side], ...fields } }))
   return <form className="match-attendance-form" onSubmit={async (event) => {
     event.preventDefault(); setSaving(true); setNotice(''); setFailed(false)

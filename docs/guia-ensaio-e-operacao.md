@@ -1,6 +1,20 @@
 # Ensaio e operação do Interclasse
 
-## Abrir o ambiente de treino
+## Testar dentro do próprio sistema
+
+Não é necessário abrir um link local ou instalar ferramentas. Entre como organizador e abra **Painel master → Ensaio geral → Iniciar modo de teste**.
+
+1. Escolha **Futebol**, **Handebol**, **Basquete** ou **Vôlei**.
+2. Marque pelo nome do aluno fictício ou pelo botão da equipe. No basquete, escolha 1, 2 ou 3 pontos.
+3. Em **Cartões da partida**, selecione o aluno e a cor e confirme. Teste também a anulação com motivo.
+4. Confira a **prévia da TV** ao lado. Basquete e vôlei mostram dois jogos; use **Jogo para operar** para escolher qual deles atualizar.
+5. Use **Ampliar TV de teste** e, se desejar, **Tela cheia**. **Voltar aos controles** retorna à operação.
+6. Experimente pausa, intervalo, próximo período, desfazer e presença. **Adiantar 1 minuto neste jogo** ajuda a conferir o minuto dos gols sem esperar.
+7. Use **Reiniciar todos os testes** para zerar os seis jogos fictícios ou **Sair do modo teste** para descartar a sessão.
+
+O modo usa os mesmos controles e a mesma apresentação de placar dos jogos, com operações isoladas na memória do navegador. Nenhum lance é enviado ao banco ou à TV oficial. Ele demonstra a operação e o visual; os testes de autenticação, palpites e conexão entre aparelhos continuam disponíveis no ambiente técnico abaixo.
+
+## Ambiente técnico opcional
 
 Na pasta do projeto, dê dois cliques em **Iniciar-Ensaio.cmd**, ou abra um terminal nessa pasta e execute:
 
@@ -37,7 +51,7 @@ Depois, atualize as janelas e entre novamente nas contas de treino. Para encerra
 
 ## Checklist com a equipe
 
-Abra **Painel master → Ensaio geral**. No ambiente fictício, a aba permite marcar as etapas conferidas, registrar pendências e salvar um relatório de texto. As marcações ficam neste navegador; elas representam a conferência feita pela equipe, não uma aprovação automática. No site oficial, a mesma aba mostra como abrir o ambiente de treino.
+Abra **Painel master → Ensaio geral**. No ambiente técnico fictício, a aba também permite marcar as etapas conferidas, registrar pendências e salvar um relatório de texto. As marcações ficam neste navegador; elas representam a conferência feita pela equipe, não uma aprovação automática. No site normal, use **Iniciar modo de teste** para experimentar o placar diretamente.
 
 Distribua os papéis: um organizador controla a seleção da TV, cada árbitro opera sua quadra e um professor testa os palpites em outra janela. Use **Abrir operação dos jogos** para ir à central. A TV fica em uma segunda aba, monitor ou projeção.
 
@@ -106,7 +120,7 @@ Em **Painel master → Central disciplinar**, escolha a equipe, o atleta e **Car
 
 **Anular registro** retira o cartão da TV e mantém o histórico privado da decisão. Cartões sem partida vinculada ficam apenas na Central disciplinar. Advertências e suspensões também continuam nessa central, com as regras de suspensão existentes.
 
-Os gols permanecem visíveis com uma bola, o primeiro nome e os minutos. Quando há muitos lances, a lista alterna páginas automaticamente a cada dez segundos. O botão **Voltar**, no topo do placar, retorna ao Modo TV e encerra a tela cheia.
+Os gols permanecem visíveis com uma bola, o primeiro nome e os minutos. Quando há muitos lances, a lista alterna páginas automaticamente a cada dez segundos. O botão **Voltar**, no topo do placar, retorna à página principal do site e encerra a tela cheia.
 
 ### Publicar o resultado e pontuar os palpites
 

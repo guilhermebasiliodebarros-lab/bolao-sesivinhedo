@@ -7,8 +7,10 @@ import MatchDetails from './MatchDetails.jsx'
 import MatchScoreForm from './MatchScoreForm.jsx'
 import MatchAttendanceForm from './MatchAttendanceForm.jsx'
 import { attendanceTeamKey } from '../utils/attendance.js'
+import { useMatchOperations } from '../context/useMatchOperations.js'
 
 export default function RefereePanel({ game, teams, user, onSaved }) {
+  const { localTest } = useMatchOperations()
   const [online, setOnline] = useState(navigator.onLine)
   const [fullscreen, setFullscreen] = useState(Boolean(document.fullscreenElement))
   const [message, setMessage] = useState('')
@@ -47,7 +49,7 @@ export default function RefereePanel({ game, teams, user, onSaved }) {
   }, [])
 
   return <section className="referee-panel" aria-label="Modo árbitro">
-    <div className="referee-toolbar"><MatchBadge game={game} /><span>{online ? 'Conectado · atualização ao vivo' : 'Sem conexão'}</span><button type="button" className="btn btn-outline" onClick={async () => {
+    <div className="referee-toolbar"><MatchBadge game={game} /><span>{localTest ? 'Modo teste · somente neste navegador' : online ? 'Conectado · atualização ao vivo' : 'Sem conexão'}</span><button type="button" className="btn btn-outline" onClick={async () => {
       setMessage('')
       try {
         if (document.fullscreenElement) await document.exitFullscreen()
@@ -55,7 +57,7 @@ export default function RefereePanel({ game, teams, user, onSaved }) {
         else setMessage('Use a tela cheia do navegador para ampliar a exibição.')
       } catch { setMessage('Use a opção de tela cheia do navegador para ampliar a exibição.') }
     }}>{fullscreen ? 'Sair da tela cheia' : 'Tela cheia'}</button></div>
-    {!online ? <p className="alert alert-error" role="alert">Sem conexão. Os lançamentos estão bloqueados até a internet voltar. Confira o placar atualizado antes de continuar.</p> : null}
+    {!online && !localTest ? <p className="alert alert-error" role="alert">Sem conexão. Os lançamentos estão bloqueados até a internet voltar. Confira o placar atualizado antes de continuar.</p> : null}
     {message ? <p role="status">{message}</p> : null}
     <div className="referee-scoreboard" aria-label={`Placar: ${game.timeA} ${displayed[0]} a ${displayed[1]} ${game.timeB}`}>
       <div><span>{game.timeA}</span><strong>{formatSportScore(displayed[0])}</strong></div><span aria-hidden="true">×</span><div><span>{game.timeB}</span><strong>{formatSportScore(displayed[1])}</strong></div>
@@ -63,6 +65,6 @@ export default function RefereePanel({ game, teams, user, onSaved }) {
     <p className="referee-score-caption">{sets ? live && !setEnded ? `${set.number}º set · pontos · sets ${score.join(' × ')}` : `Sets ${score.join(' × ')}` : scoreLabel(game)}</p>
     {sets && game.setScores?.length ? <p className="referee-partials">Parciais: {game.setScores.map((partial, index) => `${index + 1}º: ${partial.a} × ${partial.b}`).join(' · ')}</p> : null}
     <MatchDetails game={game} />
-    {live ? <fieldset className="referee-controls" disabled={!online}><legend className="sr-only">Controles da arbitragem</legend><details className="referee-presence" onToggle={(event) => setPresenceOpen(event.currentTarget.open)}><summary>Conferir alunos e presença</summary>{presenceOpen ? <MatchAttendanceForm key={attendanceTeamKey(game)} game={game} teams={teams} user={user} /> : null}</details><MatchScoreForm game={game} teams={teams} user={user} onSaved={onSaved} referee /></fieldset> : <p className="schedule-warning" role="status">Esta partida não está mais ao vivo. Os lançamentos foram encerrados. Volte à administração para consultar a situação.</p>}
+    {live ? <fieldset className="referee-controls" disabled={!online && !localTest}><legend className="sr-only">Controles da arbitragem</legend><details className="referee-presence" onToggle={(event) => setPresenceOpen(event.currentTarget.open)}><summary>Conferir alunos e presença</summary>{presenceOpen ? <MatchAttendanceForm key={attendanceTeamKey(game)} game={game} teams={teams} user={user} /> : null}</details><MatchScoreForm game={game} teams={teams} user={user} onSaved={onSaved} referee /></fieldset> : <p className="schedule-warning" role="status">Esta partida não está mais ao vivo. Os lançamentos foram encerrados. Volte à administração para consultar a situação.</p>}
   </section>
 }

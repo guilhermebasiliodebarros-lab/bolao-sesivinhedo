@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react'
-import { resolveDisciplinaryRecord, saveDisciplinaryRecord } from '../services/bolaoService.js'
+import { useMatchOperations } from '../context/useMatchOperations.js'
 import { useAuth } from '../context/useAuth.js'
 import { eventMinute } from '../utils/liveEvents.js'
 import './MatchOperationTools.css'
 
 export default function MatchCardsControl({ game, teams, players, disabled }) {
+  const { resolveDisciplinaryRecord, saveDisciplinaryRecord } = useMatchOperations()
   const { user } = useAuth()
   const [draft, setDraft] = useState({ side: 'A', playerId: '', type: 'yellow', minute: '', reason: '' })
   const [review, setReview] = useState(false)

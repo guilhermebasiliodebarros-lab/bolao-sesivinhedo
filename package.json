@@ -14,7 +14,8 @@
     "ensaio": "node scripts/start-rehearsal.mjs",
     "ensaio:reiniciar": "node scripts/rehearsal-data.mjs",
     "validar:ensaio": "node scripts/validate-rehearsal.mjs",
-    "validar:operacao": "node scripts/validate-operations.mjs"
+    "validar:operacao": "node scripts/validate-operations.mjs",
+    "validar:teste-interno": "node scripts/validate-local-test.mjs"
   },
   "dependencies": {
     "firebase": "^12.15.0",

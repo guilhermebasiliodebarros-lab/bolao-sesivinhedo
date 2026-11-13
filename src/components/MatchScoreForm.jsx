@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { finalizeGame, updateLiveScore } from '../services/bolaoService.js'
+import { useMatchOperations } from '../context/useMatchOperations.js'
 import { getMatchState, getMatchCondition, MATCH_STATE } from '../utils/match.js'
 import { normalizeTieBreak, tieBreakSummary } from '../utils/tieBreak.js'
 import { validateSportScores } from '../utils/sportRules.js'
@@ -11,6 +11,7 @@ import { scoreRevision } from '../utils/liveEvents.js'
 import { getSportProfile } from '../utils/sportRules.js'
 
 export default function MatchScoreForm({ game, teams, user, onSaved, referee = false }) {
+  const { finalizeGame, updateLiveScore } = useMatchOperations()
   const live = getMatchState(game) === MATCH_STATE.LIVE
   const [draft, setDraft] = useState(null)
   const value = draft || { placarA: (live ? game.liveScoreA : game.placarA) ?? 0, placarB: (live ? game.liveScoreB : game.placarB) ?? 0, setScores: game.setScores || [], currentSet: game.currentSet || { a: 0, b: 0 }, tieBreak: game.tieBreak, expectedScoreRevision: scoreRevision(game) }

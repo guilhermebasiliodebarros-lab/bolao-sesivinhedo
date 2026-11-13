@@ -1,5 +1,5 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
-import { correctLiveEvent, loadMatchReport, recordLiveEvent, undoLiveEvent } from '../services/bolaoService.js'
+import { useMatchOperations } from '../context/useMatchOperations.js'
 import { getSportProfile } from '../utils/sportRules.js'
 import { canCorrectLiveEvent, currentSetScore, eventIcon, eventMinute, isBasketball, scoreRevision } from '../utils/liveEvents.js'
 import { getMatchCondition, getMatchState, MATCH_STATE } from '../utils/match.js'
@@ -12,6 +12,7 @@ const requestId = () => globalThis.crypto?.randomUUID?.() || `live-${Date.now().
 const amountLabel = (value, goal = false) => `${value} ${goal ? value === 1 ? 'gol' : 'gols' : value === 1 ? 'ponto' : 'pontos'}`
 
 export default function QuickScoring({ game, teams = [], disabled = false, expandedPlayers = false }) {
+  const { correctLiveEvent, loadMatchReport, recordLiveEvent, undoLiveEvent, localTest } = useMatchOperations()
   const { user } = useAuth()
   const [playersFeed, setPlayersFeed] = useState(null)
   const [reload, setReload] = useState(0)
@@ -50,7 +51,7 @@ export default function QuickScoring({ game, teams = [], disabled = false, expan
   const interval = game.period?.phase === 'interval'
   const set = currentSetScore(game)
   const ended = isSets && Math.max(game.liveScoreA || 0, game.liveScoreB || 0) >= Math.ceil(profile.volleyballBestOf / 2)
-  const available = online && getMatchState(game) === MATCH_STATE.LIVE && getMatchCondition(game) === 'normal' && !game.deletionPending
+  const available = (online || localTest) && getMatchState(game) === MATCH_STATE.LIVE && getMatchCondition(game) === 'normal' && !game.deletionPending
   const blocked = busy || disabled || !available || ended || Boolean(correction) || Boolean(setReview)
   const recent = [...(game.liveEvents || [])].reverse()
   const last = recent[0]
@@ -70,7 +71,7 @@ export default function QuickScoring({ game, teams = [], disabled = false, expan
   return <section className="quick-scoring" aria-label="Lançamento rápido de lances" aria-busy={busy}>
     <div className="quick-scoring-heading"><strong>{isSets ? ended ? 'Sets encerrados' : `${set.number}º set · pontos` : 'Gols e pontos ao vivo'}</strong><span>{isSets ? `${set.a} × ${set.b} · sets ${game.liveScoreA || 0} × ${game.liveScoreB || 0}` : `${game.liveScoreA || 0} × ${game.liveScoreB || 0}`}</span></div>
     <p className="quick-author-hint">Escolha o aluno e toque no botão da equipe. Os botões com nomes registram o lance em um toque.</p>
-    {!online ? <p className="alert alert-error" role="status">Sem internet. Aguarde a conexão voltar antes de lançar ou corrigir pontos.</p> : null}
+    {!online && !localTest ? <p className="alert alert-error" role="status">Sem internet. Aguarde a conexão voltar antes de lançar ou corrigir pontos.</p> : null}
     {interval ? <p className="schedule-warning" role="status">Intervalo. Inicie o próximo período antes de lançar gols ou pontos. As correções e os cartões continuam disponíveis.</p> : null}
     {isBasketball(game) ? <div className="quick-point-values" aria-label="Valor da cesta">{[1, 2, 3].map((value) => <button type="button" className={points === value ? 'is-active' : ''} aria-pressed={points === value} disabled={blocked} key={value} onClick={() => setPoints(value)}>+{amountLabel(value)}</button>)}</div> : null}
     {!ended ? <div className="quick-team-columns">{['A', 'B'].map((side) => {

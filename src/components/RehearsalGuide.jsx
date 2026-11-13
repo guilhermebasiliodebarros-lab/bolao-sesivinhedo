@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { isRehearsal } from '../config/rehearsal.js'
 import { readPreference, writePreference } from '../utils/preferences.js'
 import './RehearsalGuide.css'
+
+const LocalTestMode = lazy(() => import('./LocalTestMode.jsx'))
 
 const key = 'interclasse-rehearsal-checklist-v1'
 const tasks = [
@@ -23,6 +25,7 @@ function loadProgress() {
 }
 
 export default function RehearsalGuide({ onLive }) {
+  const [testing, setTesting] = useState(false)
   const [progress, setProgress] = useState(loadProgress)
   const [notes, setNotes] = useState(() => isRehearsal ? readPreference(`${key}-notes`, '') : '')
   const count = tasks.filter(([id]) => progress[id]).length
@@ -30,9 +33,12 @@ export default function RehearsalGuide({ onLive }) {
     const next = { ...progress, [id]: checked ? new Date().toISOString() : null }
     setProgress(next); writePreference(key, JSON.stringify(next))
   }
+  if (testing) return <Suspense fallback={<p role="status">Preparando os jogos fictícios…</p>}><LocalTestMode onClose={() => setTesting(false)} /></Suspense>
   return <section className="rehearsal-guide" aria-label="Ensaio geral da equipe">
     <div className="section-heading"><div><span className="eyebrow">Preparação para o evento</span><h2>Ensaio geral</h2><p>Uma rodada completa com quem vai operar. Cada etapa deve ser conferida pela equipe.</p></div><strong>{isRehearsal ? `${count} / ${tasks.length} etapas conferidas` : 'Roteiro do treinamento'}</strong></div>
-    {!isRehearsal ? <div className="rehearsal-setup"><strong>Faça o treinamento no ambiente de ensaio</strong><ol><li>No computador com o projeto, abra <b>Iniciar-Ensaio.cmd</b>.</li><li>Aguarde a mensagem de que o ensaio está pronto e abra o endereço local abaixo.</li><li>Entre como <b>suporte</b>, com a senha fictícia <b>Ensaio2026!</b>, e abra esta aba.</li></ol><a className="btn btn-primary" href="http://127.0.0.1:5179/#login" target="_blank" rel="noreferrer">Abrir ensaio local ↗</a><p>O ensaio usa dados fictícios e não altera os jogos, alunos ou palpites oficiais.</p></div> : <div className="rehearsal-setup"><strong>Ambiente de ensaio ativo · dados fictícios</strong><p>Use outro aparelho ou uma TV conectada como segunda tela, ou abra outra janela do navegador. Para uma TV física, conecte o computador por HDMI ou espelhamento.</p><div className="form-actions"><button type="button" className="btn btn-primary" onClick={onLive}>Abrir operação dos jogos</button><a className="btn btn-outline" href="/#placar" target="_blank" rel="noreferrer">Abrir TV do ensaio ↗</a></div></div>}
+    <div className="rehearsal-setup"><strong>Teste o placar aqui mesmo</strong><p>Experimente futebol, handebol, basquete e vôlei com jogos e alunos fictícios. Os controles da arbitragem e a apresentação da TV são os mesmos usados nos jogos.</p><div className="form-actions"><button type="button" className="btn btn-primary" onClick={() => setTesting(true)}>Iniciar modo de teste</button></div><p>Não precisa abrir outro link ou instalar nada. Os lances ficam somente nesta sessão e não alteram o campeonato nem a TV oficial.</p></div>
+    {!isRehearsal ? <div className="rehearsal-roles"><article><h3>Gols e pontos</h3><p>Escolha o aluno, marque gols ou cestas de 1, 2 e 3 pontos e confira nomes e minutos na prévia.</p></article><article><h3>Cartões e relógio</h3><p>Registre e anule cartões, pause o relógio, teste intervalos e troque o tempo ou período.</p></article><article><h3>TV com um ou dois jogos</h3><p>Futebol e handebol mostram um jogo. Basquete e vôlei mostram dois. Amplie a TV de teste para conferir a apresentação.</p></article></div> : <>
+    <div className="rehearsal-setup"><strong>Ensaio técnico da equipe</strong><p>Este ambiente local também permite conferir logins, palpites e a conexão com o servidor de ensaio.</p><div className="form-actions"><button type="button" className="btn btn-primary" onClick={onLive}>Abrir operação dos jogos</button><a className="btn btn-outline" href="/#placar" target="_blank" rel="noreferrer">Abrir TV do ensaio ↗</a></div></div>
     <div className="rehearsal-roles"><article><h3>Organizador e árbitro</h3><p>Login: <b>suporte</b></p><p>Opera partidas, alunos, períodos, cartões e seleção da TV.</p></article><article><h3>Professor participante</h3><p>Login: <b>professor@ensaio.local</b></p><p>Use uma janela privada para testar os palpites com outra conta.</p></article><article><h3>TV e consulta</h3><p>A TV abre sem login. Consulta: <b>sesivinhedo</b>.</p><p>A conta de consulta mantém seus cinco menus, sem edição.</p></article></div>
     <p className="form-hint">No ensaio, a senha dessas contas fictícias é <b>Ensaio2026!</b>. Os registros do checklist ficam neste navegador.</p>
     <div className="rehearsal-progress" aria-label="Progresso do ensaio"><progress max={tasks.length} value={count} /><span>{count} de {tasks.length}</span></div>
@@ -44,5 +50,6 @@ export default function RehearsalGuide({ onLive }) {
       const link = document.createElement('a'); link.href = url; link.download = 'relatorio-ensaio-interclasse.txt'; link.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000)
     }}>Salvar relatório do ensaio</button><button type="button" className="btn btn-outline" disabled={!isRehearsal} onClick={() => { setProgress({}); writePreference(key, '{}') }}>Limpar marcações do checklist</button></div>
     <p className="form-hint">Para reiniciar os jogos fictícios, use <code>npm run ensaio:reiniciar</code> no computador do ensaio. Limpar o checklist altera apenas as marcações, sem apagar partidas.</p>
+    </>}
   </section>
 }
