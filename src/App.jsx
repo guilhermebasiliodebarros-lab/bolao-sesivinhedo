@@ -10,6 +10,7 @@ import { readPreference, writePreference } from './utils/preferences.js'
 import { APP_VIEWS, resolveAppView } from './utils/navigation.js'
 import PredictionReminders from './components/PredictionReminders.jsx'
 import useAppUpdates from './hooks/useAppUpdates.js'
+import { reloadAppVersion } from './services/appUpdates.js'
 import ConnectionStatus from './components/ConnectionStatus.jsx'
 import LiveScoresStrip from './components/LiveScoresStrip.jsx'
 import useQuickPredictionMode from './hooks/useQuickPredictionMode.js'
@@ -67,7 +68,7 @@ function AppShell() {
   const quickShell = quick && ((isParticipant && activeView === 'jogos') || (!user && ['home', 'login', 'cadastro'].includes(activeView)))
   const authLoading = loading || profileLoading
   const appUpdate = useAppUpdates({ enabled: !authLoading })
-  const updateNotice = appUpdate ? <div className="app-update-notice" role="status"><span>Nova versão pronta. A atualização será automática quando não houver edição em andamento. Salve seus dados antes de atualizar agora.</span><button type="button" className="btn btn-secondary" onClick={() => window.location.reload()}>Atualizar site</button></div> : null
+  const updateNotice = appUpdate ? <div className="app-update-notice" role="status"><span>Nova versão pronta. A atualização será automática quando não houver edição em andamento. Salve seus dados antes de atualizar agora.</span><button type="button" className="btn btn-secondary" onClick={() => reloadAppVersion(appUpdate)}>Atualizar site</button></div> : null
 
   const navigate = (nextView) => {
     setView(nextView)
