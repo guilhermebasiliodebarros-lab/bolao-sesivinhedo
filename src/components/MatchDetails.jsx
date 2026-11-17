@@ -2,7 +2,7 @@ const colors = { Vermelho: '#d92a35', Azul: '#2874df', Amarelo: '#f4d13e', Verde
 
 import { matchVenueLabel } from '../utils/matchVenue.js'
 
-export default function MatchDetails({ game, compact = false }) {
-  if (!game.venue && !game.vestA && !game.vestB) return null
-  return <div className={compact ? 'match-details is-compact' : 'match-details'}>{game.venue ? <strong className="match-venue">📍 {matchVenueLabel(game)}</strong> : null}{['A', 'B'].map((side) => game[`vest${side}`] ? <span className="match-vest" key={side}><i aria-hidden="true" style={{ background: colors[game[`vest${side}`]] || '#8a98ac' }} />{compact ? side : game[`time${side}`]}: colete {game[`vest${side}`].toLocaleLowerCase('pt-BR')}</span> : null)}</div>
+export default function MatchDetails({ game, compact = false, showVenue = true }) {
+  if (!(showVenue && game.venue) && !game.vestA && !game.vestB) return null
+  return <div className={compact ? 'match-details is-compact' : 'match-details'}>{showVenue && game.venue ? <strong className="match-venue">📍 {matchVenueLabel(game)}</strong> : null}{['A', 'B'].map((side) => game[`vest${side}`] ? <span className="match-vest" key={side}><i aria-hidden="true" style={{ background: colors[game[`vest${side}`]] || '#8a98ac' }} />{compact ? side : game[`time${side}`]}: colete {game[`vest${side}`].toLocaleLowerCase('pt-BR')}</span> : null)}</div>
 }

@@ -39,6 +39,7 @@ import { sourceParticipant, thirdPlaceParticipants, thirdPlaceSemifinals } from 
 import { bracketScheduleConflicts } from '../utils/bracketSchedule.js'
 import { automaticPredictionDeadline, predictionDeadlineInput } from '../utils/predictionDeadline.js'
 import { calendarCandidate, calendarConflictSignature, calendarConflicts, calendarFingerprint } from '../utils/visualSchedule.js'
+import { buildDelayImpact, delayPlanFingerprint, delayScheduleFingerprint } from '../utils/scheduleDelay.js'
 import { deletionFingerprint, validateDeletionSelection } from '../utils/bulkGameDeletion.js'
 import { getSportProfile, normalizeMatchDetails, normalizeSetScores, validateFinalSets, validateSportScores } from '../utils/sportRules.js'
 
@@ -841,6 +842,30 @@ export async function saveCalendarGame({ gameId, expectedFingerprint, change, ac
       limitePalpites: Timestamp.fromDate(automaticPredictionDeadline(candidate)), preparation: null, updatedAt: serverTimestamp(),
     })
     return { conflicts: conflicts.length }
+  })
+}
+
+export async function applyScheduleDelay({ anchorId, minutes, expectedSchedule, expectedPlan }) {
+  if (!expectedSchedule || !expectedPlan) throw new Error('Confira a prévia do atraso antes de aplicar os novos horários.')
+  const firestore = ensureDb()
+  const [current, roster] = await Promise.all([getDocs(collection(firestore, 'games')), getDocs(collection(firestore, 'teams'))])
+  return runTransaction(firestore, async (transaction) => {
+    const [snapshots, teamSnapshots] = await Promise.all([
+      Promise.all(current.docs.map((item) => transaction.get(item.ref))),
+      Promise.all(roster.docs.map((item) => transaction.get(item.ref))),
+    ])
+    const games = snapshots.filter((item) => item.exists()).map((item) => normalizeGame(item.id, item.data()))
+    const teams = teamSnapshots.filter((item) => item.exists()).map((item) => normalizeTeam(item.id, item.data()))
+    if (delayScheduleFingerprint(games, teams) !== expectedSchedule) throw new Error('A agenda ou as equipes mudaram. Atualize a prévia antes de aplicar o atraso.')
+    const plan = buildDelayImpact(games, teams, { anchorId, minutes, now: new Date() })
+    if (delayPlanFingerprint(plan) !== expectedPlan) throw new Error('Os horários propostos mudaram. Confira uma nova prévia antes de aplicar.')
+    if (plan.issues.length) throw new Error(plan.issues[0].message)
+    if (!plan.changes.length) throw new Error('Nenhum horário disponível para ajustar.')
+    if (plan.changes.length > 450) throw new Error('A prévia altera mais de 450 partidas. Divida o ajuste em intervalos menores na programação.')
+    for (const { game, after } of plan.changes) transaction.update(doc(firestore, 'games', game.id), {
+      dataHora: after.dataHora, limitePalpites: Timestamp.fromDate(automaticPredictionDeadline(after)), preparation: null, updatedAt: serverTimestamp(),
+    })
+    return { changed: plan.changes.length, maxDelay: plan.maxDelay }
   })
 }
 

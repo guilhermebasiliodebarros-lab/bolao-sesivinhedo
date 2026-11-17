@@ -116,7 +116,7 @@ export default function Jogos({ onNavigate, onQuickMode }) {
   }, [visibleGames])
 
   if (loading || (isParticipant && predictionUser !== user?.uid)) {
-    return <LoadingState label="Buscando jogos..." error={error} />
+    return <LoadingState label="Buscando jogos…" variant="cards" count={6} error={error} />
   }
 
   return (

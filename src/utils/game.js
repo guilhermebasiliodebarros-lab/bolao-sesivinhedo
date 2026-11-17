@@ -10,13 +10,13 @@ export function getGameStageLabel(game) {
 }
 
 export function gameMatchesSearch(game, searchTerm) {
-  const normalizedTerm = normalizeFilterText(searchTerm)
+  const normalizedTerm = normalizeFilterText(searchTerm).trim()
 
   if (!normalizedTerm) {
     return true
   }
 
-  return [game.timeA, game.timeB, game.esporteNome, game.fase, game.rodada]
+  return [game.timeA, game.timeB, game.esporteNome, game.fase, game.rodada, game.tournamentName, game.nomeTorneio, game.venue, game.venueArea]
     .map(normalizeFilterText)
     .some((value) => value.includes(normalizedTerm))
 }

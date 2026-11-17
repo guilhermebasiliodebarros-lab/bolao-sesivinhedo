@@ -1,19 +1,15 @@
 import { useId, useMemo, useRef, useState } from 'react'
 import useModalDialog from '../hooks/useModalDialog.js'
+import DelayImpactDialog from './DelayImpactDialog.jsx'
 import { saveCalendarGame } from '../services/bolaoService.js'
 import { calendarCandidate, calendarColumns, calendarConflictSignature, calendarConflicts, calendarFingerprint, calendarSlotGames, calendarSlots, canScheduleGame } from '../utils/visualSchedule.js'
-import { eventDate, schoolDay, SCHOOL_TIMEZONE } from '../utils/tvSchedule.js'
+import { eventDate, schoolDay } from '../utils/tvSchedule.js'
+import { schoolDateTimeInput as localInput } from '../utils/scheduleDelay.js'
 import { formatDateTime } from '../utils/format.js'
 import { predictionDeadlineInput } from '../utils/predictionDeadline.js'
 import { getGameShift, shiftLabel } from '../utils/schoolShifts.js'
 import './VisualSchedule.css'
 
-const localInput = (value) => {
-  const date = eventDate(value)
-  if (!Number.isFinite(date.getTime())) return ''
-  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: SCHOOL_TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(date).map((part) => [part.type, part.value]))
-  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`
-}
 const clock = (value) => localInput(value).slice(11)
 
 function ScheduleEditor({ source, initial, games, teams, venues, onClose, onSaved }) {
@@ -59,6 +55,7 @@ export default function VisualSchedule({ games, teams, sports, turno }) {
   const [start, setStart] = useState('07:00'), [finish, setFinish] = useState('18:00'), [step, setStep] = useState(30)
   const [extraVenues, setExtraVenues] = useState([]), [newVenue, setNewVenue] = useState('')
   const [draggedId, setDraggedId] = useState(''), [editing, setEditing] = useState(null), [message, setMessage] = useState('')
+  const [simulatingDelay, setSimulatingDelay] = useState(false)
   const filtered = useMemo(() => games.filter((game) => getGameShift(game) === turno && (!sportId || game.sportId === sportId)), [games, turno, sportId])
   const slots = calendarSlots(start, finish, step)
   const venues = calendarColumns(filtered, extraVenues)
@@ -84,6 +81,7 @@ export default function VisualSchedule({ games, teams, sports, turno }) {
   return <section className="visual-schedule" aria-label="Agenda visual dos jogos">
     <div className="section-heading"><div><span className="eyebrow">Organização do interclasse · {shiftLabel(turno)}</span><h2>Agenda visual dos jogos</h2><p>Arraste uma partida até o dia, horário e quadra desejados. Confira a prévia antes de salvar. No celular, use Agendar ou Editar agenda.</p></div></div>
     {message ? <p className="alert alert-success" role="status">{message}</p> : null}
+    <div className="delay-impact-entry"><div><strong>Um jogo vai começar mais tarde?</strong><p>Veja o efeito nas próximas partidas e confira os horários antes de aplicar.</p></div><button type="button" className="btn btn-secondary" disabled={!dayGames.some((game) => canScheduleGame(game))} onClick={() => { setMessage(''); setSimulatingDelay(true) }}>Simular atraso</button></div>
     <div className="form-grid visual-schedule-filters"><label>Dia da agenda<input type="date" value={day} required onChange={(event) => setDay(event.target.value)} /></label><label>Modalidade na agenda<select value={sportId} onChange={(event) => setSportId(event.target.value)}><option value="">Todas as modalidades</option>{sports.map((sport) => <option key={sport.id} value={sport.id}>{sport.nome}</option>)}</select></label><label>Dias com partidas<select value={dates.includes(day) ? day : ''} onChange={(event) => { if (event.target.value) setDay(event.target.value) }}><option value="">Escolher um dia</option>{dates.map((date) => <option key={date} value={date}>{date.split('-').reverse().join('/')}</option>)}</select></label><label>Exibir a partir de<input type="time" value={start} onChange={(event) => setStart(event.target.value)} /></label><label>Exibir até<input type="time" value={finish} onChange={(event) => setFinish(event.target.value)} /></label><label>Intervalo da grade<select value={step} onChange={(event) => setStep(Number(event.target.value))}>{[15, 30, 60].map((value) => <option key={value} value={value}>{value} minutos</option>)}</select></label></div>
     <div className="visual-board-actions"><div className="form-actions"><button type="button" className="btn btn-outline btn-small" onClick={() => changeDay(-1)} disabled={!day}>Dia anterior</button><button type="button" className="btn btn-outline btn-small" onClick={() => changeDay(1)} disabled={!day}>Próximo dia</button><span>{dayGames.length} partida(s) neste dia</span></div><form onSubmit={(event) => { event.preventDefault(); if (newVenue.trim()) { setExtraVenues((values) => [...values, newVenue.trim()]); setNewVenue('') } }}><label>Nova quadra/local<input maxLength="80" value={newVenue} onChange={(event) => setNewVenue(event.target.value)} placeholder="Ex.: Quadra principal" /></label><button type="submit" className="btn btn-outline btn-small" disabled={!newVenue.trim()}>Adicionar local</button></form></div>
     <p className="form-hint">Locais adicionados viram colunas e ficam salvos quando você agenda uma partida neles. Avisos consideram a duração completa e a mesma turma em esportes diferentes, mesmo fora dos filtros exibidos.</p>
@@ -92,5 +90,6 @@ export default function VisualSchedule({ games, teams, sports, turno }) {
     </div></div>
     {outside.length ? <section className="visual-outside"><h3>Partidas fora da faixa de horários exibida ({outside.length})</h3><div>{outside.map(card)}</div></section> : null}
     {editing ? <ScheduleEditor source={editing.game} initial={editing.initial} games={games} teams={teams} venues={venues} onClose={() => setEditing(null)} onSaved={(notice) => { setEditing(null); setMessage(notice) }} /> : null}
+    {simulatingDelay ? <DelayImpactDialog games={games} teams={teams} candidates={filtered} day={day} onClose={() => setSimulatingDelay(false)} onSaved={(notice) => { setSimulatingDelay(false); setMessage(notice) }} /> : null}
   </section>
 }

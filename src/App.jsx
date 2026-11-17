@@ -1,13 +1,17 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import './App.css'
+import './components/Experience.css'
 import './components/QuickPredictions.css'
+import './components/Interface.css'
+import LoadingState from './components/LoadingState.jsx'
 import Footer from './components/Footer.jsx'
 import Header from './components/Header.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
 import { useAuth } from './context/useAuth.js'
 import { firebaseEnvNames, isFirebaseConfigured, missingFirebaseConfig } from './config/firebase.js'
 import { readPreference, writePreference } from './utils/preferences.js'
-import { APP_VIEWS, resolveAppView } from './utils/navigation.js'
+import { APP_VIEW_LABELS, APP_VIEWS, resolveAppView } from './utils/navigation.js'
+import MobileNavigation from './components/MobileNavigation.jsx'
 import PredictionReminders from './components/PredictionReminders.jsx'
 import useAppUpdates from './hooks/useAppUpdates.js'
 import { reloadAppVersion } from './services/appUpdates.js'
@@ -65,15 +69,17 @@ function AppShell() {
   const { user, profile, isMaster, isViewer, isParticipant, loading, profileLoading, logout } = useAuth()
   const { quick, setQuick } = useQuickPredictionMode(user?.uid)
   const activeView = resolveAppView(view, { signedIn: Boolean(user), isMaster, isViewer, participantHome: quick ? 'jogos' : 'dashboard' })
+  const loadingVariant = { admin: 'admin', classificacao: 'ranking', calendario: 'calendar', dashboard: 'dashboard', login: 'form', cadastro: 'form' }[activeView] || 'cards'
   const quickShell = quick && ((isParticipant && activeView === 'jogos') || (!user && ['home', 'login', 'cadastro'].includes(activeView)))
   const authLoading = loading || profileLoading
+  const previousView = useRef(activeView)
   const appUpdate = useAppUpdates({ enabled: !authLoading })
   const updateNotice = appUpdate ? <div className="app-update-notice" role="status"><span>Nova versão pronta. A atualização será automática quando não houver edição em andamento. Salve seus dados antes de atualizar agora.</span><button type="button" className="btn btn-secondary" onClick={() => reloadAppVersion(appUpdate)}>Atualizar site</button></div> : null
 
   const navigate = (nextView) => {
     setView(nextView)
     window.location.hash = nextView
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    window.scrollTo({ top: 0, behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' })
   }
 
   useEffect(() => {
@@ -85,6 +91,13 @@ function AppShell() {
   useEffect(() => {
     if (!authLoading && activeView !== view) window.location.replace(`#${activeView}`)
   }, [activeView, authLoading, view])
+
+  useEffect(() => {
+    if (authLoading) return
+    document.title = `${APP_VIEW_LABELS[activeView] || 'Início'} · Interclasse SESI Vinhedo`
+    if (previousView.current !== activeView) document.getElementById('main-content')?.focus({ preventScroll: true })
+    previousView.current = activeView
+  }, [activeView, authLoading])
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -138,35 +151,37 @@ function AppShell() {
     return <Home onNavigate={navigate} />
   }
 
-  if (authLoading) return <div className="route-loading" role="status">Carregando sua conta…</div>
+  if (authLoading) return <LoadingState label="Carregando sua conta…" variant="form" />
 
   if (quickShell) return <div className="app quick-app">
     <header className="quick-app-header"><img src="/logo-interclasse.png" alt="Interclasse SESI Vinhedo" /><div><strong>{user ? 'Palpite rápido' : 'Acesso ao Interclasse'}</strong><span>{user ? `Olá, ${profile?.nome || user.displayName || 'participante'}` : 'Entre com o login fornecido pela organização'}</span></div><button type="button" className="btn btn-outline" onClick={leaveQuickMode}>Site completo</button>{user ? <button type="button" className="quick-logout" onClick={async () => { await logout(); navigate('login') }}>Sair</button> : null}</header>
     <ConnectionStatus /><ConfigNotice />
-    <main>{updateNotice}{isParticipant ? <PredictionReminders key={user.uid} userId={user.uid} showSettings={false} onNavigate={navigate} /> : null}<Suspense fallback={<div className="route-loading">{user ? 'Abrindo palpites…' : 'Abrindo acesso…'}</div>}>{user ? <QuickPredictions key={user.uid} /> : activeView === 'cadastro' ? <Cadastro onNavigate={navigate} onSuccess={() => afterLogin('dashboard')} /> : <Login onNavigate={navigate} onSuccess={afterLogin} />}</Suspense></main>
+    <main>{updateNotice}{isParticipant ? <PredictionReminders key={user.uid} userId={user.uid} showSettings={false} onNavigate={navigate} /> : null}<Suspense fallback={<LoadingState label={user ? 'Abrindo palpites…' : 'Abrindo acesso…'} variant={user ? 'cards' : 'form'} />}>{user ? <QuickPredictions key={user.uid} /> : activeView === 'cadastro' ? <Cadastro onNavigate={navigate} onSuccess={() => afterLogin('dashboard')} /> : <Login onNavigate={navigate} onSuccess={afterLogin} />}</Suspense></main>
     <footer className="quick-app-footer">{user ? 'Interclasse SESI Vinhedo · confira o placar antes de enviar.' : 'Interclasse SESI Vinhedo · jogos, resultados e informações do evento.'}</footer>
   </div>
 
   if (activeView === 'placar') {
-    return <>{updateNotice}<Suspense fallback={<div className="route-loading">Preparando o placar ao vivo…</div>}><TVScoreboard onNavigate={navigate} /></Suspense></>
+    return <>{updateNotice}<Suspense fallback={<LoadingState label="Preparando o placar ao vivo…" variant="screen" count={2} />}><TVScoreboard onNavigate={navigate} /></Suspense></>
   }
 
   if (activeView === 'tv') {
-    return <>{updateNotice}<Suspense fallback={<div className="route-loading">Abrindo modo TV…</div>}><TVMode onNavigate={navigate} /></Suspense></>
+    return <>{updateNotice}<Suspense fallback={<LoadingState label="Abrindo modo TV…" variant="screen" count={2} />}><TVMode onNavigate={navigate} /></Suspense></>
   }
 
   return (
-    <div className="app">
+    <div className={isMaster ? 'app' : 'app app-with-mobile-navigation'}>
+      <button className="skip-link" type="button" onClick={() => document.getElementById('main-content')?.focus()}>Pular para o conteúdo</button>
       <Header activeView={activeView} onNavigate={navigate} theme={theme} onToggleTheme={toggleTheme} />
       <ConnectionStatus />
       <ConfigNotice />
-      <main>
+      <main id="main-content" tabIndex={-1}>
         {updateNotice}
         <LiveScoresStrip />
         {isParticipant ? <PredictionReminders key={user.uid} userId={user.uid} showSettings={activeView === 'dashboard'} onNavigate={navigate} /> : null}
-        <Suspense fallback={<div className="route-loading">Carregando tela...</div>}>{renderView()}</Suspense>
+        <Suspense fallback={<LoadingState label="Preparando a tela…" variant={loadingVariant} />}>{renderView()}</Suspense>
       </main>
       <Footer accessOnly={!user && activeView === 'login'} />
+      <MobileNavigation activeView={activeView} onNavigate={navigate} />
     </div>
   )
 }

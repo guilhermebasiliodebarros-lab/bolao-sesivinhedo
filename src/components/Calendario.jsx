@@ -1,22 +1,22 @@
 import ShiftSelector from './ShiftSelector.jsx'
 import { getGameShift } from '../utils/schoolShifts.js'
 import { useEffect, useMemo, useState } from 'react'
+import usePredictionClock from '../hooks/usePredictionClock.js'
 import { useAuth } from '../context/useAuth.js'
 import {
   calculateGroupStandings,
   canEditPrediction,
-  GAME_STATUS,
   subscribeGames,
   subscribeUserPredictions,
 } from '../services/bolaoService.js'
-import { formatDateTime } from '../utils/format.js'
-import { gameMatchesSearch, getGameStageLabel, getUniqueGamePhases, groupGamesBySport } from '../utils/game.js'
+import { getGameStageLabel, getUniqueGamePhases, groupGamesBySport } from '../utils/game.js'
+import { CALENDAR_STATES, eventOverview, filterCalendarGames, formatCalendarDay, formatCalendarTime, groupCalendarDays } from '../utils/calendarExplorer.js'
+import { schoolDay } from '../utils/tvSchedule.js'
 import { getMatchState, MATCH_STATE } from '../utils/match.js'
-import MatchScore from './MatchScore.jsx'
+import MatchOverview from './MatchOverview.jsx'
+import MatchDetailsDisclosure from './MatchDetailsDisclosure.jsx'
 import MatchNotice from './MatchNotice.jsx'
-import MatchBadge from './MatchBadge.jsx'
 import SportFilter from './SportFilter.jsx'
-import MatchDetails from './MatchDetails.jsx'
 import EmptyState from './EmptyState.jsx'
 import LoadingState from './LoadingState.jsx'
 import PendingGuessBanner from './PendingGuessBanner.jsx'
@@ -77,8 +77,13 @@ export default function Calendario({ onNavigate }) {
   const [turno, setTurno] = useState('')
   const [phaseFilter, setPhaseFilter] = useState(ALL_ITEMS_FILTER)
   const [searchTerm, setSearchTerm] = useState('')
+  const [dayFilter, setDayFilter] = useState('')
+  const [stateFilter, setStateFilter] = useState('')
+  const [venueFilter, setVenueFilter] = useState('')
+  const [groupMode, setGroupMode] = useState('day')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const now = usePredictionClock(games)
 
   useEffect(() => {
     const unsubscribe = subscribeGames(
@@ -101,32 +106,28 @@ export default function Calendario({ onNavigate }) {
   }, [isParticipant, user])
 
   const phaseOptions = useMemo(() => getUniqueGamePhases(games), [games])
-  const visibleGames = useMemo(() => {
-    return games.filter((game) => {
-      const matchesSport =
-        sportFilter === ALL_ITEMS_FILTER || game.sportId === sportFilter || game.esporteNome === sportFilter
-      const matchesPhase = phaseFilter === ALL_ITEMS_FILTER || game.fase === phaseFilter
-
-      return matchesSport && matchesPhase && (!turno || getGameShift(game) === turno) && gameMatchesSearch(game, searchTerm)
-    })
-  }, [games, phaseFilter, searchTerm, sportFilter, turno])
-  const sportGroups = useMemo(() => groupGamesBySport(visibleGames), [visibleGames])
-  const nextGames = visibleGames.filter((game) => getMatchState(game) === MATCH_STATE.SCHEDULED).slice(0, 3)
-  const visibleTournaments = useMemo(() => groupGamesByTournament(visibleGames), [visibleGames])
+  const dateOptions = useMemo(() => [...new Set(games.map((game) => schoolDay(game.dataHora)).filter(Boolean))].sort(), [games])
+  const venueOptions = useMemo(() => [...new Set(games.map((game) => game.venue).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR')), [games])
+  const filteredGames = useMemo(() => filterCalendarGames(games, {
+    sport: sportFilter === ALL_ITEMS_FILTER ? '' : sportFilter,
+    shift: turno, phase: phaseFilter === ALL_ITEMS_FILTER ? '' : phaseFilter,
+    search: searchTerm, day: dayFilter, venue: venueFilter,
+  }, now), [games, sportFilter, turno, phaseFilter, searchTerm, dayFilter, venueFilter, now])
+  const visibleGames = useMemo(() => filteredGames.filter((game) => !stateFilter || getMatchState(game) === stateFilter), [filteredGames, stateFilter])
+  const viewGroups = useMemo(() => groupMode === 'day' ? groupCalendarDays(visibleGames) : groupGamesBySport(visibleGames), [visibleGames, groupMode])
+  const nextGames = useMemo(() => eventOverview(visibleGames, now).upcoming.slice(0, 3), [visibleGames, now])
+  const visibleTournaments = useMemo(() => {
+    const ids = new Set(visibleGames.map((game) => game.tournamentId).filter(Boolean))
+    return groupGamesByTournament(games.filter((game) => ids.has(game.tournamentId)))
+  }, [games, visibleGames])
   const predictionsByGame = useMemo(() => new Map((user && isParticipant ? predictions : []).map((prediction) => [prediction.gameId, prediction])), [isParticipant, predictions, user])
-  const pendingGuessCount = isParticipant ? games.filter((game) => canEditPrediction(game) && !predictionsByGame.has(game.id)).length : Number.NaN
-  const statusCounts = useMemo(
-    () => ({
-      total: visibleGames.length,
-      scheduled: visibleGames.filter((game) => getMatchState(game) === MATCH_STATE.SCHEDULED).length,
-      live: visibleGames.filter((game) => getMatchState(game) === MATCH_STATE.LIVE).length,
-      finished: visibleGames.filter((game) => game.status === GAME_STATUS.FINISHED).length,
-    }),
-    [visibleGames],
-  )
+  const pendingGuessCount = isParticipant ? games.filter((game) => canEditPrediction(game, now) && !predictionsByGame.has(game.id)).length : Number.NaN
+  const statusCounts = useMemo(() => Object.fromEntries(CALENDAR_STATES.map((state) => [state.id, filteredGames.filter((game) => !state.id || getMatchState(game) === state.id).length])), [filteredGames])
+  const hasFilters = Boolean(sportFilter !== ALL_ITEMS_FILTER || turno || phaseFilter !== ALL_ITEMS_FILTER || searchTerm || dayFilter || stateFilter || venueFilter)
+  const clearFilters = () => { setSportFilter(ALL_ITEMS_FILTER); setTurno(''); setPhaseFilter(ALL_ITEMS_FILTER); setSearchTerm(''); setDayFilter(''); setStateFilter(''); setVenueFilter('') }
 
   if (loading) {
-    return <LoadingState label="Montando calendário..." error={error} />
+    return <LoadingState label="Montando calendário…" variant="calendar" error={error} />
   }
 
   return (
@@ -135,13 +136,13 @@ export default function Calendario({ onNavigate }) {
         <div>
           <span className="eyebrow">Calendário público</span>
           <h1>Jogos do Interclasse</h1>
-          <p>{isViewer ? 'Acompanhe horários, fases, confrontos e resultados do Interclasse.' : 'Acompanhe horários, fases e confrontos antes de entrar para palpitar.'}</p>
+          <p>Encontre sua turma, confira a quadra e acompanhe cada resultado. Horários de Brasília.</p>
         </div>
         <div className="form-actions">
           {!isViewer ? <button className="btn btn-outline" type="button" onClick={() => onNavigate('tv')}>Abrir modo TV</button> : null}
           <button className="btn btn-outline" type="button" onClick={() => onNavigate('regulamentos')}>Consultar regulamentos</button>
           <button className="btn btn-outline" type="button" onClick={() => onNavigate('estatisticas')}>Ver estatísticas dos atletas</button>
-          {!isViewer ? <button className="btn btn-primary" type="button" onClick={() => onNavigate('login')}>Entrar para palpitar</button> : null}
+          {!user ? <button className="btn btn-primary" type="button" onClick={() => onNavigate('login')}>Entrar para palpitar</button> : null}
         </div>
       </div>
 
@@ -149,70 +150,54 @@ export default function Calendario({ onNavigate }) {
 
       <PendingGuessBanner count={pendingGuessCount} onNavigate={onNavigate} />
 
-      <div className="school-shift-filter"><ShiftSelector value={turno} onChange={setTurno} /></div>
-      <SportFilter games={games} value={sportFilter} onChange={setSportFilter} allValue={ALL_ITEMS_FILTER} />
-
-      <section className="calendar-status-strip" aria-label="Resumo do calendário">
-        <span>
-          <strong>{statusCounts.total}</strong>
-          Jogos filtrados
-        </span>
-        <span>
-          <strong>{statusCounts.scheduled}</strong>
-          Agendados
-        </span>
-        <span>
-          <strong>{statusCounts.live}</strong>
-          Ao vivo
-        </span>
-        <span>
-          <strong>{statusCounts.finished}</strong>
-          Finalizados
-        </span>
+      <section className="calendar-filters" aria-label="Filtros do calendário">
+        <div className="calendar-date-bar">
+          <div className="segmented-control" role="group" aria-label="Atalhos de data">
+            {[{ id: '', label: 'Todos os dias' }, { id: 'today', label: 'Hoje' }, { id: 'tomorrow', label: 'Amanhã' }].map((day) => <button type="button" key={day.id} className={dayFilter === day.id ? 'is-active' : ''} aria-pressed={dayFilter === day.id} onClick={() => setDayFilter(day.id)}>{day.label}</button>)}
+          </div>
+          <label>Data<select value={dayFilter} onChange={(event) => setDayFilter(event.target.value)}><option value="">Todas as datas</option><option value="today">Hoje</option><option value="tomorrow">Amanhã</option>{dateOptions.map((day) => <option key={day} value={day}>{formatCalendarDay(day, { month: 'short', year: 'numeric' })}</option>)}</select></label>
+        </div>
+        <div className="calendar-filter-grid">
+          <label>Buscar jogo<input type="search" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Turma, modalidade, quadra…" /></label>
+          <ShiftSelector value={turno} onChange={setTurno} />
+          <label>Fase<select value={phaseFilter} onChange={(event) => setPhaseFilter(event.target.value)}><option value={ALL_ITEMS_FILTER}>Todas as fases</option>{phaseOptions.map((phase) => <option value={phase} key={phase}>{phase}</option>)}</select></label>
+          <label>Local<select value={venueFilter} onChange={(event) => setVenueFilter(event.target.value)}><option value="">Todos os locais</option>{venueOptions.map((venue) => <option key={venue} value={venue}>{venue}</option>)}</select></label>
+        </div>
       </section>
+
+      <SportFilter games={games.filter((game) => !turno || getGameShift(game) === turno)} value={sportFilter} onChange={setSportFilter} allValue={ALL_ITEMS_FILTER} />
+
+      <div className="calendar-state-filters" role="group" aria-label="Situação da partida">
+        {CALENDAR_STATES.map((state) => <button type="button" key={state.id} className={stateFilter === state.id ? 'is-active' : ''} aria-pressed={stateFilter === state.id} onClick={() => setStateFilter(state.id)}>{state.id === MATCH_STATE.LIVE ? <i className="calendar-live-dot" aria-hidden="true" /> : null}{state.label}<span>{statusCounts[state.id]}</span></button>)}
+      </div>
+
+      <div className="calendar-results-toolbar">
+        <p role="status" aria-live="polite"><strong>{visibleGames.length}</strong> {visibleGames.length === 1 ? 'jogo encontrado' : 'jogos encontrados'}{hasFilters ? <button type="button" className="link-button" onClick={clearFilters}>Limpar filtros</button> : null}</p>
+        <div className="segmented-control" role="group" aria-label="Organizar calendário"><button type="button" className={groupMode === 'day' ? 'is-active' : ''} aria-pressed={groupMode === 'day'} onClick={() => setGroupMode('day')}>Por dia</button><button type="button" className={groupMode === 'sport' ? 'is-active' : ''} aria-pressed={groupMode === 'sport'} onClick={() => setGroupMode('sport')}>Por esporte</button></div>
+      </div>
 
       {nextGames.length ? (
         <section className="calendar-highlight">
           <div>
             <span className="eyebrow">Próximos jogos</span>
             <strong>{nextGames[0].timeA} x {nextGames[0].timeB}</strong>
-            <p>{nextGames[0].esporteNome} | {getGameStageLabel(nextGames[0])} | {formatDateTime(nextGames[0].dataHora)}</p>
+            <p>{nextGames[0].esporteNome} | {getGameStageLabel(nextGames[0])} | {formatCalendarDay(schoolDay(nextGames[0].dataHora), { month: 'short' })} · {formatCalendarTime(nextGames[0].dataHora)}</p>
           </div>
           <div className="calendar-mini-list">
             {nextGames.slice(1).map((game) => (
               <span key={game.id}>
-                {game.timeA} x {game.timeB} | {formatDateTime(game.dataHora)}
+                {game.timeA} x {game.timeB} | {formatCalendarTime(game.dataHora)} · {formatCalendarDay(schoolDay(game.dataHora), { month: 'short' })}
               </span>
             ))}
           </div>
         </section>
       ) : null}
 
-      <div className="public-filter-panel public-filter-panel-compact">
-        <label>
-          Buscar
-          <input
-            type="search"
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-            placeholder="Time, esporte, fase..."
-          />
-        </label>
-        <label>
-          Fase
-          <select value={phaseFilter} onChange={(event) => setPhaseFilter(event.target.value)}>
-            <option value={ALL_ITEMS_FILTER}>Todas</option>
-            {phaseOptions.map((phase) => (
-              <option value={phase} key={phase}>
-                {phase}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
       {visibleTournaments.length ? (
-        <section className="public-tournament-board">
+        <details className="calendar-tournament-details">
+          <summary>Consultar grupos e mata-mata <span>{visibleTournaments.length} torneio(s)</span></summary>
+          <p className="calendar-tournament-note">As tabelas consideram todos os jogos oficiais de cada torneio, incluindo os que estão fora dos filtros acima.</p>
+          <section className="public-tournament-board">
           <div className="section-heading">
             <div>
               <span className="eyebrow">Chaveamentos</span>
@@ -274,32 +259,27 @@ export default function Calendario({ onNavigate }) {
               )
             })}
           </div>
-        </section>
+          </section>
+        </details>
       ) : null}
 
       {visibleGames.length ? (
         <div className="calendar-list">
-          {sportGroups.map((group) => (
+          {viewGroups.map((group) => (
             <section className="calendar-sport-group" key={group.id}>
               <div className="section-heading"><h2>{group.nome}</h2><span>{group.games.length} jogo(s)</span></div>
               {group.games.map((game) => (
-                <article className={`calendar-row game-status-${game.status}`} key={game.id}>
-                  <div>
-                    <MatchBadge game={game} />
-                    <strong>{game.timeA} x {game.timeB}</strong>
-                    <small>{getGameStageLabel(game)}</small>
-                    <MatchDetails game={game} />
-                    <MatchNotice game={game} />
-                  </div>
-                  {[MATCH_STATE.LIVE, MATCH_STATE.FINISHED].includes(getMatchState(game)) ? <strong className="calendar-score"><MatchScore game={game} /></strong> : null}
-                  <time>{formatDateTime(game.dataHora)}</time>
+                <article className={`calendar-row match-calendar-card game-status-${game.status}`} key={game.id}>
+                  <MatchOverview game={game} row />
+                  <MatchNotice game={game} />
+                  <MatchDetailsDisclosure game={game} />
                 </article>
               ))}
             </section>
           ))}
         </div>
       ) : (
-        <EmptyState title="Sem jogos no calendário" description="Assim que o admin criar jogos, eles aparecem aqui." />
+        <EmptyState title={hasFilters ? 'Nenhum jogo com esses filtros' : 'A programação vem aí'} description={hasFilters ? 'Experimente outra data, turma ou situação para encontrar a partida.' : 'Os jogos aparecem aqui assim que a organização divulgar a programação.'} action={hasFilters ? <button type="button" className="btn btn-outline" onClick={clearFilters}>Limpar filtros e ver jogos</button> : null} />
       )}
     </section>
   )

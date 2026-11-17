@@ -50,7 +50,7 @@ export default function Palpites({ onNavigate }) {
   }
 
   if (loading) {
-    return <LoadingState label="Carregando seus palpites..." error={error} />
+    return <LoadingState label="Carregando seus palpites…" variant="cards" error={error} />
   }
 
   if (!isParticipant) {

@@ -4,6 +4,8 @@ import { buildSelectedScoreboard } from '../utils/scoreboardSelection.js'
 import { getMatchLabel } from '../utils/match.js'
 import { SCHOOL_TIMEZONE } from '../utils/tvSchedule.js'
 import { DEFAULT_BROADCAST_SETTINGS } from '../utils/automaticCalls.js'
+import { CLASS_DECADE_IDENTITIES, decadeTeamStyle } from '../utils/decadeIdentities.js'
+import { DecadeEmblem } from './DecadeArtwork.jsx'
 import useBroadcastScreen from '../hooks/useBroadcastScreen.js'
 import TVConnectionStatus from './TVConnectionStatus.jsx'
 import { transmissionHealth } from '../utils/transmissionHealth.js'
@@ -37,7 +39,7 @@ export default function TVScoreboard({ onNavigate }) {
 
   useEffect(() => {
     const previous = document.title
-    document.title = 'Placar ao vivo · Interclasse SESI Vinhedo'
+    document.title = 'Décadas · Placar ao vivo · Interclasse 2026'
     return () => { document.title = previous }
   }, [])
 
@@ -100,11 +102,11 @@ export default function TVScoreboard({ onNavigate }) {
   }
   const goToSite = () => leave('home')
 
-  return <section className={`scoreboard-screen${!fullscreen || controlsVisible || settingsOpen ? ' show-controls' : ''}`} aria-label="Placar ao vivo para TV" data-layout={model.games.length}>
+  return <section className={`scoreboard-screen scoreboard-decades${!fullscreen || controlsVisible || settingsOpen ? ' show-controls' : ''}`} aria-label="Placar ao vivo para TV" data-layout={model.games.length}>
     <header className="sb-header">
       <div className="sb-header-left">
         <button type="button" className="sb-back-button" onClick={goToSite} aria-label="Voltar ao site principal" title="Voltar ao site principal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m14 6-6 6 6 6M8 12h12" /></svg><span>Voltar</span></button>
-      <div className="sb-brand"><img src="/logo-interclasse.png" alt="Interclasse SESI Vinhedo" /><div><span>SESI VINHEDO</span><h1>O jogo é aqui.</h1></div></div>
+      <div className="sb-brand"><img src="/logo-interclasse.png" alt="Interclasse SESI Vinhedo" /><div><span>INTERCLASSE 2026 · SESI VINHEDO</span><h1>Décadas em jogo<span>.</span></h1></div></div>
       </div>
       <div className="sb-header-right">
         <div className="sb-controls">
@@ -128,12 +130,13 @@ export default function TVScoreboard({ onNavigate }) {
       <p>{loading ? 'Buscando os jogos escolhidos pela organização.' : 'As partidas selecionadas pela organização aparecerão aqui. Um jogo em tela inteira ou dois lado a lado.'}</p>
       <div>{['basketball', 'volleyball', 'football', 'handball'].map((name, index) => <span key={name}><SportGlyph sport={name} />{['Basquete', 'Vôlei', 'Futebol', 'Handebol'][index]}</span>)}</div>
     </main>}
-    <footer className="sb-footer"><TVConnectionStatus health={health} now={now} /><strong>UMA ESCOLA. VÁRIAS TURMAS. UM SÓ INTERCLASSE.</strong><span className="sb-footer-label">PLACAR OFICIAL</span></footer>
+    <footer className="sb-footer"><TVConnectionStatus health={health} now={now} /><strong>DÉCADAS DIFERENTES. A MESMA PAIXÃO PELO JOGO.</strong><span className="sb-footer-label">INTERCLASSE 2026</span></footer>
     <dialog className="sb-settings" ref={settingsRef} aria-labelledby="sb-settings-title" onCancel={() => setSettingsOpen(false)} onClose={() => setSettingsOpen(false)}>
       <header><div><span>TRANSMISSÃO · SESI VINHEDO</span><h2 id="sb-settings-title">Os jogos escolhidos. Ao vivo.</h2></div><button type="button" onClick={() => setSettingsOpen(false)} aria-label="Fechar ajustes">×</button></header>
       <p>A organização escolhe os jogos em <strong>Painel master → Ao vivo / TV → Escolher jogos do placar</strong>. A seleção é enviada automaticamente para esta TV.</p>
       <div className="sb-selected-summary" aria-label="Jogos selecionados">{model.games.map((game) => <p key={game.id}><strong>{game.timeA} × {game.timeB}</strong><span>{game.esporteNome} · {getMatchLabel(game)}</span></p>)}{!model.games.length ? <p>Nenhum jogo selecionado.</p> : null}</div>
       <small>Um jogo ocupa a tela inteira. Dois jogos ficam lado a lado. O placar permanece nesta seleção até a organização alterá-la.</small>
+      <details className="sb-decade-legend"><summary>Décadas e cores das turmas</summary><p>Cada equipe recebe sua identidade automaticamente. As cores da turma e do colete são identificações separadas.</p>{[['tarde', 'Tarde'], ['manha', 'Manhã']].map(([shift, label]) => <section key={shift}><h3>{label}</h3><div>{Object.values(CLASS_DECADE_IDENTITIES).filter((identity) => identity.shift === shift).map((identity) => <article key={identity.code} className="decade-team" style={decadeTeamStyle(identity)}><DecadeEmblem decade={identity.decade} /><div><strong>{identity.className} · {identity.label}</strong><span>{identity.color}</span></div></article>)}</div></section>)}</details>
       <div className="sb-settings-actions"><button className="sb-primary-button" type="button" onClick={async () => { setSettingsOpen(false); await toggleFullscreen() }}>{fullscreen ? 'Sair da tela cheia' : 'Iniciar em tela cheia'}</button><button type="button" onClick={share}>Copiar link desta TV</button></div>
       {shareMessage ? <p role="status" className="sb-share-message">{shareMessage}</p> : null}
       <nav><button type="button" onClick={() => leave('tv')}>Programação rotativa</button><button type="button" onClick={goToSite}>Voltar ao site</button></nav>

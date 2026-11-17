@@ -71,6 +71,8 @@ const { normalizeGame, startGame, updateLiveScore, finalizeGame, reopenGame, clo
 const { createThirdPlaceGame, saveDisciplinaryRecord, resolveDisciplinaryRecord } = await import('../src/services/firestoreService.js')
 const { ensureAutomaticPredictionDeadlines, getPredictionDeadline, isPredictionDeadlineOpen, savePrediction } = await import('../src/services/firestoreService.js')
 const { saveCalendarGame, deleteGamesBulk } = await import('../src/services/firestoreService.js')
+const { applyScheduleDelay } = await import('../src/services/firestoreService.js')
+const { buildDelayImpact, delayPlanFingerprint, delayScheduleFingerprint } = await import('../src/utils/scheduleDelay.js')
 const { correctLiveEvent } = await import('../src/services/firestoreService.js')
 const { saveScoreboardSelection } = await import('../src/services/firestoreService.js')
 
@@ -154,6 +156,51 @@ test('the calendar schedules undated closed games without opening guesses and ca
   assert.equal(game().durationMinutes, 20)
   documents.set('games/one', { ...documents.get('games/one'), liveStatus: 'live' })
   await assert.rejects(saveCalendarGame({ gameId: 'one', expectedFingerprint: calendarFingerprint(game()), change }), /não começaram/)
+})
+
+test('a reviewed delay updates all affected matches atomically and preserves scores, prediction ownership and manually closed status', async () => {
+  documents.set('games/one', { ...original, status: 'encerrado', durationMinutes: 30, preparation: { key: 'prepared' }, tournamentId: 'cup' })
+  documents.set('games/two', { ...original, timeA: 'Verde', timeB: 'Vermelho', dataHora: '2099-11-06T12:30', durationMinutes: 30, preparation: { key: 'prepared' } })
+  documents.set('predictions/keep', { userId: 'teacher', gameId: 'one', palpiteA: 2, palpiteB: 1 })
+  const games = [game(), game('two')]
+  const plan = buildDelayImpact(games, [], { anchorId: 'one', minutes: 15 })
+  const expected = delayScheduleFingerprint(games)
+  const prediction = structuredClone(documents.get('predictions/keep'))
+  assert.deepEqual(await applyScheduleDelay({ anchorId: 'one', minutes: 15, expectedSchedule: expected, expectedPlan: delayPlanFingerprint(plan) }), { changed: 2, maxDelay: 15 })
+  assert.equal(game().dataHora, '2099-11-06T12:15')
+  assert.equal(game('two').dataHora, '2099-11-06T12:45')
+  assert.equal(game().limitePalpites, '2099-11-06T12:10')
+  assert.equal(game('two').limitePalpites, '2099-11-06T12:40')
+  assert.equal(game().status, 'encerrado')
+  assert.equal(game().preparation, null)
+  assert.equal(game('two').preparation, null)
+  assert.equal(game().tournamentId, 'cup')
+  assert.deepEqual(documents.get('predictions/keep'), prediction)
+})
+
+test('delay application rejects changed or added fixtures and unreviewed proposals before writing any match', async () => {
+  const games = [game()]
+  const plan = buildDelayImpact(games, [], { anchorId: 'one', minutes: 15 })
+  const request = { anchorId: 'one', minutes: 15, expectedSchedule: delayScheduleFingerprint(games), expectedPlan: delayPlanFingerprint(plan) }
+  const before = structuredClone(documents.get('games/one'))
+  await assert.rejects(applyScheduleDelay({ ...request, expectedPlan: 'not-reviewed' }), /propostos mudaram/)
+  assert.deepEqual(documents.get('games/one'), before)
+  documents.set('games/new', { ...original, dataHora: '2099-11-06T12:30' })
+  await assert.rejects(applyScheduleDelay(request), /agenda ou as equipes mudaram/i)
+  assert.deepEqual(documents.get('games/one'), before)
+  documents.delete('games/new')
+  documents.set('games/one', { ...before, liveStatus: 'live' })
+  await assert.rejects(applyScheduleDelay(request), /agenda ou as equipes mudaram/i)
+  assert.equal(game().dataHora, before.dataHora)
+})
+
+test('a blocked delay cannot partially move the selected match around a live successor', async () => {
+  documents.set('games/two', { ...original, timeA: 'Verde', timeB: 'Vermelho', dataHora: '2099-11-06T12:30', liveStatus: 'live' })
+  const games = [game(), game('two')]
+  const plan = buildDelayImpact(games, [], { anchorId: 'one', minutes: 15 })
+  const before = structuredClone(documents.get('games/one'))
+  await assert.rejects(applyScheduleDelay({ anchorId: 'one', minutes: 15, expectedSchedule: delayScheduleFingerprint(games), expectedPlan: delayPlanFingerprint(plan) }), /indisponível|Mesmo local/)
+  assert.deepEqual(documents.get('games/one'), before)
 })
 
 test('bulk deletion removes linked predictions, every private document and more than one batch of events, then recalculates ranking', async () => {

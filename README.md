@@ -1,5 +1,11 @@
 # Bolão SESI Vinhedo
 
+As melhorias mais recentes da interface e as sugestões para as próximas etapas estão no [relatório de experiência de 17/11/2026](docs/melhorias-experiencia-2026-11-17.md).
+
+**Novo:** em **Painel master → Programação / PDF → Simular atraso**, confira o efeito em cadeia nos horários antes de aplicar. Veja o [guia da simulação e da interface](docs/simulacao-atrasos-e-interface.md).
+
+O **Placar ao vivo** recebeu o tema **Décadas em jogo**, com oito estilos visuais e as identidades automáticas das 14 turmas. Veja o [guia do placar temático de 2026](docs/placar-decadas-2026.md).
+
 Aplicação React + Vite para cadastro de participantes, login, palpites, ranking automático e painel master com Firebase Authentication e Firestore.
 
 ## Ensaio antes do evento

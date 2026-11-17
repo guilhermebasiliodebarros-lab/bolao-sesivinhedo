@@ -1179,7 +1179,7 @@ export default function AdminPanel({ onNavigate }) {
   }
 
   if (loading) {
-    return <LoadingState label="Carregando área administrativa..." error={message} />
+    return <LoadingState label="Carregando área administrativa…" variant="admin" error={message} />
   }
 
   const isSuccessMessage = ['Conferência salva.', 'Partida iniciada.'].some((prefix) => message.startsWith(prefix)) || ['salvo', 'sucesso', 'recalculada', 'finalizado', 'encerrado', 'reaberto', 'excluído'].some(

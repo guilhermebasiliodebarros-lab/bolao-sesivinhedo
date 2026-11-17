@@ -74,7 +74,7 @@ export default function Dashboard({ onNavigate }) {
   }
 
   if (loading || profileLoading) {
-    return <LoadingState label="Carregando seu painel..." error={error} />
+    return <LoadingState label="Carregando seu painel…" variant="dashboard" error={error} />
   }
 
   if (!isParticipant) {

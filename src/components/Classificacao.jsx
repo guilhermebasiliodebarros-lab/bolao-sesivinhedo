@@ -85,7 +85,7 @@ export default function Classificacao({ onNavigate }) {
   const loading = Object.values(loadingState).some(Boolean)
 
   if (loading) {
-    return <LoadingState label="Atualizando classificação..." error={error} />
+    return <LoadingState label="Atualizando classificação…" variant="ranking" error={error} />
   }
 
   return (
@@ -155,7 +155,7 @@ export default function Classificacao({ onNavigate }) {
           {activeRanking !== GENERAL_RANKING && !hasRankingData ? (
             <div className="alert alert-error">Este esporte ainda não tem jogos finalizados com pontuação.</div>
           ) : null}
-          <RankingTable ranking={visibleRanking} />
+          <RankingTable ranking={visibleRanking} currentUserId={isParticipant ? user?.uid : undefined} />
         </>
       ) : (
         <EmptyState

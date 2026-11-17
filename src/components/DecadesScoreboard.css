@@ -1,0 +1,131 @@
+/* Décadas 2026: each team owns an equal panel; the score stays neutral and legible. */
+.scoreboard-decades { --sb-lime: #f0dca9; background: radial-gradient(ellipse at 50% -30%, #65556b30, transparent 65%), #090d16; }
+.scoreboard-decades .sb-brand h1 { letter-spacing: -.045em; }
+.scoreboard-decades .sb-brand h1 > span { color: #f4ca69; }
+.scoreboard-decades .sb-brand > div > span { color: #c4b8a0; letter-spacing: .13em; }
+.scoreboard-decades .sb-signal > i { box-shadow: 0 0 10px #f4ca6940; }
+.sb-match.is-decade-match { --sport-accent: #e5e5e6; --sport-wash: #ffffff08; container-type: inline-size; background: #10151f; border-color: #ffffff21; border-radius: 18px; }
+.sb-match.is-decade-match::before { inset: 0 0 auto; width: 100%; height: 3px; background: linear-gradient(90deg, var(--side-a-accent) 0 50%, var(--side-b-accent) 50% 100%); }
+.sb-match.is-decade-match .sb-sport { color: #e6e7ed; }
+.sb-grid .sb-match.is-decade-match .sb-duel { gap: clamp(76px, 10cqw, 180px); align-items: stretch; }
+.sb-match.is-decade-match .sb-team { position: relative; isolation: isolate; justify-content: center; align-self: stretch; gap: clamp(7px, 1cqw, 16px); min-width: 0; min-height: 0; padding: clamp(18px, 2cqw, 40px) clamp(10px, 1.5cqw, 30px); overflow: hidden; color: #f6f6f5; border: 1px solid var(--era-line); border-radius: 16px; background: linear-gradient(160deg, var(--era-wash), transparent 60%), var(--era-background); }
+.decade-team { --era-font: var(--font); --era-tracking: -.025em; --era-name-style: normal; }
+.decade-team[data-era='20'] { --era-font: Georgia, 'Times New Roman', serif; --era-tracking: .04em; }
+.decade-team[data-era='40'] { --era-font: Georgia, 'Times New Roman', serif; --era-name-style: italic; --era-tracking: -.015em; }
+.decade-team[data-era='50'] { --era-font: 'Trebuchet MS', 'Arial Rounded MT Bold', sans-serif; --era-name-style: italic; }
+.decade-team[data-era='60'] { --era-font: Georgia, 'Times New Roman', serif; --era-name-style: italic; --era-tracking: -.045em; }
+.decade-team[data-era='70'] { --era-font: 'Arial Rounded MT Bold', 'Trebuchet MS', sans-serif; --era-tracking: -.045em; }
+.decade-team[data-era='80'] { --era-font: Consolas, 'Courier New', monospace; --era-tracking: -.06em; }
+.decade-team[data-era='90'] { --era-font: 'Courier New', Consolas, monospace; --era-tracking: -.075em; }
+.decade-team[data-era='2000'] { --era-font: 'Trebuchet MS', Arial, sans-serif; --era-name-style: italic; --era-tracking: -.04em; }
+.sb-match.is-decade-match .sb-team::before { content: ''; position: absolute; inset: 6px; z-index: -1; pointer-events: none; border: 1px solid var(--era-line); border-radius: inherit; opacity: .5; }
+.sb-match.is-decade-match .sb-team::after { content: ''; position: absolute; inset: 12% 0 0; z-index: -1; pointer-events: none; background: radial-gradient(ellipse at 50% 53%, #090d15d6, #090d15a6 38%, transparent 76%); }
+.decade-artwork { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; color: var(--era-accent); opacity: .5; pointer-events: none; }
+.sb-match.is-decade-match .sb-team[data-era='20'] { border-radius: 3px; }
+.sb-match.is-decade-match .sb-team[data-era='20']::before { inset: 10px; opacity: .75; border-radius: 0; }
+.sb-match.is-decade-match .sb-team[data-era='40'] { border-radius: 5px; background-image: linear-gradient(180deg, #ffffff08, transparent 45%); }
+.sb-match.is-decade-match .sb-team[data-era='40'] .decade-artwork { opacity: .62; }
+.sb-match.is-decade-match .sb-team[data-era='50'] { border-radius: 24px 24px 12px 12px; border-top: 3px solid var(--era-accent); box-shadow: inset 0 1px #fff5; }
+.sb-match.is-decade-match .sb-team[data-era='60'] { border-radius: 44px 18px 44px 18px; }
+.sb-match.is-decade-match .sb-team[data-era='60'] .decade-artwork { opacity: .35; }
+.sb-match.is-decade-match .sb-team[data-era='70'] { border-radius: 34px; }
+.sb-match.is-decade-match .sb-team[data-era='70'] .decade-artwork { opacity: .56; }
+.sb-match.is-decade-match .sb-team[data-era='80'] { border-radius: 5px; box-shadow: inset 0 0 24px #3e79e919; }
+.sb-match.is-decade-match .sb-team[data-era='80']::before { inset: 5px; border-color: var(--era-secondary); opacity: .5; }
+.sb-match.is-decade-match .sb-team[data-era='90'] { border-radius: 3px; border-style: dashed; }
+.sb-match.is-decade-match .sb-team[data-era='90']::before { inset: 8px; border-style: dotted; }
+.sb-match.is-decade-match .sb-team[data-era='2000'] { border-radius: 36px 16px 36px 16px; border-color: #ded7ed80; background-image: linear-gradient(135deg, #d0d8ec19, transparent 35%, #f4a2ce0d 100%); box-shadow: inset 0 1px #fff5, inset 0 -1px #f4a2ce44; }
+.sb-match.is-decade-match .sb-team[data-era='2000'] .decade-artwork { opacity: .72; }
+.sb-era-heading { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: clamp(8px, .8cqw, 18px); color: var(--era-accent); }
+.decade-emblem { width: 32px; height: 32px; flex-shrink: 0; }
+.sb-era-title { display: grid; gap: 3px; text-align: left; }
+.sb-era-title > strong { font-family: var(--era-font); font-size: clamp(17px, 2cqw, 34px); font-weight: 800; font-style: var(--era-name-style); letter-spacing: var(--era-tracking); line-height: 1.15; }
+.sb-era-title > small { color: #d2d0d0; font-size: clamp(8px, .8cqw, 12px); line-height: 1.3; letter-spacing: .04em; font-weight: 500; }
+.sb-match.is-decade-match .sb-team > h3 { z-index: 1; max-width: 100%; margin: 0; color: #fbfaf7; font-family: var(--era-font); font-weight: 800; font-style: var(--era-name-style); letter-spacing: var(--era-tracking); text-shadow: 0 3px 16px #0008; }
+.sb-match.is-decade-match .sb-score { position: relative; z-index: 1; max-width: 100%; font-family: Arial, Helvetica, sans-serif; font-size: min(var(--sb-score-size), 24cqw, 30vh); font-style: normal; font-weight: 900; font-variant-numeric: tabular-nums; color: #fffefb; line-height: .95; letter-spacing: -.055em; text-shadow: 0 4px 24px #0009; }
+.sb-match.is-decade-match .sb-score > span[data-digits='3'] { font-size: .82em; }
+.sb-match.is-decade-match .sb-score > span[data-digits='4'] { font-size: .64em; }
+.sb-match.is-decade-match .sb-score > span[data-digits='5'] { font-size: .52em; }
+.sb-match.is-decade-match .sb-awaiting-score { position: relative; z-index: 1; color: #e8e6e0; font-size: min(calc(var(--sb-score-size) * .65), 18cqw, 22vh); }
+.sb-match.is-decade-match .sb-team-detail { position: relative; z-index: 1; color: #d2d2d2; }
+.sb-match.is-decade-match .sb-team-detail > b { color: var(--era-accent); }
+.sb-match.is-decade-match .sb-vest { color: #c3c5cb; font-size: .8em; }
+.sb-grid .sb-match.is-decade-match .sb-duel-center { z-index: 2; width: clamp(84px, 9cqw, 164px); padding: clamp(10px, 1.3cqw, 20px) 6px; border: 1px solid #ffffff26; border-radius: 12px; background: #10151f; box-shadow: 0 8px 28px #0005; }
+.sb-match.is-decade-match .sb-match-clock { color: #f7f3e7; font-variant-numeric: tabular-nums; }
+.sb-grid .sb-match.is-decade-match .sb-match-clock { font-size: clamp(24px, 3cqw, 50px); line-height: 1; white-space: nowrap; }
+.sb-grid .sb-match.is-decade-match .sb-match-clock[data-clock-digits='6'], .sb-grid .sb-match.is-decade-match .sb-match-clock[data-clock-digits='7'] { font-size: clamp(17px, 2.5cqw, 42px); }
+.sb-match.is-decade-match .sb-match-clock.is-paused { color: #edc78c; }
+.sb-match.is-decade-match .sb-versus { color: #d2cbbf; }
+.sb-match.is-decade-match .sb-period-label, .sb-match.is-decade-match .sb-set-number { color: #f0e0b5; border-color: #f0e0b52e; background: #f0e0b509; }
+.sb-match.is-decade-match .sb-period-label { padding: 4px 6px; font-size: clamp(9px, 1.2cqw, 15px); white-space: nowrap; }
+.sb-match.is-decade-match .sb-set-number { padding: 4px 5px; font-size: clamp(8px, 1.1cqw, 13px); }
+.sb-match.is-decade-match .sb-clock-label { color: #acb8c7; }
+.sb-match.is-decade-match .sb-kickoff { color: #f1e7d3; }
+.sb-match.is-decade-match .sb-incidents-team.is-A { --incident-accent: var(--side-a-accent); }
+.sb-match.is-decade-match .sb-incidents-team.is-B { --incident-accent: var(--side-b-accent); }
+.sb-match.is-decade-match .sb-incidents-team-heading > strong, .sb-match.is-decade-match .sb-incidents-team .sb-incident-ball { color: var(--incident-accent); }
+.sb-match.is-decade-match .sb-match-note .sb-note-line:first-child { background: var(--side-a-accent); }
+.sb-match.is-decade-match .sb-match-note .sb-note-line:last-child { background: var(--side-b-accent); }
+.tv-team.tv-decade-team { padding: 8px 4px; border-block: 1px solid var(--era-line); }
+.tv-team.tv-decade-team > strong { font-family: var(--era-font); font-style: var(--era-name-style); letter-spacing: var(--era-tracking); }
+.tv-era-label { display: inline-flex; align-items: center; justify-content: center; gap: 6px; color: var(--era-accent); font-size: 11px; font-weight: 650; }
+.tv-era-label .decade-emblem { width: 20px; height: 20px; }
+
+.sb-decade-legend { margin: 20px 0 0; padding: 14px; border: 1px solid #ffffff24; border-radius: 10px; background: #ffffff03; }
+.sb-decade-legend summary { min-height: 28px; align-content: center; color: #f3e2bf; cursor: pointer; font-size: 13px; font-weight: 650; }
+.sb-decade-legend > p { margin: 14px 0; color: #b5c5d5; font-size: 12px; line-height: 1.6; }
+.sb-decade-legend h3 { margin: 18px 0 10px; color: #e7edf4; font-size: 13px; }
+.sb-decade-legend section > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.sb-decade-legend article { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 12px; color: var(--era-accent); background: var(--era-background); border: 1px solid var(--era-line); border-radius: 8px; }
+.sb-decade-legend article > div { display: grid; gap: 4px; }
+.sb-decade-legend article strong { color: #f3f3ed; font-size: 12px; }
+.sb-decade-legend article span { color: #cad0d7; font-size: 11px; }
+
+/* Embedded rehearsal panels keep exactly the same artwork at a smaller scale. */
+.is-embedded .sb-grid .sb-match.is-decade-match .sb-team { gap: 8px; padding: 18px 8px; }
+.is-embedded .sb-grid .sb-match.is-decade-match .sb-duel { gap: 70px; }
+.is-embedded .sb-grid .sb-match.is-decade-match .sb-duel-center { width: 74px; padding: 10px 3px; }
+.is-embedded .sb-era-title > strong { font-size: 15px; }
+.is-embedded .sb-era-title > small { font-size: 8px; }
+.is-embedded .sb-era-heading { gap: 6px; }
+.is-embedded .decade-emblem { width: 23px; height: 23px; }
+
+@container (max-width: 360px) {
+  .sb-era-heading { flex-direction: column; gap: 6px; }
+  .sb-era-title { text-align: center; }
+  .sb-era-title > small { max-width: 80px; }
+  .sb-match.is-decade-match .sb-team-detail { flex-direction: column; gap: 5px; }
+}
+
+@media (min-width: 1000px) and (max-height: 850px) {
+  .sb-grid .sb-match.is-decade-match .sb-team { gap: 7px; padding: 13px 10px; }
+  .sb-grid .sb-match.is-decade-match .sb-team > h3 { font-size: clamp(26px, 3cqw, 46px); }
+  .sb-era-title > strong { font-size: clamp(16px, 1.8cqw, 26px); }
+  .sb-era-title > small { font-size: 8px; }
+  .sb-era-heading .decade-emblem { width: 26px; height: 26px; }
+}
+@media (max-width: 999px) {
+  .sb-match.is-decade-match .sb-team { gap: 10px; padding: 22px 10px; }
+  .sb-grid .sb-match.is-decade-match .sb-team > h3 { font-size: clamp(22px, 4cqw, 38px); }
+  .sb-era-title > strong { font-size: clamp(15px, 2.3cqw, 24px); }
+  .sb-era-title > small { font-size: 9px; }
+  .sb-match.is-decade-match .sb-score { font-size: min(var(--sb-score-size), 22cqw); }
+}
+@media (max-width: 600px) {
+  .sb-grid .sb-match.is-decade-match .sb-duel { gap: 62px; }
+  .sb-grid .sb-match.is-decade-match .sb-duel-center { width: 68px; padding: 12px 2px; border-radius: 8px; gap: 6px; }
+  .sb-grid .sb-match.is-decade-match .sb-match-clock { font-size: 22px; }
+  .sb-grid .sb-match.is-decade-match .sb-team { gap: 12px; padding: 20px 5px; }
+  .sb-match.is-decade-match .sb-team[data-era='60'], .sb-match.is-decade-match .sb-team[data-era='2000'] { border-radius: 22px 8px 22px 8px; }
+  .sb-era-heading { flex-direction: column; gap: 6px; }
+  .sb-era-title { text-align: center; }
+  .sb-era-title > strong { font-size: 14px; }
+  .sb-era-title > small { max-width: 92px; font-size: 8px; }
+  .sb-era-heading .decade-emblem { width: 24px; height: 24px; }
+  .sb-grid .sb-match.is-decade-match .sb-team > h3 { font-size: clamp(19px, 6cqw, 28px); }
+  .sb-match.is-decade-match .sb-score { font-size: min(var(--sb-score-size), 23cqw); }
+  .sb-match.is-decade-match .sb-team-detail { flex-direction: column; gap: 5px; }
+  .sb-decade-legend section > div { grid-template-columns: minmax(0, 1fr); }
+  .scoreboard-decades .sb-brand > div > span { letter-spacing: .05em; font-size: 8px; }
+}
+@media (prefers-reduced-motion: reduce) { .is-decade-match, .is-decade-match * { animation: none !important; } }

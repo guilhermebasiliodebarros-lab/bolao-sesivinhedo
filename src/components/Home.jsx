@@ -2,177 +2,85 @@ import { useEffect, useMemo, useState } from 'react'
 import usePredictionClock from '../hooks/usePredictionClock.js'
 import heroImage from '../assets/bolao-hero.png'
 import { COPY } from '../content/copy.js'
-import { useAuth } from '../context/useAuth.js'
-import { canEditPrediction, subscribeGames, subscribeRanking, subscribeUserPredictions } from '../services/bolaoService.js'
-import { formatDateTime } from '../utils/format.js'
+import { canEditPrediction, subscribeGames } from '../services/bolaoService.js'
 import { getGameStageLabel, getSportIcon } from '../utils/game.js'
-import PendingGuessBanner from './PendingGuessBanner.jsx'
+import { eventOverview, formatCalendarDay, formatCalendarTime } from '../utils/calendarExplorer.js'
+import { schoolDay } from '../utils/tvSchedule.js'
+import { matchVenueLabel } from '../utils/matchVenue.js'
+import MatchScore from './MatchScore.jsx'
+
+const shortcuts = [
+  {
+    view: 'calendario', icon: '↗', title: 'Programação',
+    description: 'Encontre sua turma, o horário e a quadra.',
+  },
+  { view: 'chaveamento', icon: '⚑', title: 'Chaveamento', description: 'Veja o caminho das equipes até a final.' },
+  { view: 'estatisticas', icon: '★', title: 'Destaques', description: 'Acompanhe as estatísticas dos atletas.' },
+  { view: 'regulamentos', icon: '≡', title: 'Regulamentos', description: 'Consulte as regras de cada modalidade.' },
+]
 
 export default function Home({ onNavigate }) {
-  const { user, isParticipant } = useAuth()
   const [games, setGames] = useState([])
-  const now = usePredictionClock(games)
-  const [ranking, setRanking] = useState([])
-  const [predictions, setPredictions] = useState([])
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const now = usePredictionClock(games)
 
-  useEffect(() => {
-    return subscribeGames((items) => { setGames(items); setError('') }, setError)
-  }, [])
+  useEffect(() => subscribeGames((items) => { setGames(items); setLoading(false); setError('') }, setError), [])
 
-  useEffect(() => {
-    if (!user) {
-      return () => {}
-    }
-
-    return subscribeRanking(setRanking, setError)
-  }, [user])
-
-  useEffect(() => {
-    if (!user || !isParticipant) {
-      return () => {}
-    }
-
-    return subscribeUserPredictions(user.uid, setPredictions, setError)
-  }, [isParticipant, user])
-
-  const openGames = useMemo(() => games.filter((game) => canEditPrediction(game, now)), [games, now])
-  const activeRanking = user ? ranking : []
-  const predictionsByGame = useMemo(() => new Map((user && isParticipant ? predictions : []).map((prediction) => [prediction.gameId, prediction])), [user, isParticipant, predictions])
-  const pendingGuessCount = isParticipant ? openGames.filter((game) => !predictionsByGame.has(game.id)).length : Number.NaN
-  const nextGames = openGames.slice(0, 3)
-  const topRanking = activeRanking.slice(0, 3)
+  const overview = useMemo(() => eventOverview(games, now), [games, now])
+  const openCount = games.filter((game) => canEditPrediction(game, now)).length
+  const spotlight = overview.live[0] || overview.upcoming[0]
+  const isLive = overview.live.length > 0
+  const spotlightView = isLive ? 'tv' : 'calendario'
 
   return (
-    <section className="home-page">
+    <section className="home-page event-home">
       {error ? <div className="alert alert-error home-data-notice" role="alert"><p>{error}</p><button type="button" className="btn btn-outline btn-small" onClick={() => window.location.reload()}>Tentar novamente</button></div> : null}
-      <div className="hero-section" style={{ '--hero-image': `url(${heroImage})` }}>
+      <div className="hero-section event-hero" style={{ '--hero-image': `url(${heroImage})` }}>
         <div className="hero-copy">
-          <span className="eyebrow">{COPY.home.eyebrow}</span>
-          <h1>{COPY.brand.name}</h1>
-          <p>{COPY.home.intro}</p>
+          <span className="eyebrow">Na quadra. Na torcida. Em cada palpite.</span>
+          <h1>O Interclasse<br />acontece aqui<span>.</span></h1>
+          <p>Horários, placares e o caminho até a final. Acompanhe sua turma e viva cada jogo do SESI Vinhedo.</p>
           <div className="hero-actions">
-            <button className="btn btn-primary btn-large" type="button" onClick={() => onNavigate('login')}>
-              {COPY.actions.entrar}
-            </button>
-            <button className="btn btn-light btn-large" type="button" onClick={() => onNavigate('cadastro')}>
-              {COPY.actions.cadastrar}
-            </button>
-            <button className="btn btn-outline-light btn-large" type="button" onClick={() => onNavigate('classificacao')}>
-              {COPY.actions.verClassificacao}
-            </button>
+            <button className="btn btn-primary btn-large" type="button" onClick={() => onNavigate('calendario')}>Explorar os jogos <span aria-hidden="true">↗</span></button>
+            <button className="btn btn-outline-light btn-large" type="button" onClick={() => onNavigate('login')}>Entrar para palpitar</button>
           </div>
+          <p className="hero-registration">Primeira vez por aqui? <button type="button" onClick={() => onNavigate('cadastro')}>Crie sua conta</button></p>
         </div>
-        <div className="hero-signal" aria-label="Resumo do sistema">
-          {COPY.home.heroSignal.map((item) => (
-            <span key={item}>{item}</span>
-          ))}
-        </div>
+        <aside className="event-spotlight" aria-label={isLive ? 'Partida em destaque ao vivo' : 'Próxima partida'}>
+          <div className="event-spotlight-heading"><span className={isLive ? 'event-indicator is-live' : 'event-indicator'}><i aria-hidden="true" />{isLive ? 'Acontecendo agora' : 'A seguir no Interclasse'}</span><span aria-hidden="true">↗</span></div>
+          {loading ? <p role="status">Buscando a programação…</p> : spotlight ? <>
+            <span className="event-spotlight-sport">{getSportIcon(spotlight.esporteNome)} {spotlight.esporteNome} · {getGameStageLabel(spotlight)}</span>
+            <div className="event-spotlight-teams"><strong>{spotlight.timeA || 'A definir'}</strong><span>{isLive ? <MatchScore game={spotlight} /> : '×'}</span><strong>{spotlight.timeB || 'A definir'}</strong></div>
+            <p className="event-spotlight-date">{formatCalendarDay(schoolDay(spotlight.dataHora), { month: 'short' })} · {formatCalendarTime(spotlight.dataHora)}</p>
+            <p className="event-spotlight-venue">{matchVenueLabel(spotlight) || 'Local a definir'}</p>
+            <button className="event-spotlight-link" type="button" onClick={() => onNavigate(spotlightView)}>{isLive ? 'Acompanhar ao vivo' : 'Ver programação completa'} <span aria-hidden="true">→</span></button>
+          </> : <>
+            <strong className="event-spotlight-empty">A próxima disputa está a caminho.</strong>
+            <p>Consulte os resultados e acompanhe a programação divulgada pela organização.</p>
+            <button className="event-spotlight-link" type="button" onClick={() => onNavigate('calendario')}>Abrir calendário <span aria-hidden="true">→</span></button>
+          </>}
+        </aside>
+        <div className="event-hero-caption"><span>INTERCLASSE SESI VINHEDO</span><span>Esporte que conecta a escola.</span></div>
       </div>
 
-      <section className="live-command-strip" aria-label="Destaques do Interclasse">
-        <article>
-          <span className="live-dot" aria-hidden="true" />
-          <small>Agora no Interclasse</small>
-          <strong>Palpites abertos com prazo visível</strong>
-        </article>
-        <article>
-          <span className="live-dot live-dot-cyan" aria-hidden="true" />
-          <small>Ranking</small>
-          <strong>Classificação recalculada ao finalizar placares</strong>
-        </article>
-        <article>
-          <span className="live-dot live-dot-dark" aria-hidden="true" />
-          <small>Master</small>
-          <strong>Chaveamentos e jogos em lote no mesmo painel</strong>
-        </article>
+      <section className="event-metrics" aria-label="Resumo do evento">
+        {[
+          { label: 'Jogos hoje', value: overview.today, detail: 'Na programação do dia' },
+          { label: 'Ao vivo', value: overview.live.length, detail: 'Partidas em andamento' },
+          { label: 'Resultados', value: overview.finished, detail: 'Partidas concluídas' },
+          { label: 'Palpites abertos', value: openCount, detail: 'Para entrar na disputa' },
+        ].map((metric) => <article key={metric.label}><span>{metric.label}</span><strong>{loading || error ? '—' : metric.value}</strong><small>{metric.detail}</small></article>)}
       </section>
 
-      <PendingGuessBanner count={pendingGuessCount} onNavigate={onNavigate} />
-
-      <section className="home-event-panel" aria-label="Resumo do Interclasse">
-        <article className="home-next-games">
-          <span className="eyebrow">Próximos jogos</span>
-          {nextGames.length ? (
-            nextGames.map((game) => (
-              <button type="button" key={game.id} onClick={() => onNavigate(user ? 'jogos' : 'login')}>
-                <span aria-hidden="true">{getSportIcon(game.esporteNome)}</span>
-                <strong>{game.timeA} x {game.timeB}</strong>
-                <small>
-                  {getGameStageLabel(game)} | {formatDateTime(game.dataHora)}
-                </small>
-              </button>
-            ))
-          ) : (
-            <p>Nenhum jogo aberto no momento.</p>
-          )}
-        </article>
-        <article className="home-ranking-preview">
-          <span className="eyebrow">Top 3</span>
-          {topRanking.length ? (
-            topRanking.map((participant, index) => (
-              <span key={participant.id}>
-                <strong>
-                  {index + 1}º {participant.nome || participant.email}
-                </strong>
-                <small>{participant.pontos || 0} pts</small>
-              </span>
-            ))
-          ) : (
-            <p>{user ? 'Ranking ainda sem participantes.' : 'Entre para ver o ranking dos participantes.'}</p>
-          )}
-        </article>
-        <article className="home-metric-card">
-          <span>Participantes</span>
-          <strong>{user ? activeRanking.length : '-'}</strong>
-          <small>{user ? 'No ranking atual' : 'Disponível após login'}</small>
-        </article>
-        <article className="home-metric-card">
-          <span>Palpites abertos</span>
-          <strong>{openGames.length}</strong>
-          <small>Jogos disponíveis agora</small>
-        </article>
+      <section className="event-explore" aria-labelledby="event-explore-title">
+        <div className="section-heading"><div><span className="eyebrow">Do primeiro jogo à final</span><h2 id="event-explore-title">Escolha como acompanhar</h2></div><span>Informações abertas para a torcida</span></div>
+        <div className="event-shortcuts">{shortcuts.map((item) => <button type="button" key={item.view} onClick={() => onNavigate(item.view)}><span className="event-shortcut-icon" aria-hidden="true">{item.icon}</span><strong>{item.title}</strong><p>{item.description}</p><span className="event-shortcut-arrow" aria-hidden="true">↗</span></button>)}</div>
       </section>
 
-      <div className="home-grid">
-        {COPY.home.cards.map((card) => (
-          <article className="info-card" key={card.number}>
-            <span className="card-number">{card.number}</span>
-            <h2>{card.title}</h2>
-            <p>{card.description}</p>
-          </article>
-        ))}
-      </div>
-
-      <section className="sports-showcase" aria-label={COPY.home.sports.label}>
-        <div>
-          <span className="eyebrow">{COPY.home.sports.eyebrow}</span>
-          <h2>{COPY.home.sports.title}</h2>
-        </div>
-        <div className="sport-tile-grid">
-          <article className="sport-tile sport-tile-field">
-            <span>{COPY.home.sports.items[0]}</span>
-          </article>
-          <article className="sport-tile sport-tile-court">
-            <span>{COPY.home.sports.items[1]}</span>
-          </article>
-          <article className="sport-tile sport-tile-net">
-            <span>{COPY.home.sports.items[2]}</span>
-          </article>
-          <article className="sport-tile sport-tile-handball">
-            <span>{COPY.home.sports.items[3]}</span>
-          </article>
-        </div>
-      </section>
-
-      <section className="feature-band">
-        <div>
-          <span className="eyebrow">{COPY.home.feature.eyebrow}</span>
-          <h2>{COPY.home.feature.title}</h2>
-        </div>
-        <button className="btn btn-primary" type="button" onClick={() => onNavigate('jogos')}>
-          {COPY.actions.verJogos}
-        </button>
+      <section className="event-predictions" aria-labelledby="event-predictions-title">
+        <div><span className="eyebrow">Seu palpite também entra em jogo</span><h2 id="event-predictions-title">Uma disputa a mais para acompanhar.</h2><p>Registre seus palpites até cinco minutos antes de cada partida e acompanhe sua pontuação no ranking.</p><button type="button" className="btn btn-primary" onClick={() => onNavigate('login')}>Participar do bolão <span aria-hidden="true">→</span></button></div>
+        <div className="event-prediction-steps">{COPY.home.cards.map((card) => <article key={card.number}><span>{card.number}</span><div><h3>{card.title}</h3><p>{card.description}</p></div></article>)}</div>
       </section>
     </section>
   )
