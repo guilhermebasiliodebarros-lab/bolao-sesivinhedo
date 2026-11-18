@@ -4,6 +4,8 @@ O acesso **Placar ao vivo** combina a identidade das duas turmas selecionadas pe
 
 ## Como usar
 
+O placar e o Modo TV exigem login. Em cada navegador da transmissão, entre com a conta da organização antes de abrir a TV. Veja o [guia de acesso autenticado](acesso-autenticado.md).
+
 1. Selecione um ou dois jogos em **Painel master → Ao vivo / TV → Escolher jogos do placar**.
 2. Abra **Placar ao vivo** na TV. As identidades são aplicadas automaticamente às turmas e acompanham as mudanças de seleção.
 3. Use **Ajustar placar da TV → Décadas e cores das turmas** para consultar a legenda completa.

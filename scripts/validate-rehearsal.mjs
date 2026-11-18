@@ -73,6 +73,7 @@ try {
   record('Cadastro real de atleta pelo formulário da organização')
 
   await nav.getByRole('button', { name: /^Ao vivo/ }).click()
+  await login(tv, 'suporte')
   await tv.goto(`${APP_ORIGIN}/#placar`)
   await tv.getByRole('heading', { name: 'Aguardando os jogos.', exact: true }).waitFor({ timeout: 45000 })
 

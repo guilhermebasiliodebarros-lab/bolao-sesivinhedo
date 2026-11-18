@@ -7,7 +7,7 @@ export default function Footer({ accessOnly = false }) {
     <footer className="site-footer">
       <div>
         <strong>{COPY.brand.name}</strong>
-        <span>{isViewer || accessOnly ? 'Calendário, chaveamento, simulador, regulamentos e estatísticas.' : COPY.footer.tagline}</span>
+        <span>{accessOnly ? 'Entre com sua conta para acessar o Interclasse.' : isViewer ? 'Calendário, chaveamento, simulador, regulamentos e estatísticas.' : COPY.footer.tagline}</span>
       </div>
       <span>{isViewer ? 'Acesso somente para consulta.' : accessOnly ? 'Acesse com o login fornecido pela organização.' : COPY.footer.scoring}</span>
     </footer>

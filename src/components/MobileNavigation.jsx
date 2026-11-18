@@ -17,8 +17,8 @@ const iconPaths = {
 
 export default function MobileNavigation({ activeView, onNavigate }) {
   const { user, isMaster, isViewer } = useAuth()
-  if (isMaster) return null
-  const views = isViewer ? CONSULTATION_VIEWS : user ? PARTICIPANT_VIEWS : ['home', 'calendario', 'chaveamento', 'login']
+  if (!user || isMaster) return null
+  const views = isViewer ? CONSULTATION_VIEWS : PARTICIPANT_VIEWS
   const shortLabels = { dashboard: 'Painel', palpites: 'Palpites', classificacao: 'Ranking', calendario: 'Jogos', chaveamento: 'Chaves' }
 
   return <nav className="mobile-navigation" aria-label="Atalhos no celular">

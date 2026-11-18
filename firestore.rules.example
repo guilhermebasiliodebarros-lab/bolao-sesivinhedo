@@ -109,7 +109,7 @@ service cloud.firestore {
     }
 
     match /games/{gameId} {
-      allow read: if true;
+      allow read: if signedIn();
       allow create, update, delete: if isMaster();
 
       match /documents/{documentId} {
@@ -121,17 +121,17 @@ service cloud.firestore {
     }
 
     match /sports/{sportId} {
-      allow read: if true;
+      allow read: if signedIn();
       allow create, update, delete: if isMaster();
     }
 
     match /announcements/{announcementId} {
-      allow read: if isMaster() || resource.data.active == true;
+      allow read: if signedIn() && (isMaster() || resource.data.active == true);
       allow create, update, delete: if isMaster();
     }
 
     match /broadcastSettings/{settingId} {
-      allow read: if true;
+      allow read: if signedIn();
       allow create, update, delete: if isMaster();
     }
 
@@ -140,7 +140,7 @@ service cloud.firestore {
     }
 
     match /teams/{teamId} {
-      allow read: if true;
+      allow read: if signedIn();
       allow create, update, delete: if isMaster();
 
       match /players/{playerId} {

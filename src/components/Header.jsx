@@ -27,7 +27,7 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
   }, [])
 
   useEffect(() => {
-    if (!menuOpen) return
+    if (!menuOpen || !user) return
     const drawer = drawerRef.current
     const previousOverflow = document.body.style.overflow
     drawer.showModal()
@@ -36,9 +36,9 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
       drawer.close()
       document.body.style.overflow = previousOverflow
     }
-  }, [menuOpen])
+  }, [menuOpen, user])
 
-  const publicItems = [
+  const eventItems = [
     { id: 'home', label: COPY.nav.home },
     { id: 'calendario', label: COPY.nav.calendario },
     { id: 'chaveamento', label: 'Chaveamento' },
@@ -49,11 +49,10 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
     { id: 'placar', label: 'Placar ao vivo' },
   ]
   const participantItems = participantAccount ? PARTICIPANT_VIEWS.map((id) => ({ id, label: COPY.nav[id] })) : []
-  const consultationItems = CONSULTATION_VIEWS.map((id) => publicItems.find((item) => item.id === id))
+  const consultationItems = CONSULTATION_VIEWS.map((id) => eventItems.find((item) => item.id === id))
   const adminItems = isMaster ? [{ id: 'admin', label: 'Painel master' }] : []
-  const navItems = isViewer ? consultationItems : [
-    ...(participantAccount ? [] : publicItems),
-    ...(!user ? [{ id: 'classificacao', label: COPY.nav.classificacao }] : []),
+  const navItems = !user ? [] : isViewer ? consultationItems : [
+    ...(participantAccount ? [] : eventItems),
     ...participantItems,
     ...adminItems,
   ]
@@ -90,7 +89,7 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
             )}
           </button>
           <div className="header-event-label">
-            <strong>{isViewer || (!user && activeView === 'login') ? 'Acompanhe o Interclasse.' : 'O seu palpite entra em jogo.'}</strong>
+            <strong>{isViewer || !user ? 'Acompanhe o Interclasse.' : 'O seu palpite entra em jogo.'}</strong>
             <span>Jogos, resultados e classificação em um só lugar.</span>
           </div>
           <div className="header-quick-actions">
@@ -103,7 +102,7 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
             </button>
           </div>
         </div>
-        <div className="header-menubar">
+        {user ? <div className="header-menubar">
           <button className="all-menu-button" type="button" aria-label={COPY.header.openMenu}
             aria-expanded={menuOpen} aria-controls="site-navigation-drawer" aria-haspopup="dialog"
             onClick={() => setMenuOpen(true)}>
@@ -117,9 +116,9 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
                 onClick={() => handleNavigate(item.id)}>{item.label}</button>
             ))}
           </nav>
-        </div>
+        </div> : null}
       </header>
-      {createPortal(
+      {user ? createPortal(
         <dialog ref={drawerRef} className="navigation-drawer" id="site-navigation-drawer"
           aria-labelledby="drawer-greeting" onCancel={() => setMenuOpen(false)} onClose={() => setMenuOpen(false)}
           onKeyDown={(event) => {
@@ -150,10 +149,9 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
           </div>
           <div className="drawer-scroll">
             <nav aria-label="Menu lateral">
-              {!participantAccount && !isViewer ? <section className="drawer-section">
+              {isMaster ? <section className="drawer-section">
                 <h2>Explore o Interclasse</h2>
-                {renderLinks(publicItems)}
-                {!user ? renderLinks([{ id: 'classificacao', label: COPY.nav.classificacao }]) : null}
+                {renderLinks(eventItems)}
               </section> : null}
               {isViewer ? <section className="drawer-section"><h2>Consulta do Interclasse</h2>{renderLinks(consultationItems)}</section> : null}
               {participantItems.length ? (
@@ -180,7 +178,7 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
             <div className="drawer-footer">SESI Vinhedo <span>{isViewer ? 'Jogos, resultados e estatísticas do Interclasse.' : 'Todo jogo começa com um palpite.'}</span></div>
           </div>
         </dialog>, document.body,
-      )}
+      ) : null}
     </>
   )
 }

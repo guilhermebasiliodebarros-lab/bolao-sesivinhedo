@@ -1,4 +1,4 @@
-/* Public event experience, calendar discovery and compact navigation. */
+/* Event experience, calendar discovery and compact navigation. */
 :root { color-scheme: light; }
 :root[data-theme='dark'] { color-scheme: dark; }
 
@@ -8,6 +8,7 @@
 .mobile-navigation { display: none; }
 
 .event-home { gap: 48px; }
+.access-home .event-hero { grid-template-columns: minmax(0, 1fr); min-height: clamp(460px, calc(100svh - 220px), 740px); }
 .event-hero { grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr); gap: clamp(30px, 5vw, 80px); min-height: 570px; padding: 64px max(24px, calc((100% - 1180px) / 2)) 88px; background-image: linear-gradient(100deg, rgba(11, 18, 28, 0.96), rgba(11, 18, 28, 0.83) 54%, rgba(11, 18, 28, 0.48)), var(--hero-image); }
 .event-hero::after { height: 4px; background: linear-gradient(90deg, #e10600 0 72%, #f59d8d 72%); }
 .event-hero .hero-copy { max-width: 650px; }

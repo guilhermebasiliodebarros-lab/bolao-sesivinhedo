@@ -26,6 +26,7 @@ const Calendario = lazy(() => import('./components/Calendario.jsx'))
 const Classificacao = lazy(() => import('./components/Classificacao.jsx'))
 const Dashboard = lazy(() => import('./components/Dashboard.jsx'))
 const Home = lazy(() => import('./components/Home.jsx'))
+const AccessHome = lazy(() => import('./components/AccessHome.jsx'))
 const Jogos = lazy(() => import('./components/Jogos.jsx'))
 const Login = lazy(() => import('./components/Login.jsx'))
 const Palpites = lazy(() => import('./components/Palpites.jsx'))
@@ -148,14 +149,14 @@ function AppShell() {
       return <AdminPanel onNavigate={navigate} />
     }
 
-    return <Home onNavigate={navigate} />
+    return user ? <Home onNavigate={navigate} /> : <AccessHome onNavigate={navigate} />
   }
 
   if (authLoading) return <LoadingState label="Carregando sua conta…" variant="form" />
 
   if (quickShell) return <div className="app quick-app">
     <header className="quick-app-header"><img src="/logo-interclasse.png" alt="Interclasse SESI Vinhedo" /><div><strong>{user ? 'Palpite rápido' : 'Acesso ao Interclasse'}</strong><span>{user ? `Olá, ${profile?.nome || user.displayName || 'participante'}` : 'Entre com o login fornecido pela organização'}</span></div><button type="button" className="btn btn-outline" onClick={leaveQuickMode}>Site completo</button>{user ? <button type="button" className="quick-logout" onClick={async () => { await logout(); navigate('login') }}>Sair</button> : null}</header>
-    <ConnectionStatus /><ConfigNotice />
+    {user ? <ConnectionStatus /> : null}<ConfigNotice />
     <main>{updateNotice}{isParticipant ? <PredictionReminders key={user.uid} userId={user.uid} showSettings={false} onNavigate={navigate} /> : null}<Suspense fallback={<LoadingState label={user ? 'Abrindo palpites…' : 'Abrindo acesso…'} variant={user ? 'cards' : 'form'} />}>{user ? <QuickPredictions key={user.uid} /> : activeView === 'cadastro' ? <Cadastro onNavigate={navigate} onSuccess={() => afterLogin('dashboard')} /> : <Login onNavigate={navigate} onSuccess={afterLogin} />}</Suspense></main>
     <footer className="quick-app-footer">{user ? 'Interclasse SESI Vinhedo · confira o placar antes de enviar.' : 'Interclasse SESI Vinhedo · jogos, resultados e informações do evento.'}</footer>
   </div>
@@ -169,18 +170,18 @@ function AppShell() {
   }
 
   return (
-    <div className={isMaster ? 'app' : 'app app-with-mobile-navigation'}>
+    <div className={user && !isMaster ? 'app app-with-mobile-navigation' : 'app'}>
       <button className="skip-link" type="button" onClick={() => document.getElementById('main-content')?.focus()}>Pular para o conteúdo</button>
-      <Header activeView={activeView} onNavigate={navigate} theme={theme} onToggleTheme={toggleTheme} />
-      <ConnectionStatus />
+      <Header key={user?.uid || 'guest'} activeView={activeView} onNavigate={navigate} theme={theme} onToggleTheme={toggleTheme} />
+      {user ? <ConnectionStatus /> : null}
       <ConfigNotice />
       <main id="main-content" tabIndex={-1}>
         {updateNotice}
-        <LiveScoresStrip />
+        {user ? <LiveScoresStrip /> : null}
         {isParticipant ? <PredictionReminders key={user.uid} userId={user.uid} showSettings={activeView === 'dashboard'} onNavigate={navigate} /> : null}
         <Suspense fallback={<LoadingState label="Preparando a tela…" variant={loadingVariant} />}>{renderView()}</Suspense>
       </main>
-      <Footer accessOnly={!user && activeView === 'login'} />
+      <Footer accessOnly={!user} />
       <MobileNavigation activeView={activeView} onNavigate={navigate} />
     </div>
   )

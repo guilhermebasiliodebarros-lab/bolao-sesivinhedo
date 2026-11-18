@@ -1,5 +1,7 @@
 # Bolão SESI Vinhedo
 
+**Acesso por login:** visitantes veem somente boas-vindas, login e cadastro. Menus, jogos, calendário, estatísticas, Modo TV e placar ao vivo exigem autenticação, inclusive por links diretos e nas regras do Firestore. Veja o [guia de acesso autenticado](docs/acesso-autenticado.md).
+
 As melhorias mais recentes da interface e as sugestões para as próximas etapas estão no [relatório de experiência de 17/11/2026](docs/melhorias-experiencia-2026-11-17.md).
 
 **Novo:** em **Painel master → Programação / PDF → Simular atraso**, confira o efeito em cadeia nos horários antes de aplicar. Veja o [guia da simulação e da interface](docs/simulacao-atrasos-e-interface.md).
@@ -49,7 +51,7 @@ O build exige todas essas variáveis e interrompe a publicação se alguma estiv
 
 O usuário master serve apenas para administração. Para participar do bolão, crie outra conta normal com `role: "user"`.
 
-Contas de usuário autenticadas têm navegação restrita a **Painel**, **Jogos**, **Meus palpites** e **Classificação**, tanto no menu superior quanto no lateral. O logo leva ao Painel; links diretos para outras telas redirecionam ao Painel após o carregamento do perfil. Tema e saída da conta continuam disponíveis. Visitantes mantêm a navegação pública, e o master mantém suas telas de organização. Essa separação é da navegação do site; as permissões dos dados continuam sob as regras do Firestore.
+Contas de usuário autenticadas têm navegação restrita a **Painel**, **Jogos**, **Meus palpites** e **Classificação**, tanto no menu superior quanto no lateral. O logo leva ao Painel; links diretos para outras telas redirecionam ao Painel após o carregamento do perfil. Tema e saída da conta continuam disponíveis. Visitantes veem somente boas-vindas, login e cadastro, sem menus de funcionalidades nem dados do campeonato; links diretos para as funções pedem login. O master mantém suas telas de organização e a conta de consulta mantém suas cinco telas. As leituras do campeonato no Firestore também exigem autenticação.
 
 ## Coleções usadas
 
@@ -83,7 +85,7 @@ O início é controlado pela organização; o horário programado sozinho não m
 
 ## Modo TV
 
-Abra `https://bolao-sesivinhedo.web.app/#tv` ou use **Modo TV** no menu. A tela pública usa o nome **Interclasse SESI Vinhedo**, mantém o logo e recebe os dados em tempo real. As páginas alternam entre partidas ao vivo, jogos de hoje, amanhã, outros dias e resultados. Cada página mostra até quatro partidas ao vivo ou seis jogos de um esporte. Os jogos ao vivo voltam entre as páginas da programação, com uma faixa de placares permanente.
+Entre com a conta da organização no navegador da TV e abra `https://bolao-sesivinhedo.web.app/#tv` ou use **Modo TV** no menu. A transmissão usa o nome **Interclasse SESI Vinhedo**, mantém o logo e recebe os dados em tempo real. As páginas alternam entre partidas ao vivo, jogos de hoje, amanhã, outros dias e resultados. Cada página mostra até quatro partidas ao vivo ou seis jogos de um esporte. Os jogos ao vivo voltam entre as páginas da programação, com uma faixa de placares permanente.
 
 Use o filtro por esporte, as abas da programação e os controles de página para escolher o que exibir. O intervalo pode ser de 8, 12, 20 ou 30 segundos; a opção fica salva no navegador. A programação considera o horário de São Paulo. Jogos atrasados e sem horário têm páginas próprias e não são marcados como ao vivo automaticamente. Sem conexão, a tela identifica que está exibindo os últimos dados recebidos.
 
@@ -97,7 +99,7 @@ Os jogadores ficam na subcoleção `teams/{teamId}/players`, com leitura e escri
 
 ### Chaveamento público e simulador
 
-Os menus **Chaveamento** (`#chaveamento`) e **Simulador** (`#simulador`) podem ser acessados sem login. Ambos recebem as modalidades, as equipes e as partidas públicas em tempo real, com seleção por esporte, turno e torneio.
+Os menus **Chaveamento** (`#chaveamento`) e **Simulador** (`#simulador`) exigem login em uma conta de consulta ou master. Ambos recebem as modalidades, as equipes e as partidas em tempo real, com seleção por esporte, turno e torneio.
 
 - **Chaveamento:** mostra as tabelas oficiais dos grupos e as rodadas do mata-mata com conexões entre os jogos. As linhas seguem os vínculos registrados (`sourceGameIdA/B` ou `nextGameId`), sem adivinhar avanços pela ordem do calendário. Toque em uma partida para destacar seus antecedentes e o caminho até a final. O campeão só aparece com uma final oficial decidida, incluindo W.O. e desempate. No celular, o desenho tem rolagem horizontal própria.
 - **Simulador:** permite preencher resultados hipotéticos apenas em jogos ainda sem resultado oficial da fase de grupos ou de todos contra todos. A tabela reaproveita as regras reais de pontos e desempate do sistema, com conferência dos sets do vôlei e meios pontos do xadrez. É possível destacar uma equipe e ajustar a faixa de classificação para explorar cenários. Empates no corte são sinalizados; a faixa escolhida não confirma uma vaga oficial e partidas restantes podem mudar as posições.

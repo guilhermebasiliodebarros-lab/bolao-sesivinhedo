@@ -1,7 +1,8 @@
 export const PARTICIPANT_VIEWS = ['dashboard', 'jogos', 'palpites', 'classificacao']
 export const CONSULTATION_VIEWS = ['calendario', 'chaveamento', 'simulador', 'regulamentos', 'estatisticas']
-export const PROTECTED_VIEWS = [...PARTICIPANT_VIEWS, 'admin']
-export const APP_VIEWS = ['home', 'calendario', 'regulamentos', 'estatisticas', 'chaveamento', 'simulador', 'login', 'cadastro', 'tv', 'placar', ...PROTECTED_VIEWS]
+export const PUBLIC_VIEWS = ['home', 'login', 'cadastro']
+export const PROTECTED_VIEWS = [...CONSULTATION_VIEWS, 'tv', 'placar', ...PARTICIPANT_VIEWS, 'admin']
+export const APP_VIEWS = [...PUBLIC_VIEWS, ...PROTECTED_VIEWS]
 
 export const APP_VIEW_LABELS = {
   home: 'Início', calendario: 'Calendário', regulamentos: 'Regulamentos', estatisticas: 'Estatísticas',
@@ -12,7 +13,7 @@ export const APP_VIEW_LABELS = {
 
 export function resolveAppView(requested, { signedIn, isMaster, isViewer = false, participantHome = 'dashboard' }) {
   const view = APP_VIEWS.includes(requested) ? requested : 'home'
-  if (!signedIn) return PROTECTED_VIEWS.includes(view) ? 'login' : view
+  if (!signedIn) return PUBLIC_VIEWS.includes(view) ? view : 'login'
   if (isViewer) return CONSULTATION_VIEWS.includes(view) ? view : 'calendario'
   if (!isMaster) return PARTICIPANT_VIEWS.includes(view) ? view : participantHome === 'jogos' ? 'jogos' : 'dashboard'
   return PARTICIPANT_VIEWS.includes(view) || ['login', 'cadastro'].includes(view) ? 'admin' : view
