@@ -13,9 +13,9 @@ test('the shared consultation account only opens the five read-only screens, inc
 
 test('a signed-in participant can only navigate to their four betting screens, including through direct links', () => {
   for (const view of APP_VIEWS) {
-    assert.equal(resolveAppView(view, { signedIn: true, isMaster: false }), PARTICIPANT_VIEWS.includes(view) ? view : 'dashboard')
+    assert.equal(resolveAppView(view, { signedIn: true, isMaster: false, isParticipant: true }), PARTICIPANT_VIEWS.includes(view) ? view : 'dashboard')
   }
-  assert.equal(resolveAppView('unknown', { signedIn: true, isMaster: false }), 'dashboard')
+  assert.equal(resolveAppView('unknown', { signedIn: true, isMaster: false, isParticipant: true }), 'dashboard')
 })
 
 test('guests can only open the welcome, sign-in and registration screens, including through direct links', () => {

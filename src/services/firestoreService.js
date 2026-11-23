@@ -13,7 +13,7 @@ import {
   where,
   writeBatch as firestoreWriteBatch,
 } from 'firebase/firestore'
-import { db } from './firebase.js'
+import { auth, db } from './firebase.js'
 import { watchGames, watchSnapshot as onSnapshot } from './realtime.js'
 import { trackWrite } from './pendingWrites.js'
 import { asNumberOrNull, toDate } from '../utils/format.js'
@@ -42,6 +42,7 @@ import { calendarCandidate, calendarConflictSignature, calendarConflicts, calend
 import { buildDelayImpact, delayPlanFingerprint, delayScheduleFingerprint } from '../utils/scheduleDelay.js'
 import { deletionFingerprint, validateDeletionSelection } from '../utils/bulkGameDeletion.js'
 import { getSportProfile, normalizeMatchDetails, normalizeSetScores, validateFinalSets, validateSportScores } from '../utils/sportRules.js'
+import { APPROVAL_STATUS, isApprovedParticipant, isRegistrationReviewer, registrationApprovalStatus } from '../utils/registrationApproval.js'
 
 const runTransaction = (...args) => trackWrite(() => firestoreRunTransaction(...args))
 const setDoc = (...args) => trackWrite(() => firestoreSetDoc(...args))
@@ -209,7 +210,7 @@ export function canEditPrediction(game, now = new Date()) {
 }
 
 export function isRankingProfile(profile) {
-  return profile?.role === 'user' && profile?.participaRanking === true
+  return isApprovedParticipant(profile)
 }
 
 export function normalizeUserProfile(id, data = {}) {
@@ -222,7 +223,10 @@ export function normalizeUserProfile(id, data = {}) {
     email: data.email || '',
     avatarUrl: data.avatarUrl || data.photoURL || data.fotoUrl || '',
     role,
-    participaRanking: role === 'user' && data.participaRanking !== false,
+    approvalStatus: registrationApprovalStatus(data),
+    approvalReviewedBy: data.approvalReviewedBy || '',
+    approvalReviewedAt: data.approvalReviewedAt || null,
+    participaRanking: isApprovedParticipant({ ...data, role }),
     pontos: numberOrZero(data.pontos ?? data.score),
     acertosExatos: numberOrZero(data.acertosExatos ?? data.exactHits),
     acertosResultado: numberOrZero(data.acertosResultado ?? data.resultHits),
@@ -496,11 +500,11 @@ export async function createParticipantProfile(user, nome, avatarUrl = '') {
       pontos: 0,
       acertosExatos: 0,
       acertosResultado: 0,
-      participaRanking: true,
+      approvalStatus: APPROVAL_STATUS.PENDING,
+      participaRanking: false,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     },
-    { merge: true },
   )
 }
 
@@ -635,7 +639,7 @@ export function subscribeParticipants(onData, onError) {
   }
 
   return onSnapshot(
-    collection(db, 'users'),
+    approvedParticipantsQuery(),
     (snapshot) => {
       const users = snapshot.docs
         .map((item) => normalizeUserProfile(item.id, item.data()))
@@ -646,6 +650,45 @@ export function subscribeParticipants(onData, onError) {
     },
     (error) => onError?.(error ? toFriendlyError(error) : ''),
   )
+}
+
+function approvedParticipantsQuery() {
+  return query(collection(db, 'users'), where('role', '==', 'user'), where('approvalStatus', '==', APPROVAL_STATUS.APPROVED), where('participaRanking', '==', true))
+}
+
+export function subscribeRegistrations(onData, onError) {
+  if (!db || !isRegistrationReviewer(auth?.currentUser)) {
+    onData([])
+    return () => {}
+  }
+
+  return onSnapshot(
+    query(collection(db, 'users'), where('role', '==', 'user')),
+    (snapshot) => onData(snapshot.docs.map((item) => normalizeUserProfile(item.id, item.data())).sort(sortByName)),
+    (error) => onError?.(toFriendlyError(error)),
+  )
+}
+
+export async function reviewRegistration({ userId, status, expectedStatus }) {
+  const firestore = ensureDb()
+  const reviewer = auth?.currentUser
+  if (!isRegistrationReviewer(reviewer)) throw new Error('Somente Guilherme pode aprovar ou recusar cadastros.')
+  if (![APPROVAL_STATUS.APPROVED, APPROVAL_STATUS.REJECTED].includes(status)) throw new Error('Escolha aprovar ou recusar o cadastro.')
+  if (!userId) throw new Error('Selecione um cadastro para revisar.')
+
+  const userRef = doc(firestore, 'users', userId)
+  await runTransaction(firestore, async (transaction) => {
+    const snapshot = await transaction.get(userRef)
+    if (!snapshot.exists() || snapshot.data().role !== 'user') throw new Error('Cadastro de participante não encontrado.')
+    if (registrationApprovalStatus(snapshot.data()) !== expectedStatus) throw new Error('Este cadastro foi revisado em outra sessão. Confira a situação atual e tente novamente.')
+    transaction.update(userRef, {
+      approvalStatus: status,
+      participaRanking: status === APPROVAL_STATUS.APPROVED,
+      approvalReviewedBy: reviewer.uid,
+      approvalReviewedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+  })
 }
 
 export function sortRanking(users) {
@@ -665,7 +708,7 @@ export function subscribeRanking(onData, onError) {
   }
 
   return onSnapshot(
-    collection(db, 'users'),
+    approvedParticipantsQuery(),
     (snapshot) => {
       const ranking = sortRanking(
         snapshot.docs.map((item) => normalizeUserProfile(item.id, item.data())).filter(isRankingProfile),
@@ -1822,7 +1865,7 @@ export async function savePrediction({ user, profile, game, palpiteA, palpiteB, 
   }
 
   if (!isRankingProfile(profile)) {
-    throw new Error('Usuário master não registra palpites.')
+    throw new Error('Somente professores com cadastro aprovado podem enviar palpites.')
   }
 
   if (!game?.id) throw new Error('Selecione uma partida para enviar o palpite.')
@@ -1919,8 +1962,6 @@ export async function recalculateScores() {
   stats.forEach((userStats, userId) => {
     batch.update(doc(firestore, 'users', userId), {
       ...userStats,
-      participaRanking: true,
-      role: 'user',
       updatedAt: serverTimestamp(),
       scoreUpdatedAt: serverTimestamp(),
     })

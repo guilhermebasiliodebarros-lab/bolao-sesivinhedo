@@ -55,6 +55,7 @@ import TournamentDrawDialog from './TournamentDrawDialog.jsx'
 import ThirdPlaceDialog from './ThirdPlaceDialog.jsx'
 import DisciplinePanel from './DisciplinePanel.jsx'
 import RehearsalGuide from './RehearsalGuide.jsx'
+import RegistrationApprovals from './RegistrationApprovals.jsx'
 import { thirdPlaceParticipants, thirdPlaceSemifinals } from '../utils/thirdPlace.js'
 import { drawFingerprint, drawTeamOrder } from '../utils/tournamentDraw.js'
 import { ShiftTabs } from './ShiftSelector.jsx'
@@ -449,7 +450,7 @@ function getTournamentKnockoutGames(games) {
 }
 
 export default function AdminPanel({ onNavigate }) {
-  const { user, isMaster } = useAuth()
+  const { user, isMaster, canReviewRegistrations } = useAuth()
   const [games, setGames] = useState([])
   const [sports, setSports] = useState([])
   const [teams, setTeams] = useState([])
@@ -1267,7 +1268,7 @@ export default function AdminPanel({ onNavigate }) {
               aria-pressed={activeAdminTab === tab.id}
               onClick={() => setActiveAdminTab(tab.id)}
             >
-              <span>{tab.label}</span>
+              <span>{tab.id === 'participantes' && canReviewRegistrations ? 'Cadastros / professores' : tab.label}</span>
               {tabCount !== undefined ? <span className="admin-section-count">{tabCount}</span> : null}
               <span className="navigation-chevron" aria-hidden="true">›</span>
             </button>
@@ -2041,6 +2042,7 @@ export default function AdminPanel({ onNavigate }) {
       )}
 
       {activeAdminTab === 'participantes' ? (
+        canReviewRegistrations ? <RegistrationApprovals embedded /> :
         <section className="admin-tab-panel">
           <div className="section-heading">
             <h2>Participantes</h2>
@@ -2055,7 +2057,7 @@ export default function AdminPanel({ onNavigate }) {
                 </article>
               ))
             ) : (
-              <EmptyState title="Sem participantes" description="Usuários cadastrados aparecem aqui." />
+              <EmptyState title="Sem participantes aprovados" description="Professores aprovados por Guilherme aparecem aqui." />
             )}
           </div>
         </section>

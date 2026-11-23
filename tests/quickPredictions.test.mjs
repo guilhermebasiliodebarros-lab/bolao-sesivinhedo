@@ -38,7 +38,7 @@ test('quick queue prioritizes the nearest closing game without mutating the subs
   assert.deepEqual(games.map((game) => game.id), ['late', 'undated', 'soon'])
 })
 test('mobile landing uses Jogos while preserving the four participant routes and master restrictions', () => {
-  const mobile = { signedIn: true, isMaster: false, participantHome: 'jogos' }
+  const mobile = { signedIn: true, isMaster: false, isParticipant: true, participantHome: 'jogos' }
   for (const requested of ['home', 'login', 'cadastro', 'admin', 'tv', 'unknown']) assert.equal(resolveAppView(requested, mobile), 'jogos')
   for (const requested of ['dashboard', 'jogos', 'palpites', 'classificacao']) assert.equal(resolveAppView(requested, mobile), requested)
   assert.equal(resolveAppView('jogos', { ...mobile, signedIn: false }), 'login')

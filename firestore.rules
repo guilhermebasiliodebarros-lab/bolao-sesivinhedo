@@ -17,7 +17,35 @@ service cloud.firestore {
     function isParticipant() {
       return signedIn()
         && currentUser().role == "user"
+        && currentUser().get("approvalStatus", "pending") == "approved"
         && currentUser().participaRanking == true;
+    }
+
+    function isRegistrationReviewer() {
+      return signedIn() && request.auth.token.email.lower() == "guilhermebasiliodebarros@gmail.com";
+    }
+
+    function hasEventAccess() {
+      return signedIn() && (isMaster() || currentUser().role == "viewer" || isParticipant());
+    }
+
+    function approvalFieldsUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        "approvalStatus", "participaRanking", "approvalReviewedBy", "approvalReviewedAt"
+      ]);
+    }
+
+    function validRegistrationReview() {
+      return isRegistrationReviewer()
+        && resource.data.role == "user"
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "approvalStatus", "participaRanking", "approvalReviewedBy", "approvalReviewedAt", "updatedAt"
+        ])
+        && request.resource.data.approvalStatus in ["approved", "rejected"]
+        && request.resource.data.participaRanking == (request.resource.data.approvalStatus == "approved")
+        && request.resource.data.approvalReviewedBy == request.auth.uid
+        && request.resource.data.approvalReviewedAt == request.time
+        && request.resource.data.updatedAt == request.time;
     }
 
     function gameAcceptsPredictions(gameId) {
@@ -97,25 +125,33 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
-      allow read: if signedIn() && (request.auth.uid == uid || isMaster() || isParticipant());
+      allow read: if signedIn() && (request.auth.uid == uid || isMaster() || isRegistrationReviewer()
+        || (isParticipant() && resource.data.role == "user" && resource.data.approvalStatus == "approved" && resource.data.participaRanking == true));
 
       allow create: if signedIn()
         && request.auth.uid == uid
         && request.resource.data.uid == uid
+        && request.resource.data.email == request.auth.token.email
         && request.resource.data.role == "user"
-        && request.resource.data.participaRanking == true
+        && request.resource.data.keys().hasOnly([
+          "uid", "nome", "email", "avatarUrl", "role", "approvalStatus", "participaRanking",
+          "pontos", "acertosExatos", "acertosResultado", "createdAt", "updatedAt"
+        ])
+        && request.resource.data.approvalStatus == "pending"
+        && request.resource.data.participaRanking == false
         && request.resource.data.pontos == 0
         && request.resource.data.acertosExatos == 0
         && request.resource.data.acertosResultado == 0;
 
-      allow update: if isMaster()
+      allow update: if (isMaster() && approvalFieldsUnchanged())
+        || validRegistrationReview()
         || (signedIn() && currentUser().role == "user" && request.auth.uid == uid && userCannotChangeScoreOrRole());
 
       allow delete: if isMaster();
     }
 
     match /games/{gameId} {
-      allow read: if signedIn();
+      allow read: if hasEventAccess();
       allow create, update, delete: if isMaster();
 
       match /documents/{documentId} {
@@ -129,17 +165,17 @@ service cloud.firestore {
     }
 
     match /sports/{sportId} {
-      allow read: if signedIn();
+      allow read: if hasEventAccess();
       allow create, update, delete: if isMaster();
     }
 
     match /announcements/{announcementId} {
-      allow read: if signedIn() && (isMaster() || resource.data.active == true);
+      allow read: if hasEventAccess() && (isMaster() || resource.data.active == true);
       allow create, update, delete: if isMaster();
     }
 
     match /broadcastSettings/{settingId} {
-      allow read: if signedIn();
+      allow read: if hasEventAccess();
       allow create, update, delete: if isMaster();
     }
 
@@ -148,7 +184,7 @@ service cloud.firestore {
     }
 
     match /teams/{teamId} {
-      allow read: if signedIn();
+      allow read: if hasEventAccess();
       allow create, update, delete: if isMaster();
 
       match /players/{playerId} {
@@ -157,8 +193,8 @@ service cloud.firestore {
     }
 
     match /predictions/{predictionId} {
-      allow read: if signedIn() && (isMaster() || resource.data.userId == request.auth.uid);
-      allow get: if signedIn() && !exists(/databases/$(database)/documents/predictions/$(predictionId));
+      allow read: if isMaster() || (isParticipant() && resource.data.userId == request.auth.uid);
+      allow get: if (isMaster() || isParticipant()) && !exists(/databases/$(database)/documents/predictions/$(predictionId));
       allow create: if isParticipant() && predictionCreatedByOwner();
       allow update: if isMaster() || (isParticipant() && predictionEditedByOwner());
       allow delete: if isMaster();

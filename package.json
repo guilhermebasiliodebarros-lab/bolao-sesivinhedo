@@ -16,6 +16,7 @@
     "validar:ensaio": "node scripts/validate-rehearsal.mjs",
     "validar:operacao": "node scripts/validate-operations.mjs",
     "validar:acesso": "node scripts/validate-auth-access.mjs",
+    "validar:cadastros": "node scripts/validate-registration-approval.mjs",
     "validar:teste-interno": "node scripts/validate-local-test.mjs"
   },
   "dependencies": {

@@ -13,12 +13,13 @@ const iconPaths = {
   palpites: 'M5 3h14v18H5zM8 8l2 2 4-4M8 15h8',
   classificacao: 'M8 3h8v6a4 4 0 0 1-8 0zM8 5H4v3a4 4 0 0 0 4 4M16 5h4v3a4 4 0 0 1-4 4M12 13v5M8 21v-3h8v3',
   login: 'M14 3h6v18h-6M3 12h12M10 7l5 5-5 5',
+  cadastros: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0M17 9l2 2 3-4',
 }
 
 export default function MobileNavigation({ activeView, onNavigate }) {
-  const { user, isMaster, isViewer } = useAuth()
-  if (!user || isMaster) return null
-  const views = isViewer ? CONSULTATION_VIEWS : PARTICIPANT_VIEWS
+  const { user, isMaster, isViewer, isParticipant, canReviewRegistrations } = useAuth()
+  if (!user || isMaster || (!isViewer && !isParticipant)) return null
+  const views = isViewer ? CONSULTATION_VIEWS : [...PARTICIPANT_VIEWS, ...(canReviewRegistrations ? ['cadastros'] : [])]
   const shortLabels = { dashboard: 'Painel', palpites: 'Palpites', classificacao: 'Ranking', calendario: 'Jogos', chaveamento: 'Chaves' }
 
   return <nav className="mobile-navigation" aria-label="Atalhos no celular">

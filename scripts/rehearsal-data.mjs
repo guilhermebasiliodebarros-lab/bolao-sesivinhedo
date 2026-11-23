@@ -55,7 +55,7 @@ export async function resetRehearsal() {
   const now = new Date()
   const start = new Date(Date.now() + 90 * 60000)
   for (const user of users) {
-    write(`users/${user.uid}`, { uid: user.uid, nome: user.nome, email: user.email, role: user.role, participaRanking: user.role === 'user', pontos: 0, acertosExatos: 0, acertosResultado: 0, createdAt: now, updatedAt: now })
+    write(`users/${user.uid}`, { uid: user.uid, nome: user.nome, email: user.email, role: user.role, ...(user.role === 'user' ? { approvalStatus: 'approved' } : {}), participaRanking: user.role === 'user', pontos: 0, acertosExatos: 0, acertosResultado: 0, createdAt: now, updatedAt: now })
     if (user.guess) write(`predictions/${user.uid}_ensaio-futebol`, { userId: user.uid, gameId: 'ensaio-futebol', nomeUsuario: user.nome, palpiteA: user.guess[0], palpiteB: user.guess[1], pontos: 0, acertoExato: false, acertoResultado: false, createdAt: now, updatedAt: now })
   }
   const sports = [

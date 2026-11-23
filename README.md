@@ -10,6 +10,18 @@ O **Placar ao vivo** recebeu o tema **Décadas em jogo**, com oito estilos visua
 
 Aplicação React + Vite para cadastro de participantes, login, palpites, ranking automático e painel master com Firebase Authentication e Firestore.
 
+## Aprovação dos professores
+
+O bolão é exclusivo para professores. Novos cadastros começam com `approvalStatus: "pending"` e `participaRanking: false`. Cadastros antigos sem aprovação explícita também aguardam análise. Contas master e de consulta mantêm seus acessos.
+
+Entre com **guilhermebasiliodebarros@gmail.com** e abra **Aprovar cadastros** no menu, ou **Painel master → Cadastros / professores**. Confira nome e e-mail, escolha **Aprovar professor** ou **Recusar cadastro** e confirme. Os filtros mostram pendentes, aprovados e recusados; a busca aceita nome ou e-mail. Também é possível bloquear alguém já aprovado ou aprovar um cadastro recusado.
+
+Somente a conta autenticada de Guilherme pode analisar cadastros. A permissão usa o e-mail do Firebase Authentication, não um campo de perfil editável, e não concede o papel master. A análise registra quem decidiu e quando. Os demais masters continuam gerenciando jogos e pontuação, sem alterar a aprovação de participantes.
+
+Somente professores aprovados acessam o bolão, enviam ou editam palpites e aparecem na classificação. Pendentes e recusados veem a situação do próprio cadastro; links diretos e o modo rápido também respeitam o bloqueio. A aprovação ou recusa atualiza as sessões abertas automaticamente. Perfis e palpites anteriores são preservados; contas bloqueadas ficam fora do ranking e da pontuação dos participantes.
+
+Com o ensaio local aberto, `npm run validar:cadastros` verifica cadastro pela interface, análise em computador e celular, atualização das sessões e as regras reais do Firestore. Usa somente o projeto fictício `demo-interclasse-ensaio` e grava o relatório em `artifacts/rehearsal/registration-approval/result.json`. Para aplicar a funcionalidade em outro ambiente, publique a interface e `firestore.rules` juntos.
+
 ## Ensaio antes do evento
 
 Para experimentar o placar sem sair do sistema, abra **Painel master → Ensaio geral → Iniciar modo de teste**. A simulação cria seis jogos e alunos fictícios apenas na memória do navegador. Use os mesmos controles de arbitragem para gols, pontos, cartões, presença, relógio e períodos; a prévia reutiliza o mesmo componente da TV oficial e pode ser ampliada. Futebol e handebol mostram um jogo; basquete e vôlei mostram dois. Reiniciar ou sair descarta somente os dados fictícios. O modo não faz gravações no Firebase nem muda a seleção da TV oficial, e não depende de um servidor de ensaio.
@@ -49,9 +61,9 @@ O build exige todas essas variáveis e interrompe a publicação se alguma estiv
 4. Altere `role` de `"user"` para `"master"`.
 5. Altere ou crie `participaRanking` como `false`.
 
-O usuário master serve apenas para administração. Para participar do bolão, crie outra conta normal com `role: "user"`.
+O usuário master serve apenas para administração. Para participar do bolão, crie outra conta normal com `role: "user"` e aprove esse cadastro na conta de Guilherme.
 
-Contas de usuário autenticadas têm navegação restrita a **Painel**, **Jogos**, **Meus palpites** e **Classificação**, tanto no menu superior quanto no lateral. O logo leva ao Painel; links diretos para outras telas redirecionam ao Painel após o carregamento do perfil. Tema e saída da conta continuam disponíveis. Visitantes veem somente boas-vindas, login e cadastro, sem menus de funcionalidades nem dados do campeonato; links diretos para as funções pedem login. O master mantém suas telas de organização e a conta de consulta mantém suas cinco telas. As leituras do campeonato no Firestore também exigem autenticação.
+Contas de professores aprovados têm navegação restrita a **Painel**, **Jogos**, **Meus palpites** e **Classificação**, tanto no menu superior quanto no lateral. O logo leva ao Painel; links diretos para outras telas redirecionam ao Painel após o carregamento do perfil. Tema e saída da conta continuam disponíveis. Visitantes veem somente boas-vindas, login e cadastro, sem menus de funcionalidades nem dados do campeonato; links diretos para as funções pedem login. O master mantém suas telas de organização e a conta de consulta mantém suas cinco telas. As leituras do campeonato no Firestore também exigem um perfil autorizado.
 
 ## Coleções usadas
 

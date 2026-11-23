@@ -3,6 +3,7 @@ import { auth } from '../services/firebase.js'
 import { loginWithEmail, logoutUser, registerParticipant, watchAuthState } from '../services/authService.js'
 import { isRankingProfile, subscribeUserProfile, toFriendlyError } from '../services/firestoreService.js'
 import { AuthContext } from './auth-context.js'
+import { isRegistrationReviewer } from '../utils/registrationApproval.js'
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
@@ -20,6 +21,7 @@ export function AuthProvider({ children }) {
     const unsubscribeAuth = watchAuthState((firebaseUser) => {
       profileUnsubscribe.current()
       setUser(firebaseUser)
+      setProfile(null)
       setError('')
 
       if (!firebaseUser) {
@@ -41,6 +43,7 @@ export function AuthProvider({ children }) {
           setProfileLoading(false)
         },
         (message) => {
+          setProfile(null)
           setError(message)
           setLoading(false)
           setProfileLoading(false)
@@ -101,6 +104,8 @@ export function AuthProvider({ children }) {
   const isMaster = Boolean(user && profile?.role === 'master')
   const isViewer = Boolean(user && profile?.role === 'viewer')
   const isParticipant = Boolean(user && isRankingProfile(profile))
+  const canReviewRegistrations = Boolean(user && isRegistrationReviewer(user))
+  const hasEventAccess = Boolean(user && (isMaster || isViewer || isParticipant))
   const value = {
     user,
     profile,
@@ -110,6 +115,8 @@ export function AuthProvider({ children }) {
     isMaster,
     isViewer,
     isParticipant,
+    canReviewRegistrations,
+    hasEventAccess,
     register,
     login,
     logout,

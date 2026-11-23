@@ -75,9 +75,9 @@ export const COPY = {
       switchText: 'Ainda não participa?',
     },
     cadastro: {
-      eyebrow: 'Novo participante',
+      eyebrow: 'Bolão exclusivo para professores',
       title: 'Cadastrar conta',
-      description: 'Crie seu acesso para participar do Interclasse SESI Vinhedo e acompanhar sua pontuação.',
+      description: 'Solicite seu acesso ao bolão dos professores. A participação será liberada após a aprovação de Guilherme. Alunos não podem participar.',
       missingFields: 'Preencha nome, e-mail e senha.',
       shortPassword: 'A senha precisa ter pelo menos 6 caracteres.',
       nameLabel: 'Nome',

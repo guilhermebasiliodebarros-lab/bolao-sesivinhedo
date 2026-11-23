@@ -1,0 +1,20 @@
+.registration-filters { display: flex; flex-wrap: wrap; gap: .65rem; margin: 1.5rem 0; }
+.registration-search { display: grid; gap: .5rem; margin: 0 0 1.5rem; max-width: 36rem; font-weight: 600; }
+.registration-list { display: grid; gap: 1rem; }
+.registration-card { display: flex; justify-content: space-between; align-items: center; gap: 1.5rem; border: 1px solid var(--border); border-radius: 18px; padding: 1.4rem; background: var(--surface); }
+.registration-card-details { min-width: 0; }
+.registration-card h2 { font-size: 1.12rem; margin: 0 0 .4rem; }
+.registration-card p { margin: .4rem 0; }
+.registration-email, .registration-account span { overflow-wrap: anywhere; }
+.registration-card-actions { display: flex; flex-wrap: wrap; flex-shrink: 0; gap: .6rem; }
+.registration-badge { display: inline-block; margin: .4rem 0; padding: .35rem .7rem; border-radius: 999px; font-size: .82rem; font-weight: 700; background: var(--gray); }
+.registration-badge-approved { color: #126338; background: #dcfce7; }
+.registration-badge-rejected { color: #991b1b; background: #fee2e2; }
+.registration-badge-pending { color: #854d0e; background: #fef3c7; }
+.registration-account { display: grid; gap: .5rem; margin: 1.5rem 0; padding: 1rem; border-radius: 12px; background: var(--gray); }
+.registration-status-card .btn { margin-top: .7rem; }
+@media (max-width: 720px) {
+  .registration-card { flex-direction: column; align-items: stretch; padding: 1rem; gap: .8rem; }
+  .registration-card-actions { flex-shrink: 1; }
+  .registration-card-actions .btn { flex: 1 1 auto; }
+}

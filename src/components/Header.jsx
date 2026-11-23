@@ -5,10 +5,10 @@ import { useAuth } from '../context/useAuth.js'
 import { CONSULTATION_VIEWS, PARTICIPANT_VIEWS } from '../utils/navigation.js'
 
 export default function Header({ activeView, onNavigate, theme, onToggleTheme }) {
-  const { user, profile, isMaster, isViewer, logout } = useAuth()
-  const participantAccount = Boolean(user && !isMaster && !isViewer)
-  const accountHome = isViewer ? 'calendario' : isMaster ? 'admin' : user ? 'dashboard' : 'home'
-  const brandHome = isViewer ? 'calendario' : participantAccount ? 'dashboard' : 'home'
+  const { user, profile, isMaster, isViewer, isParticipant, canReviewRegistrations, hasEventAccess, logout } = useAuth()
+  const participantAccount = Boolean(user && isParticipant)
+  const accountHome = isViewer ? 'calendario' : isMaster ? 'admin' : participantAccount ? 'dashboard' : canReviewRegistrations ? 'cadastros' : user ? 'aprovacao' : 'home'
+  const brandHome = isMaster ? 'home' : user ? accountHome : 'home'
   const [menuOpen, setMenuOpen] = useState(false)
   const [logoLoaded, setLogoLoaded] = useState(true)
   const drawerRef = useRef(null)
@@ -18,7 +18,10 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
   const avatarLabel = String(displayName).trim().charAt(0).toLocaleUpperCase('pt-BR')
 
   useEffect(() => {
-    const measure = () => document.documentElement.style.setProperty('--site-header-height', `${headerRef.current.getBoundingClientRect().height}px`)
+    const measure = () => {
+      const header = headerRef.current
+      if (header) document.documentElement.style.setProperty('--site-header-height', `${header.getBoundingClientRect().height}px`)
+    }
     measure()
     const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null
     observer?.observe(headerRef.current)
@@ -50,11 +53,13 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
   ]
   const participantItems = participantAccount ? PARTICIPANT_VIEWS.map((id) => ({ id, label: COPY.nav[id] })) : []
   const consultationItems = CONSULTATION_VIEWS.map((id) => eventItems.find((item) => item.id === id))
-  const adminItems = isMaster ? [{ id: 'admin', label: 'Painel master' }] : []
-  const navItems = !user ? [] : isViewer ? consultationItems : [
-    ...(participantAccount ? [] : eventItems),
+  const adminItems = [...(isMaster ? [{ id: 'admin', label: 'Painel master' }] : []), ...(canReviewRegistrations ? [{ id: 'cadastros', label: 'Aprovar cadastros' }] : [])]
+  const statusItems = user && !hasEventAccess && !canReviewRegistrations ? [{ id: 'aprovacao', label: 'Situação do cadastro' }] : []
+  const navItems = !user ? [] : isViewer ? [...consultationItems, ...adminItems] : [
+    ...(isMaster ? eventItems : []),
     ...participantItems,
     ...adminItems,
+    ...statusItems,
   ]
 
   const handleNavigate = (view) => {
@@ -89,7 +94,7 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
             )}
           </button>
           <div className="header-event-label">
-            <strong>{isViewer || !user ? 'Acompanhe o Interclasse.' : 'O seu palpite entra em jogo.'}</strong>
+            <strong>{isViewer || !hasEventAccess ? 'Interclasse SESI Vinhedo' : 'O seu palpite entra em jogo.'}</strong>
             <span>Jogos, resultados e classificação em um só lugar.</span>
           </div>
           <div className="header-quick-actions">
@@ -98,7 +103,7 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
             </button>
             <button className="header-account" type="button" onClick={() => handleNavigate(user ? accountHome : 'login')}>
               <span>{user ? `Olá, ${displayName}` : 'Olá, faça seu login'}</span>
-              <strong>{user ? (isViewer ? 'Somente consulta' : isMaster ? 'Painel master' : 'Minha participação') : 'Entre no Interclasse'} <span aria-hidden="true">›</span></strong>
+              <strong>{user ? (isViewer ? 'Somente consulta' : isMaster ? 'Painel master' : participantAccount ? 'Minha participação' : canReviewRegistrations ? 'Aprovar cadastros' : 'Situação do cadastro') : 'Entre no Interclasse'} <span aria-hidden="true">›</span></strong>
             </button>
           </div>
         </div>
@@ -157,13 +162,14 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
               {participantItems.length ? (
                 <section className="drawer-section"><h2>Sua participação</h2>{renderLinks(participantItems)}</section>
               ) : null}
-              {isMaster ? (
+              {adminItems.length ? (
                 <section className="drawer-section">
                   <h2>Administração</h2>
                   {renderLinks(adminItems)}
-                  <p className="drawer-hint">Gerencie esportes, times, jogos e participantes.</p>
+                  <p className="drawer-hint">{isMaster ? 'Gerencie esportes, times, jogos e participantes.' : 'Confira e aprove os cadastros dos professores.'}</p>
                 </section>
               ) : null}
+              {statusItems.length ? <section className="drawer-section"><h2>Seu cadastro</h2>{renderLinks(statusItems)}</section> : null}
               <section className="drawer-section">
                 <h2>Conta e preferências</h2>
                 <button className="drawer-link" type="button" onClick={onToggleTheme}>

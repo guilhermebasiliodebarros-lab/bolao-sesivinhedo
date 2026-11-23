@@ -55,6 +55,8 @@ const sdk = {
   deleteDoc: async (ref) => documents.delete(ref.path),
 }
 globalThis.__matchTestSdk = sdk
+const testAuth = { currentUser: null }
+globalThis.__matchTestAuth = testAuth
 registerHooks({
   resolve(specifier, context, next) {
     if (specifier === 'firebase/firestore') return { url: 'test:firestore', shortCircuit: true }
@@ -62,7 +64,7 @@ registerHooks({
     return next(specifier, context)
   },
   load(url, context, next) {
-    if (url === 'test:config') return { format: 'module', source: 'export const db = {}', shortCircuit: true }
+    if (url === 'test:config') return { format: 'module', source: 'export const db = {}; export const auth = globalThis.__matchTestAuth', shortCircuit: true }
     if (url === 'test:firestore') return { format: 'module', source: Object.keys(sdk).map((name) => `export const ${name} = globalThis.__matchTestSdk.${name};`).join('\n'), shortCircuit: true }
     return next(url, context)
   },
@@ -108,14 +110,79 @@ test('a selected final result can remain beside a newly chosen live game, but un
   await assert.rejects(saveScoreboardSelection(['old-final'], 2), /agendadas ou em andamento/)
   assert.deepEqual(documents.get('broadcastSettings/scoreboard').gameIds, ['final', 'live'])
 })
-const { normalizeUserProfile, isRankingProfile } = await import('../src/services/firestoreService.js')
+const { normalizeUserProfile, isRankingProfile, createParticipantProfile, reviewRegistration, recalculateScores } = await import('../src/services/firestoreService.js')
 
 test('consultation profiles preserve their role and cannot enter the participant ranking', () => {
   const viewer = normalizeUserProfile('consultation', { role: 'viewer', participaRanking: true })
   assert.equal(viewer.role, 'viewer')
   assert.equal(viewer.participaRanking, false)
   assert.equal(isRankingProfile(viewer), false)
-  assert.equal(isRankingProfile(normalizeUserProfile('participant', { role: 'user' })), true)
+  assert.equal(isRankingProfile(normalizeUserProfile('participant', { role: 'user' })), false)
+  assert.equal(isRankingProfile(normalizeUserProfile('participant', { role: 'user', approvalStatus: 'approved', participaRanking: true })), true)
+})
+
+test('registration creates a pending profile without ranking access or review privileges', async () => {
+  await createParticipantProfile({ uid: 'new-teacher', email: 'professor@example.com' }, ' Professora Ana ')
+  const profile = documents.get('users/new-teacher')
+  assert.equal(profile.nome, 'Professora Ana')
+  assert.equal(profile.approvalStatus, 'pending')
+  assert.equal(profile.participaRanking, false)
+  assert.equal(profile.role, 'user')
+  assert.equal(profile.pontos, 0)
+  assert.equal(profile.approvalReviewedBy, undefined)
+})
+
+test('only the authenticated reviewer can approve, reject and restore a participant without changing scores or roles', async () => {
+  const previous = { uid: 'teacher', nome: 'Professora Ana', email: 'professora@example.com', role: 'user', participaRanking: true, pontos: 4.2 }
+  documents.set('users/teacher', previous)
+  const request = { userId: 'teacher', status: 'approved', expectedStatus: 'pending' }
+  for (const currentUser of [null, { uid: 'master', email: 'suporte@bolao-sesivinhedo.local' }, { uid: 'teacher', email: previous.email }]) {
+    testAuth.currentUser = currentUser
+    await assert.rejects(reviewRegistration(request), /Somente Guilherme/)
+    assert.deepEqual(documents.get('users/teacher'), previous)
+  }
+  testAuth.currentUser = { uid: 'reviewer', email: 'guilhermebasiliodebarros@gmail.com' }
+  await reviewRegistration(request)
+  let profile = documents.get('users/teacher')
+  assert.equal(profile.approvalStatus, 'approved')
+  assert.equal(profile.participaRanking, true)
+  assert.equal(profile.approvalReviewedBy, 'reviewer')
+  assert(profile.approvalReviewedAt instanceof Date)
+  assert.equal(profile.pontos, 4.2)
+  assert.equal(profile.role, 'user')
+  await reviewRegistration({ ...request, status: 'rejected', expectedStatus: 'approved' })
+  profile = documents.get('users/teacher')
+  assert.equal(profile.participaRanking, false)
+  assert.equal(isRankingProfile(normalizeUserProfile('teacher', profile)), false)
+  await assert.rejects(reviewRegistration(request), /outra sessão/)
+  await reviewRegistration({ ...request, expectedStatus: 'rejected' })
+  assert.equal(documents.get('users/teacher').participaRanking, true)
+  assert.equal(documents.get('users/teacher').pontos, 4.2)
+  documents.set('users/master', { role: 'master' })
+  await assert.rejects(reviewRegistration({ ...request, userId: 'master' }), /não encontrado/)
+  await assert.rejects(reviewRegistration({ ...request, status: 'pending' }), /Escolha aprovar ou recusar/)
+})
+
+test('pending, rejected and unreviewed profiles cannot submit predictions even with a stale game open', async () => {
+  for (const approvalStatus of [undefined, 'pending', 'rejected', 'unknown']) {
+    await assert.rejects(savePrediction({ user: { uid: 'teacher' }, profile: { role: 'user', participaRanking: true, approvalStatus }, game: game(), palpiteA: 1, palpiteB: 0 }), /cadastro aprovado/)
+  }
+  assert.equal([...documents.keys()].some((path) => path.startsWith('predictions/')), false)
+})
+
+test('recalculating scores excludes unreviewed accounts and cannot restore approval revoked during calculation', async () => {
+  documents.set('users/teacher', { role: 'user', approvalStatus: 'approved', participaRanking: true, pontos: 0 })
+  documents.set('users/legacy', { role: 'user', participaRanking: true, pontos: 0 })
+  documents.set('users/rejected', { role: 'user', approvalStatus: 'rejected', participaRanking: false, pontos: 0 })
+  documents.set('games/one', { ...original, status: 'finalizado', placarA: 2, placarB: 1 })
+  for (const userId of ['teacher', 'legacy', 'rejected']) documents.set(`predictions/${userId}_one`, { userId, gameId: 'one', palpiteA: 2, palpiteB: 1 })
+  inspectBatch = () => documents.set('users/teacher', { ...documents.get('users/teacher'), approvalStatus: 'rejected', participaRanking: false })
+  await recalculateScores()
+  assert.equal(documents.get('users/legacy').pontos, 0)
+  assert.equal(documents.get('predictions/legacy_one').pontos, 0)
+  assert.equal(documents.get('predictions/rejected_one').pontos, 0)
+  assert.equal(documents.get('users/teacher').approvalStatus, 'rejected')
+  assert.equal(documents.get('users/teacher').participaRanking, false)
 })
 const { calendarCandidate, calendarConflicts, calendarConflictSignature, calendarFingerprint } = await import('../src/utils/visualSchedule.js')
 const { deletionFingerprint } = await import('../src/utils/bulkGameDeletion.js')
@@ -128,7 +195,7 @@ const original = {
 }
 const game = (id = 'one') => normalizeGame(id, documents.get(`games/${id}`))
 const preparationFor = (id, area = '') => ({ expectedTeamKey: attendanceTeamKey(game(id)), venue: 'Quadra principal', venueArea: area, vestA: 'Azul', vestB: 'Amarelo', responsible: 'Professor responsável', sides: { A: { status: 'present', players: {} }, B: { status: 'present', players: {} } } })
-beforeEach(() => { useCurrentTimestamp = false; failBatchNumber = 0; batchCommitSizes = []; inspectBatch = null; documents.clear(); documents.set('games/one', structuredClone(original)) })
+beforeEach(() => { testAuth.currentUser = null; useCurrentTimestamp = false; failBatchNumber = 0; batchCommitSizes = []; inspectBatch = null; documents.clear(); documents.set('games/one', structuredClone(original)) })
 
 test('visual scheduling rechecks other sports, requires the reviewed conflict signature and preserves match identity and betting status', async () => {
   documents.set('games/one', { ...original, turno: 'manha', tournamentId: 'cup', timeA: '9º A', timeB: '9º B', preparation: { key: 'old' } })
@@ -206,7 +273,7 @@ test('a blocked delay cannot partially move the selected match around a live suc
 test('bulk deletion removes linked predictions, every private document and more than one batch of events, then recalculates ranking', async () => {
   documents.set('games/two', { ...original, status: 'finalizado', placarA: 2, placarB: 1 })
   documents.set('games/keep', { ...original, sportId: 'volley' })
-  documents.set('users/student', { role: 'user', participaRanking: true, nome: 'Aluno', pontos: 100 })
+  documents.set('users/student', { role: 'user', approvalStatus: 'approved', participaRanking: true, nome: 'Professor', pontos: 100 })
   documents.set('predictions/student_two', { gameId: 'two', userId: 'student', palpiteA: 2, palpiteB: 1, pontos: 100 })
   documents.set('games/one/documents/attendance', { private: 'presença' })
   documents.set('games/one/documents/extra', { private: 'documento' })
@@ -279,7 +346,7 @@ test('new and existing predictions are rejected at the exact cutoff and a stale 
   context.mock.timers.enable({ apis: ['Date'], now: new Date('2099-11-10T12:54:59.999Z') })
   const data = { ...original, dataHora: '2099-11-10T10:00', limitePalpites: '2099-11-10T10:30' }
   documents.set('games/one', data)
-  const args = { user: { uid: 'student' }, profile: { role: 'user', participaRanking: true, nome: 'Aluno' }, game: { ...game(), dataHora: '2099-11-10T14:00' }, palpiteA: 2, palpiteB: 1 }
+  const args = { user: { uid: 'student' }, profile: { role: 'user', approvalStatus: 'approved', participaRanking: true, nome: 'Professor' }, game: { ...game(), dataHora: '2099-11-10T14:00' }, palpiteA: 2, palpiteB: 1 }
   assert.equal(getPredictionDeadline(data).toISOString(), '2099-11-10T12:55:00.000Z')
   assert.equal(isPredictionDeadlineOpen(data), true)
   await savePrediction(args)
@@ -940,7 +1007,7 @@ test('live scores validate integers and do not publish a final result', async ()
 })
 
 test('finishing publishes the result, ends the live badge and scores predictions', async () => {
-  documents.set('users/student', { uid: 'student', nome: 'Aluno', role: 'user', participaRanking: true, pontos: 0 })
+  documents.set('users/student', { uid: 'student', nome: 'Professor', role: 'user', approvalStatus: 'approved', participaRanking: true, pontos: 0 })
   documents.set('predictions/pick', { userId: 'student', gameId: 'one', palpiteA: 2, palpiteB: 1, pontos: 0 })
   await startGame('one')
   assert.equal(documents.get('users/student').pontos, 0)
@@ -966,7 +1033,7 @@ test('finishing advances the winner to the next knockout match', async () => {
 test('penalties advance a knockout winner while teacher guesses use the normal-time draw', async () => {
   documents.set('games/one', { ...original, stageType: 'knockout', fase: 'Semifinal' })
   documents.set('games/final', { ...original, stageType: 'knockout', fase: 'Final', timeA: 'A definir', sourceGameIdA: 'one', seedLabelA: 'Vencedor 1' })
-  documents.set('users/teacher', { uid: 'teacher', role: 'user', participaRanking: true, pontos: 0 })
+  documents.set('users/teacher', { uid: 'teacher', role: 'user', approvalStatus: 'approved', participaRanking: true, pontos: 0 })
   documents.set('predictions/pick', { userId: 'teacher', gameId: 'one', palpiteA: 1, palpiteB: 1 })
   await startGame('one')
   await assert.rejects(finalizeGame({ gameId: 'one', placarA: 1, placarB: 1 }), /Informe o desempate/)
@@ -1102,7 +1169,7 @@ test('cancelled matches can be rescheduled and always recalculate the five-minut
 
 test('walkovers advance the winner without inventing scores or awarding teacher guesses', async () => {
   documents.set('games/final', { ...original, sourceGameIdA: 'one', timeA: 'A definir', seedLabelA: 'Vencedor 1' })
-  documents.set('users/teacher', { uid: 'teacher', nome: 'Professor', role: 'user', participaRanking: true, pontos: 4.2 })
+  documents.set('users/teacher', { uid: 'teacher', nome: 'Professor', role: 'user', approvalStatus: 'approved', participaRanking: true, pontos: 4.2 })
   documents.set('predictions/pick', { userId: 'teacher', gameId: 'one', palpiteA: 3, palpiteB: 0, pontos: 4.2 })
   await changeMatchCondition({ gameId: 'one', action: 'walkover', winnerSide: 'A', reason: 'Equipe adversária ausente' })
   assert.equal(game().status, 'finalizado')

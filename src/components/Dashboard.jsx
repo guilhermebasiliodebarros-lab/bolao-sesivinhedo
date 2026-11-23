@@ -82,7 +82,7 @@ export default function Dashboard({ onNavigate }) {
       <section className="page-shell">
         <EmptyState
           title="Perfil de participante não encontrado"
-          description="Esta área é exclusiva para contas com role user e participaRanking true."
+          description="Esta área é exclusiva para professores com cadastro aprovado por Guilherme."
         />
       </section>
     )

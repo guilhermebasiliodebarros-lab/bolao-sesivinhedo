@@ -3,6 +3,7 @@ import './App.css'
 import './components/Experience.css'
 import './components/QuickPredictions.css'
 import './components/Interface.css'
+import './components/RegistrationApprovals.css'
 import LoadingState from './components/LoadingState.jsx'
 import Footer from './components/Footer.jsx'
 import Header from './components/Header.jsx'
@@ -36,6 +37,8 @@ const Regulations = lazy(() => import('./components/Regulations.jsx'))
 const AthleteStatistics = lazy(() => import('./components/AthleteStatistics.jsx'))
 const TournamentExplorer = lazy(() => import('./components/TournamentExplorer.jsx'))
 const QuickPredictions = lazy(() => import('./components/QuickPredictions.jsx'))
+const RegistrationStatus = lazy(() => import('./components/RegistrationStatus.jsx'))
+const RegistrationApprovals = lazy(() => import('./components/RegistrationApprovals.jsx'))
 
 const viewFromHash = () => {
   const requested = window.location.hash.slice(1)
@@ -67,9 +70,9 @@ function AppShell() {
 
     return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   })
-  const { user, profile, isMaster, isViewer, isParticipant, loading, profileLoading, logout } = useAuth()
+  const { user, profile, isMaster, isViewer, isParticipant, canReviewRegistrations, hasEventAccess, loading, profileLoading, logout } = useAuth()
   const { quick, setQuick } = useQuickPredictionMode(user?.uid)
-  const activeView = resolveAppView(view, { signedIn: Boolean(user), isMaster, isViewer, participantHome: quick ? 'jogos' : 'dashboard' })
+  const activeView = resolveAppView(view, { signedIn: Boolean(user), isMaster, isViewer, isParticipant, canReviewRegistrations, participantHome: quick ? 'jogos' : 'dashboard' })
   const loadingVariant = { admin: 'admin', classificacao: 'ranking', calendario: 'calendar', dashboard: 'dashboard', login: 'form', cadastro: 'form' }[activeView] || 'cards'
   const quickShell = quick && ((isParticipant && activeView === 'jogos') || (!user && ['home', 'login', 'cadastro'].includes(activeView)))
   const authLoading = loading || profileLoading
@@ -114,6 +117,8 @@ function AppShell() {
   const leaveQuickMode = () => { setQuick(false); navigate(user ? 'jogos' : 'home') }
 
   const renderView = () => {
+    if (activeView === 'aprovacao') return <RegistrationStatus />
+    if (activeView === 'cadastros') return <RegistrationApprovals />
     if (activeView === 'login') {
       return <Login onNavigate={navigate} onSuccess={afterLogin} />
     }
@@ -170,18 +175,18 @@ function AppShell() {
   }
 
   return (
-    <div className={user && !isMaster ? 'app app-with-mobile-navigation' : 'app'}>
+    <div className={hasEventAccess && !isMaster ? 'app app-with-mobile-navigation' : 'app'}>
       <button className="skip-link" type="button" onClick={() => document.getElementById('main-content')?.focus()}>Pular para o conteúdo</button>
       <Header key={user?.uid || 'guest'} activeView={activeView} onNavigate={navigate} theme={theme} onToggleTheme={toggleTheme} />
       {user ? <ConnectionStatus /> : null}
       <ConfigNotice />
       <main id="main-content" tabIndex={-1}>
         {updateNotice}
-        {user ? <LiveScoresStrip /> : null}
+        {hasEventAccess ? <LiveScoresStrip /> : null}
         {isParticipant ? <PredictionReminders key={user.uid} userId={user.uid} showSettings={activeView === 'dashboard'} onNavigate={navigate} /> : null}
         <Suspense fallback={<LoadingState label="Preparando a tela…" variant={loadingVariant} />}>{renderView()}</Suspense>
       </main>
-      <Footer accessOnly={!user} />
+      <Footer accessOnly={!hasEventAccess} />
       <MobileNavigation activeView={activeView} onNavigate={navigate} />
     </div>
   )
