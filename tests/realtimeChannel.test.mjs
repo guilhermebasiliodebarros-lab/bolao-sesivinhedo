@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createRealtimeChannel, recoverCollection } from '../src/utils/realtimeChannel.js'
+import { createRealtimeChannel, mergeChangedSnapshots, recoverCollection } from '../src/utils/realtimeChannel.js'
 
 function setup(read) {
   const timers = new Map(), win = new EventTarget(), doc = new EventTarget(), streams = []
@@ -91,4 +91,19 @@ test('incremental recovery merges updates and falls back to a full read for dele
   count = 2; changed = [document('replacement', 12, 0)]; assert.equal(await recoverCollection(old, options), 'full')
   assert.equal(await recoverCollection(undefined, options), 'full')
   assert.equal(await recoverCollection({ docs: [document('legacy', null, 0)] }, options), 'full')
+})
+
+test('recovery sees server scoring updates without changing the timestamp of the original prediction edit', async () => {
+  const scored = (scoreTime, points) => ({ id: 'pick', data: () => ({ updatedAt: { toMillis: () => 10 }, scoreUpdatedAt: { toMillis: () => scoreTime }, pontos: points }) })
+  const latest = scored(22, 2), stale = scored(21, 1)
+  const merged = mergeChangedSnapshots([{ docs: [latest] }, { docs: [stale] }])
+  assert.equal(merged.docs.length, 1)
+  assert.equal(merged.docs[0].data().pontos, 2)
+  const result = await recoverCollection({ docs: [scored(20, 0)], metadata: { fromCache: false } }, {
+    readAll: async () => { throw new Error('Unexpected full read') },
+    readChanged: async (cursor) => { assert.equal(cursor.toMillis(), 20); return merged },
+    readCount: async () => 1,
+  })
+  assert.equal(result.docs[0].data().pontos, 2)
+  assert.equal(result.docs[0].data().updatedAt.toMillis(), 10)
 })

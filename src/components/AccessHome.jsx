@@ -1,4 +1,4 @@
-import heroImage from '../assets/bolao-hero.png'
+import heroImage from '../assets/bolao-hero.webp'
 
 export default function AccessHome({ onNavigate }) {
   return <section className="home-page event-home access-home">

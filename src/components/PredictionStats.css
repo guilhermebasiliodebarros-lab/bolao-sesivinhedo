@@ -1,0 +1,8 @@
+.prediction-stats { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); font-size: .8rem; }
+.prediction-stats summary { min-height: 36px; display: flex; align-items: center; cursor: pointer; color: var(--muted); font-weight: 700; }
+.prediction-stats p, .prediction-stats small { color: var(--muted); line-height: 1.6; }
+.prediction-stats-bars { display: grid; gap: 10px; margin: 14px 0; }
+.prediction-stats-bars > div { display: grid; grid-template-columns: minmax(70px, 1fr) minmax(50px, 2fr) 38px; align-items: center; gap: 10px; }
+.prediction-stats-bars meter { width: 100%; height: 14px; accent-color: var(--red); }
+.prediction-stats-bars meter::-webkit-meter-optimum-value { background: var(--red); }
+.prediction-stats-bars strong { text-align: right; font-variant-numeric: tabular-nums; }

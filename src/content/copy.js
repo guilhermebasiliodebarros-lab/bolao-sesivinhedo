@@ -42,7 +42,7 @@ export const COPY = {
         number: '02',
         title: 'Pontuação automática',
         description:
-          'Acertar vencedor ou empate vale 3 pontos, com multiplicador de 1,2 por gol parcial e 1,4 no placar exato.',
+          'Acertar vencedor ou empate vale 1 ponto. Futebol, handebol e basquete dão mais 1 pelo placar exato; vôlei, pelo placar exato em sets.',
       },
       {
         number: '03',
@@ -92,6 +92,6 @@ export const COPY = {
   },
   footer: {
     tagline: 'Palpites, ranking e emoção em tempo real para o evento escolar.',
-    scoring: 'Resultado 3 pts | Gol parcial x1,2 | Placar exato x1,4',
+    scoring: 'Resultado: 1 ponto | Placar/sets exatos: +1 ponto (2 no total)',
   },
 }

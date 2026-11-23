@@ -20,14 +20,14 @@ function AthleteTable({ table }) {
   </article>
 }
 
-export function AthleteStatisticsPanel({ games, turno: fixedShift = '' }) {
-  const [sport, setSport] = useState('')
+export function AthleteStatisticsPanel({ games, turno: fixedShift = '', focusTarget }) {
+  const [sport, setSport] = useState(focusTarget?.sportId || '')
   const [shift, setShift] = useState('')
   const turno = fixedShift || shift
   const [tournament, setTournament] = useState('')
-  const [team, setTeam] = useState('')
+  const [team, setTeam] = useState(focusTarget?.statsTeamKey || '')
   const [finishedOnly, setFinishedOnly] = useState(false)
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useState(focusTarget?.searchText || '')
   const teamAliases = useMemo(() => buildStatisticsTeamAliases(games), [games])
   const scoringGames = games.filter((game) => hasIndividualScoring(game) && (!turno || getGameShift(game) === turno))
   const sports = [...new Map(scoringGames.map((game) => [statisticsSportKey(game), { id: statisticsSportKey(game), name: game.esporteNome }])).values()].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
@@ -47,10 +47,10 @@ export function AthleteStatisticsPanel({ games, turno: fixedShift = '' }) {
   </section>
 }
 
-export default function AthleteStatistics() {
+export default function AthleteStatistics({ focusTarget }) {
   const [games, setGames] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   useEffect(() => subscribeGames((items) => { setGames(items); setLoading(false); setError('') }, (message) => { setError(message); setLoading(false) }), [])
-  return <section className="page-shell athlete-statistics-page"><div className="page-heading"><span className="eyebrow">Interclasse SESI Vinhedo</span><h1>Estatísticas individuais</h1><p>Acompanhe a artilharia e os pontos por atleta de cada modalidade.</p></div>{error ? <div className="alert alert-error" role="alert">{error}</div> : null}{loading ? <LoadingState label="Carregando estatísticas…" /> : <AthleteStatisticsPanel games={games} />}</section>
+  return <section className="page-shell athlete-statistics-page"><div className="page-heading"><span className="eyebrow">Interclasse SESI Vinhedo</span><h1>Estatísticas individuais</h1><p>Acompanhe a artilharia e os pontos por atleta de cada modalidade.</p></div>{error ? <div className="alert alert-error" role="alert">{error}</div> : null}{loading ? <LoadingState label="Carregando estatísticas…" /> : <AthleteStatisticsPanel games={games} focusTarget={focusTarget} />}</section>
 }

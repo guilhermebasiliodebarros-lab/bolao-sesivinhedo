@@ -83,6 +83,86 @@ Status de jogo:
 - `encerrado`: palpites bloqueados, placar ainda não finalizado.
 - `finalizado`: placar lançado, palpites pontuados e ranking atualizado.
 
+## Pontuação dos palpites
+
+- Acertar o vencedor ou o empate vale **1 ponto**.
+- No futebol, handebol e basquete, acertar também os dois placares vale **mais 1 ponto**, totalizando **2 pontos**.
+- No vôlei, o palpite é o placar final em sets. O formato é sempre **melhor de 3**: vence quem ganhar 2 sets. Os únicos resultados finais são **2 × 0, 2 × 1, 0 × 2 e 1 × 2**. Acertar o vencedor vale 1 ponto; acertar também os sets vale mais 1, totalizando 2. As parciais em pontos não entram no palpite.
+- Acertar só o placar de uma equipe não dá bônus. Errar o resultado vale 0; acertar a quantidade de sets com o vencedor errado também vale 0.
+- No xadrez, acertar vitória ou empate vale **1 ponto**, sem bônus de placar exato.
+
+Exemplo: para um resultado de `2 × 1`, os palpites `2 × 1`, `2 × 0`, `3 × 0` e `0 × 1` no futebol rendem, respectivamente, **2, 1, 1 e 0 pontos**. Acertos exatos também contam entre os acertos de resultado. W.O. e cancelamentos anulam os palpites; o desempate por pênaltis/prorrogação permanece separado do placar usado no bolão.
+
+Após publicar esta versão, use **Painel master → Sistema → Apuração automática → Recalcular agora** uma vez para atualizar os resultados já finalizados. Novas finalizações e reaberturas também recalculam os totais gerais e por esporte. Esta versão exige publicar as **Cloud Functions, as regras e a interface**; configurações antigas de cinco sets passam a usar melhor de três.
+
+## Painel organizado, busca e carregamento
+
+O painel master reúne suas ferramentas em **Operação**, **Campeonato**, **Participantes** e **Sistema**. No celular, o campo **Ferramenta do painel** substitui a lista longa de botões. O panorama de contagens pode ser aberto quando necessário. Espaçamentos, cartões, formulários e estados de foco seguem um padrão comum, com cabeçalho menor em telas pequenas.
+
+**Buscar** no cabeçalho, ou **Ctrl/Cmd + K**, abre a busca geral. Pesquise confrontos, turmas, modalidades e locais; setas e Enter permitem abrir um resultado pelo teclado. Sem texto, a busca prioriza jogos ao vivo e próximos confrontos. O master também encontra nomes completos dos atletas e abre a equipe com o jogador destacado. Professores abrem jogos e equipes dentro de suas telas permitidas. A conta de consulta encontra atletas somente pelos primeiros nomes já presentes nas estatísticas públicas; os elencos privados permanecem restritos à organização.
+
+As imagens da interface usam WebP, com o hero reduzido de aproximadamente 1,84 MB para 101 KB e o logo de 1,28 MB para 29 KB. PDFs continuam usando PNG. Ferramentas do painel, busca, relatório e seus estilos são carregados conforme a seção é aberta; os recursos para escrever PDF só entram quando a exportação é solicitada.
+
+## Favoritos nos palpites
+
+Os cartões de jogos e o palpite rápido oferecem **Favoritos nos palpites**, com votos e percentuais agregados de vitória de cada equipe e empate. A divulgação começa após o prazo dos palpites, ou quando a partida já começou/foi finalizada. Tanto a interface quanto as regras do servidor bloqueiam o documento antes desse momento. Em registros antigos com prazo divergente, vale o mais tarde entre o prazo gravado e cinco minutos antes do jogo. Adiamentos, cancelamentos e W.O. não exibem favoritos.
+
+As funções publicam somente contagens em `games/{gameId}/public/predictionStats`, sem IDs, nomes ou placares individuais dos participantes. Entram apenas palpites válidos de professores aprovados; duplicatas históricas contam uma vez, usando a edição mais recente. Reprovar ou remover a participação de uma conta retira seus votos e pontos. Os percentuais arredondados somam 100%.
+
+## Prévia de correção de resultado
+
+Ao revisar um resultado ou reabrir uma partida finalizada, a organização confere antes da confirmação as mudanças nos pontos e posições dos professores, na tabela das equipes e nas vagas seguintes do chaveamento. A prévia acompanha os registros atuais e bloqueia a confirmação se o placar mudar ou se uma fase dependente já tiver começado. A conferência não altera os dados oficiais. Grupos incompletos não apresentam uma classificação provisória como avanço confirmado.
+
+Uma correção em grupo já concluído também atualiza as vagas anteriormente preenchidas, enquanto a fase seguinte não começou. Reabrir o resultado limpa suas vagas dependentes. As regras de placar de cada modalidade e a separação entre tempo normal e desempate são preservadas.
+
+## Relatório final em PDF
+
+Em **Campeonato → Relatório final / PDF**, selecione modalidade, turno e torneio ou mantenha todos. **Conferir relatório** pede ao servidor os registros oficiais e a pontuação correspondente ao filtro. A prévia informa partidas pendentes e campeões definidos; **Baixar PDF completo** reúne panorama, campeões, ranking dos professores, tabelas dos grupos, artilharia e todos os resultados, com cabeçalho e páginas numeradas.
+
+O documento é marcado como **parcial** se houver partidas pendentes. Resultados ainda não publicados permanecem sem placar; W.O. e cancelamentos aparecem identificados. Os campeões dependem de uma final oficial decidida ou de uma competição de todos contra todos concluída sem empate nos critérios de liderança. O ranking respeita as posições compartilhadas e o filtro escolhido. Atletas aparecem pelo primeiro nome e pela equipe. Contas, e-mails, listas privadas de presença e observações das súmulas não entram no PDF. **Atualizar conferência** gera uma nova fotografia dos registros antes de outra exportação.
+
+## Apuração automática no servidor
+
+O pacote `functions/` usa Node 22, Admin SDK e Cloud Functions de segunda geração em `southamerica-east1`. Alterações em resultados, palpites e aprovação de participantes disparam a apuração geral e por modalidade, mesmo sem navegador aberto. A regra de pontos é compartilhada com a interface em `functions/domain/`, evitando cálculos diferentes na prévia e na classificação oficial.
+
+O processamento usa lotes de até 300 gravações, revisões e um token conferido em transação. Um cálculo antigo não pode sobrescrever um mais recente. As funções de evento habilitam novas tentativas; repetir a operação não soma pontos novamente. Atualizar campos derivados não inicia outro ciclo de apuração. A data da edição do palpite é preservada; a apuração usa `scoreUpdatedAt`. Clientes não podem atribuir pontos, nem mesmo pelo painel master: o botão manual chama uma função autenticada exclusiva de master. O andamento fica em `system/scoring` e aparece na seção **Apuração automática**.
+
+Para preparar e validar localmente:
+
+```powershell
+npm ci
+npm ci --prefix functions
+npm test
+npm run lint
+npm run check:functions
+npm run build
+npm run ensaio
+```
+
+Em outro terminal, com o ensaio aberto, use `npm run validar:evolucao` para verificar gatilhos sem navegador, proteção dos favoritos, correção com prévia, busca por perfil, painel a 320 px e exportação de PDFs. O script usa somente `demo-interclasse-ensaio`, reinicia dados fictícios e salva evidências em `artifacts/rehearsal/evolution/`.
+
+**Publicação:** instale as dependências de `functions/`, confira os [requisitos de implantação do Firebase](https://firebase.google.com/docs/functions/get-started) e publique primeiro as funções no projeto correto. Em seguida publique `firestore.rules` e Hosting. Publicar somente os arquivos do site não ativa a apuração automática. Use **Recalcular agora** após a primeira implantação para migrar os totais existentes. Esta alteração de código não publica serviços nem modifica os dados do projeto oficial.
+
+## Empates no ranking dos professores
+
+O ranking geral e os rankings por modalidade usam pontos, acertos exatos e acertos de resultado. Quando os três critérios empatam, os participantes compartilham a posição, como **1º, 1º e 3º**. A ordem alfabética organiza os nomes dentro do empate e não altera a colocação. Pódio, resumo pessoal, Painel e busca respeitam a mesma regra. O pódio agrupa os empatados e permite abrir a lista completa, sem escolher apenas três nomes. Antes dos primeiros pontos, todos compartilham a primeira posição.
+
+## Novidades da programação para os professores
+
+Professores aprovados encontram **Novidades do evento** no site completo e no palpite rápido. Alterações feitas no cadastro do jogo, agenda visual, reorganização de horários, simulação de atraso, preparação da partida e adiamento/cancelamento/reagendamento geram avisos junto da gravação oficial. Cada aviso mostra o horário/local/situação anterior e atual, no horário de São Paulo; mudanças em lote ficam agrupadas. Apenas alterações reais geram novidades, e os motivos privados da organização permanecem privados.
+
+Os avisos ficam disponíveis ao entrar no site e se atualizam em tempo real enquanto ele está aberto. A central exibe as últimas 50 atualizações. **Marcar todas como lidas** sincroniza a leitura entre dispositivos da mesma conta. Cada professor acessa apenas seu próprio registro de leitura. Partidas com palpite enviado recebem um destaque; os palpites são preservados e os limites continuam sendo recalculados para cinco minutos antes do jogo.
+
+## Backup e recuperação do campeonato
+
+Em **Painel master → Backup e recuperação**, use **Baixar backup completo** para guardar um arquivo JSON com modalidades, regulamentos, equipes, atletas, partidas, súmulas, presenças, lances, palpites, disciplina, avisos e configurações da TV. Contas, senhas, aprovações e preferências pessoais não fazem parte do arquivo. A exportação lê os dados do servidor e confere se partidas e equipes mudaram durante a cópia.
+
+Para recuperar, escolha um arquivo do mesmo projeto e confira a prévia. A opção inicial **Somente ausentes** preserva as versões atuais. **Ausentes e alterados** também recupera informações alteradas por engano, substituindo pelas versões do arquivo. Itens criados depois do backup são mantidos. Antes de aplicar, o sistema baixa uma cópia dos dados atuais e pede confirmação dos totais a criar/substituir. Arquivos incompatíveis, de outro projeto, alterados ou com caminhos fora do campeonato são recusados. Datas e horários do banco são preservados; o limite é de 50 MB e 20.000 registros.
+
+A recuperação exige que não haja partidas ao vivo. Se o arquivo trouxer uma partida que estava ao vivo quando foi copiada, ela volta com o cronômetro pausado. A pontuação e as quantidades de atletas são recalculadas ao concluir, incluindo atletas cadastrados depois do backup; contas e aprovações são mantidas. Alterações posteriores à prévia são detectadas antes de sobrescrever os registros. Se houver interrupção, a tela informa quantos itens foram gravados; confira uma nova prévia com a mesma opção de recuperação antes de continuar. Se os registros já tiverem sido recuperados, use **Concluir conferência dos totais** ou importe o arquivo novamente e escolha **Conferir quantidades e pontuação**. A cópia anterior fica disponível no download do navegador.
+
+Com o ensaio local aberto, `npm run validar:melhorias` verifica as posições compartilhadas, avisos em duas sessões, permissões reais do servidor, download, recuperação de documentos privados, cópia anterior, recusa de arquivo alterado e apresentação no celular. O ensaio usa somente `demo-interclasse-ensaio` e grava o relatório em `artifacts/rehearsal/improvements/result.json`. Publique a interface e `firestore.rules` juntos para ativar os novos avisos e a recuperação de palpites removidos.
+
 ## Esportes e partidas ao vivo
 
 O calendário e a página Jogos têm filtros por modalidade. No painel master, use **Esporte para gerenciar** para alternar entre as listas de jogos.
@@ -126,7 +206,7 @@ A preparação é registrada por modalidade em `schoolClassesVersion`, com IDs e
 - **Identidade:** todo o site usa o nome Interclasse SESI Vinhedo, incluindo a área de palpites dos professores. O logo `public/logo-interclasse.png` preserva o escudo SESI Vinhedo.
 - **Local e coletes:** em Jogos, informe quadra/sala, duração prevista e a cor de colete de cada equipe. Os dados aparecem nos jogos, no calendário e na TV.
 - **Conflitos:** o sorteio cria os confrontos sem horários. A organização preenche a agenda depois; o início verifica a disponibilidade do local e das equipes. O local, a área, a duração e os coletes são definidos em **Preparar partida**. Para identificar turmas entre modalidades, preencha **Turma** no cadastro de cada time com o mesmo nome.
-- **Placares por esporte:** em Esportes, configure gols, pontos, sets ou xadrez; no vôlei, melhor de 3 ou 5 sets. Em Ao vivo / TV, registre parciais de sets opcionais; xadrez aceita vitória, derrota ou empate de ½ ponto. Os pontos por vitória, empate e derrota são configuráveis para o regulamento escolar.
+- **Placares por esporte:** em Esportes, configure gols, pontos, sets ou xadrez; no vôlei, o formato é melhor de 3 sets, com vitória ao ganhar 2. Em Ao vivo / TV, registre até três parciais de sets opcionais; xadrez aceita vitória, derrota ou empate de ½ ponto. Os pontos por vitória, empate e derrota da classificação das turmas são configuráveis e independentes dos pontos dos palpites.
 - **Avisos TV:** publique avisos, chamadas de equipes ou atrasos com validade. A chamada pode ser preenchida a partir de uma partida. É possível ocultar, exibir novamente ou remover; avisos vencidos saem da TV automaticamente.
 - **Classificação por grupo:** no painel master, apresenta uma tabela para cada grupo do torneio, com filtros por modalidade e torneio. As equipes aparecem com zero pontos antes de jogar, e apenas os resultados finais da fase de grupos contam. Semifinais, finais e outros jogos sem grupo ficam fora dessa pontuação. Os critérios são pontos, vitórias, saldo, pontos/gols/sets a favor e nome. Esta tabela é independente dos palpites dos professores e não aparece no modo TV.
 - **Importação de jogadores:** em Jogadores, selecione a equipe e abra **Importar jogadores de Word, PDF ou Bloco de notas**. Aceita Word `.docx`, PDF e texto `.txt`, ou nomes colados. Arquivos Word antigos `.doc` devem ser salvos como `.docx`. Use um nome por linha ou tabela com Nome, Posição e Capitão; documentos de até 15 MB e PDFs de até 20 páginas. PDFs sem texto passam por OCR em português, com recursos hospedados no próprio site. Revise a prévia, desmarque entradas indevidas e confirme a importação. Nomes repetidos são ignorados. O arquivo é lido no navegador; apenas os jogadores selecionados são gravados na equipe.

@@ -76,8 +76,8 @@ test('simulator ignores completed and cancelled matches, and reports incomplete 
 
 test('score validation follows volleyball sets, chess half points and custom school points', () => {
   const volleyball = game('volley', '9º A', '9º B', { esporteNome: 'Vôlei', sportId: 'volley', volleyballBestOf: 5, winPoints: 5, lossPoints: 2 })
-  assert.equal(simulateStandings([volleyball], { volley: draft(volleyball, 2, 1) }).applied.size, 0)
-  const valid = simulateStandings([volleyball], { volley: draft(volleyball, 3, 2) })
+  assert.equal(simulateStandings([volleyball], { volley: draft(volleyball, 3, 2) }).applied.size, 0)
+  const valid = simulateStandings([volleyball], { volley: draft(volleyball, 2, 1) })
   assert.deepEqual(valid.tables[0].rows.map((row) => row.pontos), [5, 2])
   const chess = game('chess', '9º A', '9º B', { esporteNome: 'Xadrez', sportId: 'chess' })
   assert.deepEqual(simulateStandings([chess], { chess: draft(chess, 0.5, 0.5) }).tables[0].rows.map((row) => row.pontos), [0.5, 0.5])

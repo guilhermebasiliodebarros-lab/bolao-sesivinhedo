@@ -1,3 +1,4 @@
+import './QuickPredictions.css'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../context/useAuth.js'
 import { canEditPrediction, getPredictionDeadline, savePrediction, subscribeGames, subscribeUserPredictions } from '../services/bolaoService.js'
@@ -8,7 +9,9 @@ import { formatSportScore, getSportProfile, scoreLabel, validateSportScores } fr
 import { getGameShift } from '../utils/schoolShifts.js'
 import { getSportIcon, getUniqueGameSports } from '../utils/game.js'
 import { orderQuickGames, quickScoreOptions, validQuickScore } from '../utils/quickPredictions.js'
+import { getScoringRuleText } from '../utils/scoring.js'
 import LoadingState from './LoadingState.jsx'
+import PredictionStats from './PredictionStats.jsx'
 
 function QuickPredictionCard({ game, prediction, now, connected, onSaved }) {
   const { user, profile } = useAuth()
@@ -48,10 +51,11 @@ function QuickPredictionCard({ game, prediction, now, connected, onSaved }) {
     <div className="quick-match-meta"><span>{getSportIcon(game.esporteNome)} {game.esporteNome}</span><span>{getGameShift(game) === 'tarde' ? 'Tarde' : getGameShift(game) === 'manha' ? 'Manhã' : ''}</span></div>
     <p className="quick-match-when">Jogo: {formatDateTime(game.dataHora)}</p>
     <h2>{game.timeA}<span aria-hidden="true"> × </span>{game.timeB}</h2>
+    <p className="quick-score-help">{getScoringRuleText(game)}</p>
     {editable ? <div className="quick-deadline"><strong>{formatTimeRemaining(deadline, now)}</strong><span>Palpites até {formatDateTime(deadline)}</span></div> : <p className="quick-closed">Este jogo não aceita mais alterações de palpite.</p>}
     {prediction ? <div className="quick-sent-score"><span>Seu palpite enviado</span><strong>{formatSportScore(prediction.palpiteA)} × {formatSportScore(prediction.palpiteB)}</strong>{editable && !editing ? <button type="button" className="btn btn-outline" onClick={() => setEditing(true)}>Editar palpite</button> : null}</div> : null}
     {editable && editing ? <form onSubmit={submit}>
-      <p className="quick-score-help">{options.length ? chess ? 'Toque no resultado do xadrez.' : 'Toque no placar final em sets.' : `Qual será o placar final? (${scoreLabel(game).toLocaleLowerCase('pt-BR')})`}</p>
+      <p className="quick-score-help">{options.length ? chess ? 'Toque no resultado do xadrez.' : 'Melhor de 3 sets: vence quem ganhar 2. Toque no placar final em sets.' : `Qual será o placar final? (${scoreLabel(game).toLocaleLowerCase('pt-BR')})`}</p>
       {options.length ? <div className="quick-score-options">{options.map((option) => <button key={`${option.a}:${option.b}`} className="quick-score-option" type="button" disabled={saving} aria-pressed={String(a) === String(option.a) && String(b) === String(option.b)} onClick={() => draft.updateValues({ palpiteA: option.a, palpiteB: option.b })}><strong>{formatSportScore(option.a)} × {formatSportScore(option.b)}</strong><span>{option.a === option.b ? 'Empate' : `${option.a > option.b ? game.timeA : game.timeB} vence`}</span></button>)}</div> : <div className="quick-score-fields">{[['palpiteA', game.timeA, a], ['palpiteB', game.timeB, b]].map(([field, name, value]) => <div className="quick-score-field" key={field}><label htmlFor={`quick-${game.id}-${field}`}>{name}</label><div><button type="button" disabled={saving || (value !== '' && Number(value) <= 0)} aria-label={`Diminuir placar de ${name}`} onClick={() => adjust(field, -1)}>−</button><input id={`quick-${game.id}-${field}`} type="number" inputMode="numeric" enterKeyHint={field === 'palpiteA' ? 'next' : 'done'} min="0" max="10000" step="1" required placeholder="–" value={value} disabled={saving} onFocus={(event) => event.target.select()} onChange={(event) => draft.update(field, event.target.value)} /><button type="button" disabled={saving || Number(value) >= 10000} aria-label={`Aumentar placar de ${name}`} onClick={() => adjust(field, 1)}>+</button></div></div>)}</div>}
       {draft.hasDraft ? <p className="quick-draft" role="status">Rascunho · ainda não enviado. Confirme no botão abaixo.</p> : null}
       {draft.error ? <p className="quick-form-error" role="status">{draft.error}</p> : null}
@@ -60,6 +64,7 @@ function QuickPredictionCard({ game, prediction, now, connected, onSaved }) {
       {draft.hasDraft ? <button className="quick-discard" type="button" disabled={saving} onClick={() => draft.clear()}>Limpar rascunho</button> : null}
     </form> : null}
     {error ? <p className="quick-form-error" role="alert">{error}</p> : null}
+    <PredictionStats game={game} now={now} />
   </article>
 }
 

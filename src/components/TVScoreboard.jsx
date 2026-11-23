@@ -106,7 +106,7 @@ export default function TVScoreboard({ onNavigate }) {
     <header className="sb-header">
       <div className="sb-header-left">
         <button type="button" className="sb-back-button" onClick={goToSite} aria-label="Voltar ao site principal" title="Voltar ao site principal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m14 6-6 6 6 6M8 12h12" /></svg><span>Voltar</span></button>
-      <div className="sb-brand"><img src="/logo-interclasse.png" alt="Interclasse SESI Vinhedo" /><div><span>INTERCLASSE 2026 · SESI VINHEDO</span><h1>Décadas em jogo<span>.</span></h1></div></div>
+      <div className="sb-brand"><img src="/logo-interclasse.webp" alt="Interclasse SESI Vinhedo" /><div><span>INTERCLASSE 2026 · SESI VINHEDO</span><h1>Décadas em jogo<span>.</span></h1></div></div>
       </div>
       <div className="sb-header-right">
         <div className="sb-controls">

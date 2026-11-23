@@ -18,16 +18,19 @@ test('each modality has a usable score profile and configurable school points', 
   assert.throws(() => validateSportScores({ esporteNome: 'Futebol' }, 1.5, 0))
 })
 
-test('volleyball validates best-of-three/five results and optional set partials', () => {
+test('volleyball always validates best-of-three results and at most three optional set partials', () => {
   const game = { esporteNome: 'Vôlei', volleyballBestOf: 3 }
   assert.deepEqual(validateSportScores(game, 2, 1, { final: true }), [2, 1])
   assert.throws(() => validateSportScores(game, 1, 1, { final: true }))
   assert.throws(() => validateSportScores(game, 3, 1))
-  assert.deepEqual(validateSportScores({ ...game, volleyballBestOf: 5 }, 3, 2, { final: true }), [3, 2])
+  assert.equal(getSportProfile({ ...game, volleyballBestOf: 5 }).volleyballBestOf, 3)
+  assert.throws(() => validateSportScores({ ...game, volleyballBestOf: 5 }, 3, 2, { final: true }))
+  assert.deepEqual(validateSportScores({ ...game, volleyballBestOf: 5 }, 2, 0, { final: true }), [2, 0])
   const sets = normalizeSetScores([{ a: '25', b: '20' }, { a: 20, b: 25 }, { a: 15, b: 10 }])
   assert.doesNotThrow(() => validateFinalSets(game, 2, 1, sets))
   assert.throws(() => validateFinalSets(game, 2, 0, sets))
   assert.throws(() => normalizeSetScores([{ a: '', b: 0 }]))
+  assert.throws(() => normalizeSetScores([...sets, { a: 25, b: 20 }]), /três/)
 })
 
 test('schedule conflicts distinguish shared venues, teams and classes across sports', () => {

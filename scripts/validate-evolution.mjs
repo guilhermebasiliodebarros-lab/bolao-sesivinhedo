@@ -1,0 +1,201 @@
+import assert from 'node:assert/strict'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { chromium } from 'playwright'
+import { APP_ORIGIN, AUTH_ORIGIN, FIRESTORE_ORIGIN, PROJECT, REHEARSAL_PASSWORD, localRequest, resetRehearsal } from './rehearsal-data.mjs'
+
+const output = 'artifacts/rehearsal/evolution'
+mkdirSync(output, { recursive: true })
+const base = `${FIRESTORE_ORIGIN}/v1/projects/${PROJECT}/databases/(default)/documents`
+const functionsOrigin = `http://127.0.0.1:5002/${PROJECT}/southamerica-east1`
+const field = (value) => value === null ? { nullValue: null } : value instanceof Date ? { timestampValue: value.toISOString() } : Array.isArray(value) ? { arrayValue: { values: value.map(field) } } : typeof value === 'object' ? { mapValue: { fields: fields(value) } } : typeof value === 'number' ? { integerValue: String(value) } : typeof value === 'boolean' ? { booleanValue: value } : { stringValue: value }
+const fields = (value) => Object.fromEntries(Object.entries(value).map(([key, item]) => [key, field(item)]))
+const put = (path, value) => localRequest(`${base}/${path}`, { method: 'PATCH', body: JSON.stringify({ fields: fields(value) }) })
+const patch = (path, value) => localRequest(`${base}/${path}?${Object.keys(value).map((name) => `updateMask.fieldPaths=${encodeURIComponent(name)}`).join('&')}`, { method: 'PATCH', body: JSON.stringify({ fields: fields(value) }) })
+const read = (path) => localRequest(`${base}/${path}`)
+const number = (doc, key) => Number(doc.fields[key]?.integerValue ?? doc.fields[key]?.doubleValue ?? 0)
+const sleep = (ms) => new Promise((done) => setTimeout(done, ms))
+const poll = async (action, check) => { let last; for (let attempt = 0; attempt < 240; attempt++) { last = await action(); if (check(last)) return last; await sleep(250) } throw new Error(`Atualização não chegou ao emulador: ${JSON.stringify(last).slice(0, 1000)}`) }
+const record = (name) => { results.push({ name, passed: true }); console.log(`OK · ${name}`) }
+const results = [], pageErrors = [], blockedRequests = []
+let browser, admin, professor, viewer
+try {
+  const seeded = await resetRehearsal()
+  const teacher = seeded.users.find((user) => user.email === 'professor@ensaio.local')
+  const partial = seeded.users.find((user) => user.email === 'parcial@ensaio.local')
+  const signIn = (email) => localRequest(`${AUTH_ORIGIN}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=demo-interclasse-key`, { method: 'POST', body: JSON.stringify({ email, password: REHEARSAL_PASSWORD, returnSecureToken: true }) })
+  const teacherAuth = await signIn(teacher.email)
+  const client = (path, method = 'GET', value) => fetch(`${base}/${path}`, { method, headers: { Authorization: `Bearer ${teacherAuth.idToken}`, 'Content-Type': 'application/json' }, ...(value ? { body: JSON.stringify({ fields: fields(value) }) } : {}), signal: AbortSignal.timeout(30000) })
+  await put(`predictions/${teacher.uid}_ensaio-futebol`, { userId: teacher.uid, gameId: 'ensaio-futebol', nomeUsuario: teacher.nome, palpiteA: 2, palpiteB: 1, pontos: 0, acertoExato: false, acertoResultado: false, createdAt: new Date(), updatedAt: new Date() })
+  const predictionEditedAt = (await read(`predictions/${teacher.uid}_ensaio-futebol`)).fields.updatedAt.timestampValue
+  await poll(() => read('games/ensaio-futebol/public/predictionStats').catch(() => ({ fields: {} })), (doc) => number(doc, 'total') === 4)
+  assert.equal((await client('games/ensaio-futebol/public/predictionStats')).status, 403)
+  assert.equal((await client(`users/${teacher.uid}?updateMask.fieldPaths=pontos`, 'PATCH', { pontos: 999 })).status, 403)
+  assert.equal((await client(`predictions/${teacher.uid}_ensaio-futebol?updateMask.fieldPaths=pontos`, 'PATCH', { pontos: 999 })).status, 403)
+  assert.equal((await client('games/ensaio-futebol/public/predictionStats', 'PATCH', { teamA: 999 })).status, 403)
+  const deniedCallable = await fetch(`${functionsOrigin}/recalculateRanking`, { method: 'POST', headers: { Authorization: `Bearer ${teacherAuth.idToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ data: {} }) })
+  assert.equal(deniedCallable.status, 403)
+  const deniedReport = await fetch(`${functionsOrigin}/prepareFinalReport`, { method: 'POST', headers: { Authorization: `Bearer ${teacherAuth.idToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ data: {} }) })
+  assert.equal(deniedReport.status, 403)
+  record('Regras negam favoritos antes do prazo e impedem participantes de alterar pontos, percentuais ou disparar a apuração master')
+
+  // No browser exists during these writes: only emulator triggers can calculate the totals.
+  await patch('games/ensaio-futebol', { status: 'finalizado', liveStatus: 'finished', placarA: 2, placarB: 1, scoreRevision: 1, startedAt: new Date(), endedAt: new Date(), scorerStats: [{ playerId: 'ensaio-futebol-a-p1', side: 'A', playerName: 'Ana', total: 2 }, { playerId: 'ensaio-futebol-b-p1', side: 'B', playerName: 'Carla', total: 1 }] })
+  await poll(() => read(`users/${teacher.uid}`), (doc) => number(doc, 'pontos') === 2 && number(doc, 'acertosExatos') === 1)
+  const scoredPrediction = await read(`predictions/${teacher.uid}_ensaio-futebol`)
+  assert.equal(scoredPrediction.fields.updatedAt.timestampValue, predictionEditedAt)
+  assert(scoredPrediction.fields.scoreUpdatedAt.timestampValue)
+  await patch('games/ensaio-futebol', { placarA: 2, placarB: 0, scoreRevision: 2 })
+  await poll(() => read(`users/${teacher.uid}`), (doc) => number(doc, 'pontos') === 1 && number(doc, 'acertosExatos') === 0)
+  await poll(() => read(`users/${partial.uid}`), (doc) => number(doc, 'pontos') === 2)
+  await patch('games/ensaio-futebol', { placarA: 0, placarB: 1, scoreRevision: 3 })
+  await patch('games/ensaio-futebol', { placarA: 2, placarB: 1, scoreRevision: 4 })
+  await poll(() => read(`users/${teacher.uid}`), (doc) => number(doc, 'pontos') === 2)
+  await poll(() => read('system/scoring'), (doc) => doc.fields.status?.stringValue === 'complete')
+  const statsResponse = await client('games/ensaio-futebol/public/predictionStats')
+  assert.equal(statsResponse.status, 200)
+  assert.deepEqual(Object.keys((await statsResponse.json()).fields).sort(), ['draw', 'teamA', 'teamB', 'total', 'updatedAt'])
+  await patch(`users/${partial.uid}`, { approvalStatus: 'rejected', participaRanking: false })
+  await poll(() => read(`users/${partial.uid}`), (doc) => number(doc, 'pontos') === 0)
+  await poll(() => read('games/ensaio-futebol/public/predictionStats'), (doc) => number(doc, 'total') === 3)
+  await patch(`users/${partial.uid}`, { approvalStatus: 'approved', participaRanking: true })
+  await poll(() => read('games/ensaio-futebol/public/predictionStats'), (doc) => number(doc, 'total') === 4)
+  assert.equal((await client(`predictions/${partial.uid}_ensaio-futebol`)).status, 403)
+  record('Cloud Functions apuram 2 → 1 → 2 pontos sem navegador, toleram correções rápidas e removem contas recusadas dos totais e favoritos')
+
+  const football = (await read('games/ensaio-futebol')).fields
+  await put('games/evolution-final', { sportId: 'esporte-futebol', esporteNome: 'Futebol', scoringMode: 'goals', tournamentId: 'torneio-ensaio-futebol', tournamentName: 'ENSAIO LOCAL', turno: 'manha', stageType: 'knockout', groupName: '', fase: 'Final', timeA: '9º A', teamIdA: 'ensaio-futebol-a', timeB: '8º A', sourceGameIdA: 'ensaio-futebol', sourceOutcomeA: 'winner', placarA: null, placarB: null, status: 'aberto', liveStatus: 'scheduled', matchCondition: 'normal', scoreRevision: 0, dataHora: new Date(Date.now() + 4 * 3600000), limitePalpites: new Date(Date.now() + 4 * 3600000 - 300000) })
+  assert(football)
+  browser = await chromium.launch({ channel: process.platform === 'win32' ? 'msedge' : undefined, headless: true })
+  const context = async (viewport = { width: 1440, height: 1000 }) => {
+    const value = await browser.newContext({ viewport, timezoneId: 'America/Sao_Paulo', acceptDownloads: true })
+    await value.route('**/*', (route) => {
+      const url = new URL(route.request().url())
+      if (['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname) || !['http:', 'https:'].includes(url.protocol)) return route.continue()
+      blockedRequests.push(`${url.protocol}//${url.hostname}${url.pathname}`); return route.abort()
+    })
+    value.on('page', (page) => page.on('pageerror', (error) => pageErrors.push(error.message)))
+    return value
+  }
+  const adminContext = await context(), teacherContext = await context(), viewerContext = await context({ width: 390, height: 844 })
+  admin = await adminContext.newPage(); professor = await teacherContext.newPage(); viewer = await viewerContext.newPage()
+  const login = async (page, username) => {
+    await page.goto(`${APP_ORIGIN}/#login`)
+    await page.locator('input[autocomplete="username"]').fill(username)
+    await page.locator('input[autocomplete="current-password"]').fill(REHEARSAL_PASSWORD)
+    await page.getByRole('button', { name: 'Entrar', exact: true }).click()
+    await page.locator('.header-shortcuts, .quick-app-header .quick-logout').first().waitFor({ timeout: 45000 })
+  }
+  await login(admin, 'suporte'); await login(professor, teacher.email); await login(viewer, 'sesivinhedo')
+  const nav = admin.getByRole('navigation', { name: 'Seções do painel master' })
+  await nav.waitFor()
+  for (const label of ['Operação', 'Campeonato', 'Participantes', 'Sistema']) await nav.getByRole('heading', { name: label, exact: true }).waitFor()
+  const adminTab = async (id, label) => { const picker = admin.getByLabel('Ferramenta do painel'); if (await picker.isVisible()) await picker.selectOption(id); else await nav.getByRole('button', { name: label, exact: true }).click() }
+  const search = async (page, query, keyboard = false) => { if (keyboard) await page.keyboard.press('Control+k'); else await page.getByRole('button', { name: 'Busca geral', exact: true }).click(); const dialog = page.getByRole('dialog', { name: 'Busca geral', exact: true }); await dialog.waitFor(); await dialog.getByRole('combobox').fill(query); return dialog }
+  let dialog = await search(admin, 'Ana Beatriz', true)
+  const player = dialog.getByRole('option').filter({ hasText: 'Ana Beatriz Silva' }).filter({ hasText: '9º A · Futebol' })
+  await player.waitFor({ timeout: 30000 }); await player.click()
+  await admin.locator('.roster-player.is-search-focused').waitFor()
+  assert.match(await admin.locator('.roster-player.is-search-focused').innerText(), /Ana Beatriz Silva/)
+  dialog = await search(admin, '9a futebol')
+  await dialog.getByRole('option').filter({ hasText: 'Jogo' }).filter({ hasText: '9º A × 9º B' }).click()
+  await admin.locator('.search-focus-note').getByText('9º A × 9º B', { exact: true }).waitFor()
+  assert.equal(await admin.locator('.admin-game-row').count(), 1)
+  await admin.screenshot({ path: `${output}/admin-desktop.png`, fullPage: true })
+  record('Painel agrupado e busca por Ctrl K abrem a partida e o atleta correto no elenco privado')
+
+  dialog = await search(viewer, 'Beatriz Silva')
+  await dialog.getByText('Nenhum resultado encontrado', { exact: true }).waitFor()
+  await dialog.getByRole('combobox').fill('Ana')
+  await dialog.getByRole('option').filter({ hasText: 'Atleta' }).first().click()
+  await viewer.getByRole('heading', { name: 'Estatísticas individuais', exact: true }).waitFor()
+  assert.doesNotMatch(await viewer.locator('main').innerText(), /Beatriz Silva/)
+
+  const row = admin.locator('.admin-game-row').first()
+  await row.getByRole('button', { name: /Mais opções/ }).click()
+  await admin.getByRole('button', { name: 'Corrigir resultado', exact: true }).click()
+  const manage = admin.locator('.match-management-dialog')
+  await manage.getByRole('spinbutton', { name: /^9º A · Gols/ }).fill('0')
+  await manage.getByRole('spinbutton', { name: /^9º B · Gols/ }).fill('1')
+  await manage.getByRole('button', { name: 'Revisar resultado', exact: true }).click()
+  const impact = manage.getByRole('region', { name: 'Prévia do impacto do resultado' })
+  await impact.getByText('9º B', { exact: true }).last().waitFor()
+  await manage.getByRole('button', { name: 'Confirmar resultado', exact: true }).waitFor()
+  await poll(() => manage.getByRole('button', { name: 'Confirmar resultado', exact: true }).isEnabled(), Boolean)
+  assert.match(await impact.innerText(), /2 →/)
+  assert.match(await impact.innerText(), /Vencedor da partida/)
+  await manage.screenshot({ path: `${output}/result-impact.png` })
+  await manage.getByRole('button', { name: 'Confirmar resultado', exact: true }).click()
+  await manage.waitFor({ state: 'hidden', timeout: 45000 })
+  await poll(() => read(`users/${teacher.uid}`), (doc) => number(doc, 'pontos') === 0)
+  assert.equal((await read('games/evolution-final')).fields.timeA.stringValue, '9º B')
+  record('Prévia mostra pontos, posições, equipes e próxima vaga; confirmação publica a correção e atualiza o chaveamento')
+
+  dialog = await search(professor, '9a futebol')
+  await dialog.getByRole('option').filter({ hasText: 'Jogo' }).filter({ hasText: '9º A × 9º B' }).click()
+  const card = professor.locator('.game-card')
+  await professor.locator('.search-focus-note').waitFor()
+  await poll(() => card.count(), (count) => count === 1)
+  assert.equal(await card.count(), 1)
+  await card.getByText('Favoritos nos palpites', { exact: true }).click()
+  await card.getByText('4 palpite(s) · percentuais divulgados após o fechamento', { exact: true }).waitFor()
+  assert.equal(await card.getByRole('meter').count(), 2)
+  assert.doesNotMatch(await card.locator('.prediction-stats').innerText(), /Professor|Palpite parcial|errado/)
+  record('Professores consultam somente favoritos agregados; consulta encontra atletas pelo primeiro nome sem acessar elencos')
+
+  await admin.setViewportSize({ width: 320, height: 900 })
+  await adminTab('apuracao', 'Apuração automática')
+  const status = admin.getByRole('region', { name: 'Apuração automática', exact: true })
+  await status.getByRole('button', { name: 'Recalcular agora', exact: true }).click()
+  await status.getByRole('button', { name: 'Recalcular agora', exact: true }).waitFor({ timeout: 45000 })
+  await admin.evaluate(() => { document.activeElement?.blur(); window.scrollTo(0, 0) })
+  await admin.screenshot({ path: `${output}/admin-mobile.png`, fullPage: true })
+  assert(await admin.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1))
+  dialog = await search(admin, '9a')
+  assert(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth + 1))
+  await dialog.screenshot({ path: `${output}/search-mobile.png` })
+  await admin.keyboard.press('Escape')
+  await dialog.waitFor({ state: 'hidden' })
+  await adminTab('relatorio-final', 'Relatório final / PDF')
+  const report = admin.getByRole('region', { name: 'Relatório final do evento', exact: true })
+  await report.getByRole('button', { name: 'Conferir relatório', exact: true }).click()
+  await report.getByText('Relatório parcial', { exact: true }).waitFor({ timeout: 45000 })
+  const download = admin.waitForEvent('download', { timeout: 45000 })
+  await report.getByRole('button', { name: 'Baixar PDF completo', exact: true }).click()
+  await (await download).saveAs(`${output}/relatorio-parcial.pdf`)
+  await report.screenshot({ path: `${output}/report-mobile.png` })
+  assert(await report.evaluate((element) => element.scrollWidth <= element.clientWidth + 1))
+  record('Painel e busca cabem em 320 px; apuração manual e exportação completa do PDF funcionam no celular')
+
+  await patch('games/evolution-final', { status: 'finalizado', liveStatus: 'finished', placarA: 2, placarB: 0, scoreRevision: 1 })
+  await report.getByLabel('Modalidade').selectOption('esporte-futebol')
+  await report.getByRole('button', { name: 'Conferir relatório', exact: true }).click()
+  await report.getByText('Relatório final da seleção', { exact: true }).waitFor({ timeout: 45000 })
+  await report.locator('.report-champions').getByText('9º B', { exact: true }).waitFor()
+  const finalDownload = admin.waitForEvent('download', { timeout: 45000 })
+  await report.getByRole('button', { name: 'Baixar PDF completo', exact: true }).click()
+  await (await finalDownload).saveAs(`${output}/relatorio-final.pdf`)
+  const sample = await admin.evaluate(async () => {
+    const { requestFinalReport } = await import('/src/services/serverService.js')
+    const { buildFinalReport } = await import('/src/utils/finalReport.js')
+    const { createFinalReportPDF } = await import('/src/services/finalReportPdf.js')
+    const data = await requestFinalReport({ sportId: 'esporte-futebol', shift: 'manha', tournamentId: 'torneio-ensaio-futebol' })
+    if (JSON.stringify(data).includes('@') || JSON.stringify(data).includes('approvalStatus')) throw new Error('O relatório inclui dados privados de contas')
+    data.ranking = Array.from({ length: 80 }, (_, i) => ({ id: `qa-${i}`, nome: `Professora de conferência de paginação ${i + 1} · Nome composto com acentuação`, pontos: 30 - Math.floor(i / 3), acertosExatos: 1, acertosResultado: 1 }))
+    data.games = Array.from({ length: 64 }, (_, i) => ({ ...data.games[0], id: `qa-${i}`, timeA: `Equipe de conferência ${i + 1} · Nome longo para verificar a quebra das linhas`, timeB: 'Outra equipe de conferência com nome composto', scorerStats: [{ playerId: `p${i}`, playerName: 'João da Conferência', side: 'A', total: 1 }] }))
+    const result = await createFinalReportPDF(buildFinalReport(data, { sport: 'Futebol', shift: 'Manhã', tournament: 'Torneio de conferência com nomes longos e registros suficientes para conferir todas as quebras de página' }))
+    return { pages: result.pages, pdf: Array.from(new Uint8Array(result.pdf.output('arraybuffer'))) }
+  })
+  assert(sample.pages >= 8)
+  writeFileSync(`${output}/relatorio-paginacao.pdf`, Buffer.from(sample.pdf))
+  record(`Relatório final identifica o campeão e o filtro; PDF de conferência com ${sample.pages} páginas testa nomes longos e tabelas extensas`)
+  assert.deepEqual(pageErrors, [])
+  writeFileSync(`${output}/result.json`, JSON.stringify({ project: PROJECT, productionDataUntouched: true, results, passed: results.length, pageErrors, blockedRequests }, null, 2))
+  console.log(`${results.length} etapas concluídas: ${output}/result.json`)
+} catch (error) {
+  for (const [name, page] of [['admin', admin], ['professor', professor], ['viewer', viewer]]) if (page) {
+    await page.screenshot({ path: `${output}/failure-${name}.png`, fullPage: true }).catch(() => {})
+    writeFileSync(`${output}/failure-${name}.txt`, await page.locator('body').innerText().catch(() => ''))
+  }
+  writeFileSync(`${output}/result.json`, JSON.stringify({ project: PROJECT, productionDataUntouched: true, results, pageErrors, error: error.stack }, null, 2))
+  console.error(error.stack); process.exitCode = 1
+} finally { await browser?.close() }

@@ -35,6 +35,25 @@ service cloud.firestore {
       ]);
     }
 
+    function scoreFieldsUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(["pontos", "acertosExatos", "acertosResultado", "rankingPorEsporte", "scoreUpdatedAt"]);
+    }
+
+    function predictionScoreUnchanged() {
+      return request.resource.data.get("pontos", 0) == resource.data.get("pontos", 0)
+        && request.resource.data.get("acertoExato", false) == resource.data.get("acertoExato", false)
+        && request.resource.data.get("acertoResultado", false) == resource.data.get("acertoResultado", false)
+        && request.resource.data.get("scoreUpdatedAt", null) == resource.data.get("scoreUpdatedAt", null);
+    }
+
+    function publicPredictionStatsOpen(gameId) {
+      let game = get(/databases/$(database)/documents/games/$(gameId)).data;
+      return game.get("matchCondition", "normal") == "normal"
+        && (game.get("status", "") in ["finalizado", "finished"] || game.get("startedAt", null) != null
+          || (game.get("limitePalpites", null) is timestamp && request.time >= game.limitePalpites
+            && (!(game.get("dataHora", null) is timestamp) || request.time >= game.dataHora - duration.value(5, "m"))));
+    }
+
     function validRegistrationReview() {
       return isRegistrationReviewer()
         && resource.data.role == "user"
@@ -69,10 +88,11 @@ service cloud.firestore {
 
     function validNonNegativeScores() {
       let game = get(/databases/$(database)/documents/games/$(request.resource.data.gameId)).data;
-      let mode = game.keys().hasAny(["scoringMode"]) ? game.scoringMode : (game.esporteNome == "Xadrez" ? "chess" : "points");
+      let name = game.get("esporteNome", "").lower();
+      let mode = game.get("scoringMode", name == "xadrez" ? "chess" : (name in ["vôlei", "volei", "voleibol", "volleyball"] ? "sets" : "points"));
       let a = request.resource.data.palpiteA;
       let b = request.resource.data.palpiteB;
-      let target = game.keys().hasAny(["volleyballBestOf"]) && game.volleyballBestOf == 5 ? 3 : 2;
+      let target = 2;
       return mode == "chess"
         ? ((a == 1 && b == 0) || (a == 0 && b == 1) || (a == 0.5 && b == 0.5))
         : (a is int && b is int && a >= 0 && b >= 0 && a <= 10000 && b <= 10000
@@ -143,16 +163,29 @@ service cloud.firestore {
         && request.resource.data.acertosExatos == 0
         && request.resource.data.acertosResultado == 0;
 
-      allow update: if (isMaster() && approvalFieldsUnchanged())
+      allow update: if (isMaster() && approvalFieldsUnchanged() && scoreFieldsUnchanged())
         || validRegistrationReview()
         || (signedIn() && currentUser().role == "user" && request.auth.uid == uid && userCannotChangeScoreOrRole());
 
       allow delete: if isMaster();
+
+      match /preferences/scheduleNotices {
+        allow read: if signedIn() && request.auth.uid == uid && isParticipant();
+        allow create, update: if signedIn() && request.auth.uid == uid && isParticipant()
+          && request.resource.data.keys().hasOnly(["readIds", "updatedAt"])
+          && request.resource.data.readIds is list && request.resource.data.readIds.size() <= 100
+          && request.resource.data.updatedAt == request.time;
+      }
     }
 
     match /games/{gameId} {
       allow read: if hasEventAccess();
       allow create, update, delete: if isMaster();
+
+      match /public/predictionStats {
+        allow get: if hasEventAccess() && publicPredictionStatsOpen(gameId);
+        allow write: if false;
+      }
 
       match /documents/{documentId} {
         allow read, delete: if isMaster();
@@ -174,6 +207,11 @@ service cloud.firestore {
       allow create, update, delete: if isMaster();
     }
 
+    match /scheduleNotices/{noticeId} {
+      allow read: if hasEventAccess();
+      allow write: if isMaster();
+    }
+
     match /broadcastSettings/{settingId} {
       allow read: if hasEventAccess();
       allow create, update, delete: if isMaster();
@@ -181,6 +219,11 @@ service cloud.firestore {
 
     match /operations/{operationId} {
       allow read, write: if isMaster();
+    }
+
+    match /system/{stateId} {
+      allow get: if hasEventAccess() && stateId == "scoring";
+      allow write: if false;
     }
 
     match /teams/{teamId} {
@@ -195,8 +238,8 @@ service cloud.firestore {
     match /predictions/{predictionId} {
       allow read: if isMaster() || (isParticipant() && resource.data.userId == request.auth.uid);
       allow get: if (isMaster() || isParticipant()) && !exists(/databases/$(database)/documents/predictions/$(predictionId));
-      allow create: if isParticipant() && predictionCreatedByOwner();
-      allow update: if isMaster() || (isParticipant() && predictionEditedByOwner());
+      allow create: if (isMaster() && request.resource.data.get("pontos", 0) == 0 && request.resource.data.get("acertoExato", false) == false && request.resource.data.get("acertoResultado", false) == false && request.resource.data.get("scoreUpdatedAt", null) == null) || (isParticipant() && predictionCreatedByOwner());
+      allow update: if (isMaster() && predictionScoreUnchanged()) || (isParticipant() && predictionEditedByOwner());
       allow delete: if isMaster();
     }
   }

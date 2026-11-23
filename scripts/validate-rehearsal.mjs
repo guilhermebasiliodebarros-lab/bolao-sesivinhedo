@@ -159,14 +159,14 @@ try {
   await finish(football)
   await tv.locator('[data-game-id="ensaio-futebol"]').getByText('Resultado final', { exact: true }).waitFor()
   const professorUser = seeded.users.find((user) => user.email === 'professor@ensaio.local')
-  for (const [email, points] of [['professor@ensaio.local', 4.2], ['parcial@ensaio.local', 3.6], ['vencedor@ensaio.local', 3], ['erro@ensaio.local', 0]]) {
+  for (const [email, points] of [['professor@ensaio.local', 2], ['parcial@ensaio.local', 1], ['vencedor@ensaio.local', 1], ['erro@ensaio.local', 0]]) {
     const user = seeded.users.find((item) => item.email === email)
     assert.equal(number(await read(`users/${user.uid}`), 'pontos'), points, email)
   }
   await professor.locator('.header-shortcuts').getByRole('button', { name: 'Classificação', exact: true }).click()
   await professor.getByRole('heading', { name: 'Classificação', exact: true }).waitFor()
-  assert.match(await professor.locator('main').innerText(), /4,2/)
-  record('Resultado final 2 × 1: ranking real com 4,2 / 3,6 / 3 / 0 pontos')
+  assert.equal((await professor.locator('.ranking-row.is-current-participant .ranking-points').innerText()).trim(), '2')
+  record('Resultado final 2 × 1: ranking real com 2 / 1 / 1 / 0 pontos')
 
   await start('ensaio-handebol', 'tarde')
   const handball = liveCard('Handebol', '8º A')
@@ -217,7 +217,7 @@ try {
   await waitScores('ensaio-volei-1', 2, 0)
   assert.doesNotMatch(await tv.locator('[data-game-id="ensaio-volei-1"]').innerText(), /3º SET/)
   await finish(volleyball)
-  assert.equal(number(await read(`users/${professorUser.uid}`), 'pontos'), 8.4)
+  assert.equal(number(await read(`users/${professorUser.uid}`), 'pontos'), 4)
   assert.equal(number(await read(`users/${professorUser.uid}`), 'acertosExatos'), 2)
   record('Dois jogos de vôlei; sets 25–23 e 25–19; resultado 2–0 e palpite pontuado em sets')
 
@@ -273,6 +273,21 @@ try {
   cutoffFields.limitePalpites.timestampValue = new Date(Date.now() + 30 * 60000).toISOString()
   await localRequest(cutoffUrl, { method: 'PATCH', body: JSON.stringify({ fields: cutoffFields }) })
   assert.equal((await sendPrediction()).status, 200, 'Participant must be able to submit before the deadline')
+  cutoffFields.esporteNome.stringValue = 'Vôlei'
+  cutoffFields.scoringMode.stringValue = 'sets'
+  cutoffFields.volleyballBestOf = { integerValue: '5' }
+  for (const explicitMode of [true, false]) {
+    if (!explicitMode) delete cutoffFields.scoringMode
+    await localRequest(cutoffUrl, { method: 'PATCH', body: JSON.stringify({ fields: cutoffFields }) })
+    for (const [a, b, expected] of [[2, 0, 200], [2, 1, 200], [0, 2, 200], [1, 2, 200], [3, 0, 403], [3, 2, 403], [1, 1, 403], [2, 2, 403], [0, 0, 403]]) {
+      predictionFields.palpiteA.integerValue = String(a)
+      predictionFields.palpiteB.integerValue = String(b)
+      assert.equal((await sendPrediction()).status, expected, `Volleyball ${a} × ${b}, explicit mode: ${explicitMode}`)
+    }
+  }
+  record('Servidor aceita apenas 2 × 0, 2 × 1, 0 × 2 e 1 × 2 no vôlei, inclusive com formato antigo ou sem tipo de placar')
+  predictionFields.palpiteA.integerValue = '2'
+  predictionFields.palpiteB.integerValue = '0'
   cutoffFields.status.stringValue = 'encerrado'
   cutoffFields.liveStatus.stringValue = 'live'
   await localRequest(cutoffUrl, { method: 'PATCH', body: JSON.stringify({ fields: cutoffFields }) })

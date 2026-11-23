@@ -1,3 +1,4 @@
+import './RegistrationApprovals.css'
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/useAuth.js'
 import { reviewRegistration, subscribeRegistrations, toFriendlyError } from '../services/bolaoService.js'

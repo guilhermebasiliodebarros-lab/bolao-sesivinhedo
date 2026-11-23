@@ -9,14 +9,16 @@ import MatchClockControl from './MatchClock.jsx'
 import QuickScoring from './QuickScoring.jsx'
 import { scoreRevision } from '../utils/liveEvents.js'
 import { getSportProfile } from '../utils/sportRules.js'
+import ResultImpactPanel from './ResultImpactPanel.jsx'
 
 export default function MatchScoreForm({ game, teams, user, onSaved, referee = false }) {
-  const { finalizeGame, updateLiveScore } = useMatchOperations()
+  const { finalizeGame, updateLiveScore, localTest } = useMatchOperations()
   const live = getMatchState(game) === MATCH_STATE.LIVE
   const [draft, setDraft] = useState(null)
   const value = draft || { placarA: (live ? game.liveScoreA : game.placarA) ?? 0, placarB: (live ? game.liveScoreB : game.placarB) ?? 0, setScores: game.setScores || [], currentSet: game.currentSet || { a: 0, b: 0 }, tieBreak: game.tieBreak, expectedScoreRevision: scoreRevision(game) }
   const stale = value.expectedScoreRevision !== scoreRevision(game)
   const [review, setReview] = useState(false)
+  const [impactReady, setImpactReady] = useState(false)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const update = (field, next) => setDraft((current) => ({ ...(current || value), [field]: next }))
@@ -32,8 +34,10 @@ export default function MatchScoreForm({ game, teams, user, onSaved, referee = f
   }}><details className="score-manual-editor" open={!live || (referee && getSportProfile(game).scoringMode === 'chess') || undefined}><summary>Correção manual do placar e parciais</summary><p>Alterar o placar manualmente reinicia os lances e autores exibidos na TV.</p><fieldset disabled={busy || review}><legend>{live ? 'Placar ao vivo' : 'Resultado final'}</legend><SportScoreInputs game={game} value={value} onChange={update} /><TieBreakInputs game={game} value={value} onChange={(tie) => update('tieBreak', tie)} /></fieldset></details>
     {stale ? <div className="schedule-warning">O placar foi atualizado. Confira os valores antes de salvar.<button type="button" className="btn btn-outline btn-small" onClick={() => { setDraft(null); setReview(false) }}>Usar placar atual</button></div> : null}
     {review ? <div className="match-action-review"><strong>Confirmar {game.timeA} {value.placarA} × {value.placarB} {game.timeB}?</strong>{value.tieBreak?.method && value.tieBreak.method !== 'none' ? <p>{tieBreakSummary({ tieBreak: value.tieBreak })}</p> : null}<p>O resultado será publicado e os palpites serão pontuados pelo placar do tempo normal.</p></div> : null}
+    {review && !localTest ? <ResultImpactPanel game={game} candidate={value} onReady={setImpactReady} /> : null}
+    {review && localTest ? <p className="alert">Este resultado será publicado somente na prévia de teste. Os pontos e as equipes do campeonato oficial permanecem preservados.</p> : null}
     {message ? <div className="alert" role="status">{message}</div> : null}
-    <div className="form-actions">{review ? <button className="btn btn-outline" type="button" disabled={busy} onClick={() => setReview(false)}>Voltar e revisar</button> : null}<button className="btn btn-primary" type="submit" disabled={busy || stale}>{busy ? 'Salvando…' : review ? 'Confirmar resultado' : live ? 'Salvar correção manual' : 'Revisar resultado'}</button>{live && !review ? <button className="btn btn-outline" type="button" disabled={busy || stale} onClick={(event) => {
+    <div className="form-actions">{review ? <button className="btn btn-outline" type="button" disabled={busy} onClick={() => setReview(false)}>Voltar e revisar</button> : null}<button className="btn btn-primary" type="submit" disabled={busy || stale || (review && !localTest && !impactReady)}>{busy ? 'Salvando…' : review ? 'Confirmar resultado' : live ? 'Salvar correção manual' : 'Revisar resultado'}</button>{live && !review ? <button className="btn btn-outline" type="button" disabled={busy || stale} onClick={(event) => {
       if (!event.currentTarget.form.reportValidity()) return
       try { validateSportScores(game, value.placarA, value.placarB, { final: true }); normalizeTieBreak(game, value.tieBreak, value.placarA, value.placarB, { final: true }); setDraft({ ...value }); setReview(true); setMessage('') } catch (error) { setMessage(error.message) }
     }}>Encerrar partida</button> : null}</div>

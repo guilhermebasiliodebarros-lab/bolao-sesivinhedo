@@ -144,7 +144,7 @@ export default function TVMode({ onNavigate }) {
   return (
     <section className="tv-page" aria-label="Modo TV">
       <header className="tv-header">
-        <div className="tv-brand"><img src="/logo-interclasse.png" alt="Interclasse SESI Vinhedo" /><div><span>SESI VINHEDO · ESPORTES</span><h1>Interclasse</h1></div></div>
+        <div className="tv-brand"><img src="/logo-interclasse.webp" alt="Interclasse SESI Vinhedo" /><div><span>SESI VINHEDO · ESPORTES</span><h1>Interclasse</h1></div></div>
         <div id="tv-toolbar" className="tv-toolbar" role="group" aria-label="Ajustes da transmissão" hidden={fullscreen && !settingsOpen}>
           <div className="tv-filters">
             <ShiftSelector value={turno} onChange={(value) => { setTurno(value); writePreference('tv-turno', value); setCursor('') }} />

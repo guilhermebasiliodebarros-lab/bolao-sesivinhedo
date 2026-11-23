@@ -5,7 +5,7 @@ import RosterImporter from './RosterImporter.jsx'
 
 const emptyPlayer = { nome: '', posicao: '', capitao: false }
 
-function RosterEditor({ team, onRemove, saving: parentSaving }) {
+function RosterEditor({ team, onRemove, saving: parentSaving, focusPlayerId }) {
   const [players, setPlayers] = useState([])
   const [loading, setLoading] = useState(true)
   const [draft, setDraft] = useState(emptyPlayer)
@@ -14,6 +14,7 @@ function RosterEditor({ team, onRemove, saving: parentSaving }) {
   const [failed, setFailed] = useState(false)
   const nameRef = useRef(null)
   const disabled = saving || parentSaving
+  useEffect(() => { if (!loading && focusPlayerId) document.getElementById(`roster-${team.id}-${focusPlayerId}`)?.scrollIntoView({ block: 'center' }) }, [loading, focusPlayerId, team.id])
 
   useEffect(() => subscribePlayers(team.id, (items) => { setPlayers(items); setLoading(false) }, (error) => {
     setMessage(error); setFailed(true); setLoading(false)
@@ -52,7 +53,7 @@ function RosterEditor({ team, onRemove, saving: parentSaving }) {
       {message ? <div className={failed ? 'alert alert-error' : 'alert alert-success'} role={failed ? 'alert' : 'status'}>{message}</div> : null}
       <RosterImporter team={team} players={players} disabled={disabled || loading} />
       {loading ? <LoadingState label="Carregando jogadores…" /> : players.length ? <div className="roster-list" aria-label={`Jogadores de ${team.nome}`}>{players.map((player) => (
-        <article className="roster-player" key={player.id}>
+        <article className={player.id === focusPlayerId ? 'roster-player is-search-focused' : 'roster-player'} id={`roster-${team.id}-${player.id}`} key={player.id}>
           <div className="roster-player-details"><strong>{player.nome}{player.capitao ? <span className="roster-captain-badge">Capitão</span> : null}</strong><small>{player.posicao || 'Posição não informada'}</small></div>
           <div className="form-actions"><button className="btn btn-outline btn-small" type="button" disabled={disabled} onClick={() => edit(player)}>Editar</button><button className="btn btn-ghost btn-small" type="button" disabled={disabled} onClick={() => onRemove(team, player)}>Remover</button></div>
         </article>
@@ -61,13 +62,13 @@ function RosterEditor({ team, onRemove, saving: parentSaving }) {
   )
 }
 
-export default function TeamRoster({ teams, teamId, onTeamChange, onRemove, saving }) {
+export default function TeamRoster({ teams, teamId, onTeamChange, onRemove, saving, focusPlayerId }) {
   const team = teams.find((item) => item.id === teamId)
   return (
     <section className="team-roster" aria-label="Cadastro de jogadores">
       <div className="section-heading"><div><span className="eyebrow">Equipes e atletas</span><h2>Jogadores das equipes</h2><p>Selecione uma equipe para cadastrar e organizar seus jogadores.</p></div></div>
       <label className="roster-team-select">Equipe<select value={team?.id || ''} onChange={(event) => onTeamChange(event.target.value)} disabled={saving}><option value="">Selecione uma equipe</option>{[...teams].sort((a, b) => `${a.esporteNome} ${a.nome}`.localeCompare(`${b.esporteNome} ${b.nome}`, 'pt-BR')).map((item) => <option value={item.id} key={item.id}>{item.esporteNome} · {item.nome}{item.categoria ? ` · ${item.categoria}` : ''}</option>)}</select></label>
-      {team ? <RosterEditor key={team.id} team={team} onRemove={onRemove} saving={saving} /> : <div className="live-control-empty"><strong>{teams.length ? 'Escolha uma equipe para começar.' : 'Cadastre uma equipe na aba Times primeiro.'}</strong></div>}
+      {team ? <RosterEditor key={team.id} team={team} onRemove={onRemove} saving={saving} focusPlayerId={focusPlayerId} /> : <div className="live-control-empty"><strong>{teams.length ? 'Escolha uma equipe para começar.' : 'Cadastre uma equipe na aba Times primeiro.'}</strong></div>}
     </section>
   )
 }

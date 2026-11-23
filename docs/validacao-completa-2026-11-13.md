@@ -22,7 +22,7 @@ Na execução inicial foram **195 testes automáticos aprovados e 13 etapas inte
 - `npm run ensaio`: inicia o ambiente fictício e prepara seis partidas com elencos e contas de exemplo.
 - `npm run validar:ensaio`: valida o fluxo pela interface com SDK e banco reais dos emuladores. O resultado mais recente e as imagens ficam em `artifacts/rehearsal/`.
 
-O ensaio integrado verifica cadastro de atleta, presença, início, bloqueio de palpites, autoria, TV em outra sessão, desfazer, troca de equipe/autor, exclusão, relógio, operação sem internet, resultados, pontos de 1/2/3 no basquete, dois jogos simultâneos, vôlei em sets, estatísticas e restrições da conta de consulta. O cenário do futebol termina em 2 × 1 e confere a pontuação de quatro palpites: 4,2 / 3,6 / 3 / 0. O vôlei confere parciais 25–23 e 25–19, resultado 2–0 e o palpite em sets.
+O ensaio integrado verifica cadastro de atleta, presença, início, bloqueio de palpites, autoria, TV em outra sessão, desfazer, troca de equipe/autor, exclusão, relógio, operação sem internet, resultados, pontos de 1/2/3 no basquete, dois jogos simultâneos, vôlei em sets, estatísticas e restrições da conta de consulta. O cenário do futebol termina em 2 × 1 e, na regra vigente à época deste relatório, conferiu a pontuação de quatro palpites: 4,2 / 3,6 / 3 / 0. Desde 23/11/2026, a regra e o ensaio usam **2 / 1 / 1 / 0**, conforme o [guia de operação](guia-ensaio-e-operacao.md#publicar-o-resultado-e-pontuar-os-palpites). O vôlei confere parciais 25–23 e 25–19, resultado 2–0 e o palpite em sets.
 
 ## Pendências de cadastro do evento real
 

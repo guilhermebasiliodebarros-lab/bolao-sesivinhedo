@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { formatPoints } from '../utils/format.js'
-import { findRankingEntries } from '../utils/rankingPresentation.js'
+import { findRankingEntries, rankingEntries } from '../utils/rankingPresentation.js'
 
 const PODIUM_MEDALS = ['🥇', '🥈', '🥉']
 
@@ -27,10 +27,13 @@ export default function RankingTable({ ranking, currentUserId }) {
   const [searchTerm, setSearchTerm] = useState('')
   const previousPositionsRef = useRef(new Map())
   const ownRowRef = useRef(null)
-  const topThree = ranking.slice(0, 3)
+  const entries = rankingEntries(ranking)
+  const podiumGroups = [1, 2, 3].map((position) => ({ position, entries: entries.filter((entry) => entry.position === position) })).filter((group) => group.entries.length)
   const visibleEntries = findRankingEntries(ranking, searchTerm)
-  const ownPosition = ranking.findIndex((participant) => participant.id === currentUserId) + 1
-  const ownEntry = ownPosition ? ranking[ownPosition - 1] : null
+  const ownRanking = entries.find(({ participant }) => participant.id === currentUserId)
+  const ownPosition = ownRanking?.position || 0
+  const ownEntry = ownRanking?.participant
+  const sharedPosition = entries.filter((entry) => entry.position === ownPosition).length > 1
   const gapToLeader = ownEntry ? Math.max(0, Number(ranking[0]?.pontos || 0) - Number(ownEntry.pontos || 0)) : 0
 
   const showMyPosition = () => {
@@ -45,15 +48,16 @@ export default function RankingTable({ ranking, currentUserId }) {
     const previousPositions = previousPositionsRef.current
     const changedIds = new Set()
 
-    ranking.forEach((participant, index) => {
+    const currentEntries = rankingEntries(ranking)
+    currentEntries.forEach(({ participant, position }) => {
       const previousIndex = previousPositions.get(participant.id)
 
-      if (previousIndex !== undefined && previousIndex !== index) {
+      if (previousIndex !== undefined && previousIndex !== position) {
         changedIds.add(participant.id)
       }
     })
 
-    previousPositionsRef.current = new Map(ranking.map((participant, index) => [participant.id, index]))
+    previousPositionsRef.current = new Map(currentEntries.map(({ participant, position }) => [participant.id, position]))
 
     if (!changedIds.size) {
       return undefined
@@ -65,41 +69,28 @@ export default function RankingTable({ ranking, currentUserId }) {
     return () => window.clearTimeout(timeout)
   }, [ranking])
 
-  const getGapToNext = (index) => {
-    const current = Number(ranking[index]?.pontos || 0)
-    const next = Number(ranking[index + 1]?.pontos || 0)
-
-    if (!ranking[index + 1]) {
-      return 'Último listado'
-    }
-
-    const gap = current - next
-    return gap > 0 ? `${formatPoints(gap)} pts à frente` : 'Empatado'
-  }
-
   return (
     <div className="ranking-wrap">
-      {ownEntry ? <section className="ranking-personal-summary" aria-label="Sua posição neste ranking"><div><span className="eyebrow">Sua participação</span><strong>Você está em {ownPosition}º lugar</strong><p>{ownPosition === 1 ? 'Você ocupa a primeira posição. Continue acompanhando seus palpites.' : gapToLeader > 0 ? `${formatPoints(gapToLeader)} pontos separam você da liderança.` : 'Você tem a mesma pontuação da liderança. Os critérios de desempate definem a posição.'}</p></div><span className="ranking-personal-points">{formatPoints(ownEntry.pontos)}<small>pontos</small></span><button type="button" className="btn btn-outline btn-small" onClick={showMyPosition}>Ver minha posição</button></section> : null}
-      {topThree.length ? (
-        <div className="podium" aria-label="Pódio dos três primeiros colocados">
-          {topThree.map((participant, index) => (
+      {ownEntry ? <section className="ranking-personal-summary" aria-label="Sua posição neste ranking"><div><span className="eyebrow">Sua participação</span><strong>Você está em {ownPosition}º lugar{sharedPosition ? ' · posição compartilhada' : ''}</strong><p>{ownPosition === 1 ? sharedPosition ? 'Você divide a liderança com participantes que têm os mesmos pontos e acertos.' : 'Você ocupa a primeira posição. Continue acompanhando seus palpites.' : gapToLeader > 0 ? `${formatPoints(gapToLeader)} pontos separam você da liderança.` : 'Você tem a mesma pontuação da liderança. Os critérios de desempate definem a posição.'}</p></div><span className="ranking-personal-points">{formatPoints(ownEntry.pontos)}<small>pontos</small></span><button type="button" className="btn btn-outline btn-small" onClick={showMyPosition}>Ver minha posição</button></section> : null}
+      {podiumGroups.length ? (
+        <div className="podium" style={{ gridTemplateColumns: `repeat(${podiumGroups.length}, minmax(0, 1fr))` }} aria-label="Pódio com posições compartilhadas em caso de empate">
+          {podiumGroups.map(({ position, entries: group }) => (
             <article
               className={
-                movingIds.has(participant.id)
-                  ? `podium-card podium-${index + 1} is-ranking-moving`
-                  : `podium-card podium-${index + 1}`
+                group.some(({ participant }) => movingIds.has(participant.id))
+                  ? `podium-card podium-${position} is-ranking-moving`
+                  : `podium-card podium-${position}`
               }
-              key={participant.id}
+              key={position}
             >
-              {index === 0 ? <div className="leader-ribbon">Líder atual</div> : null}
+              {position === 1 ? <div className="leader-ribbon">{group.length > 1 ? 'Liderança compartilhada' : 'Líder atual'}</div> : null}
               <span className="medal-badge">
-                <span aria-hidden="true">{PODIUM_MEDALS[index]}</span>
-                {index + 1}º lugar
+                <span aria-hidden="true">{PODIUM_MEDALS[position - 1]}</span>
+                {position}º lugar
               </span>
-              <ParticipantAvatar participant={participant} podium />
-              <strong>{participant.nome || participant.email}</strong>
-              <small>{formatPoints(participant.pontos)} pts</small>
-              <em>{getGapToNext(index)}</em>
+              {group.length === 1 ? <><ParticipantAvatar participant={group[0].participant} podium /><strong>{group[0].participant.nome || group[0].participant.email}</strong></> : <details className="podium-shared"><summary>{group.length} participantes empatados</summary><ul>{group.map(({ participant }) => <li key={participant.id}>{participant.nome || participant.email}</li>)}</ul></details>}
+              <small>{formatPoints(group[0].participant.pontos)} pts</small>
+              <em>{group.length > 1 ? 'Mesmos pontos e critérios de desempate' : 'Posição oficial'}</em>
             </article>
           ))}
         </div>
@@ -145,7 +136,7 @@ export default function RankingTable({ ranking, currentUserId }) {
         ))}
       </div>
       {!visibleEntries.length ? <div className="empty-state"><h3>Participante não encontrado</h3><p>Confira o nome ou limpe a busca para ver a classificação completa.</p><button type="button" className="btn btn-outline btn-small" onClick={() => setSearchTerm('')}>Ver todos os participantes</button></div> : null}
-      <p className="ranking-order-note">A busca mantém as posições oficiais. Desempate: pontuação, acertos exatos e acertos de resultado.</p>
+      <p className="ranking-order-note">A busca mantém as posições oficiais. Critérios: pontuação, acertos exatos e acertos de resultado. Empates completos compartilham a posição (1º, 1º, 3º). O nome organiza a lista sem desempatar.</p>
     </div>
   )
 }

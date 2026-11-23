@@ -11,7 +11,7 @@ import './LocalTestMode.css'
 function TestPreview({ games, now, full = false, onExpand, tools }) {
   return <section className={`scoreboard-screen local-test-preview${full ? ' is-full' : ' is-embedded'}`} aria-label="TV de teste">
     <aside className="local-test-tv-badge">MODO TESTE · JOGOS E ALUNOS FICTÍCIOS</aside>
-    <header className="local-test-preview-header"><img src="/logo-interclasse.png" alt="Interclasse SESI Vinhedo" /><div><strong>Placar de teste</strong><span>{games.length === 2 ? 'Dois jogos simultâneos' : 'Um jogo selecionado'}</span></div>{tools || <button type="button" onClick={onExpand}>Ampliar TV de teste</button>}</header>
+    <header className="local-test-preview-header"><img src="/logo-interclasse.webp" alt="Interclasse SESI Vinhedo" /><div><strong>Placar de teste</strong><span>{games.length === 2 ? 'Dois jogos simultâneos' : 'Um jogo selecionado'}</span></div>{tools || <button type="button" onClick={onExpand}>Ampliar TV de teste</button>}</header>
     <main className="sb-grid" data-count={games.length}>{games.map((game) => <ScoreboardMatch game={game} now={now} showClock connected key={game.id} />)}</main>
     <footer className="local-test-tv-footer">Prévia local · os placares oficiais não são alterados</footer>
   </section>

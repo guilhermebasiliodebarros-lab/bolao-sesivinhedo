@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app'
 import { connectAuthEmulator, getAuth } from 'firebase/auth'
 import { connectFirestoreEmulator, initializeFirestore } from 'firebase/firestore'
+import { connectFunctionsEmulator, getFunctions } from 'firebase/functions'
 import { isRehearsal, REHEARSAL_PROJECT } from '../config/rehearsal.js'
 
 const firebaseConfig = isRehearsal ? {
@@ -31,6 +32,7 @@ export const isFirebaseConfigured = missingFirebaseConfig.length === 0
 
 export const app = isFirebaseConfigured ? initializeApp(firebaseConfig) : null
 export const auth = app ? getAuth(app) : null
+export const cloudFunctions = app ? getFunctions(app, 'southamerica-east1') : null
 // School networks may buffer streaming responses. Long polling keeps remote displays current.
 export const db = app ? initializeFirestore(app, {
   experimentalForceLongPolling: true,
@@ -40,4 +42,5 @@ export const db = app ? initializeFirestore(app, {
 if (isRehearsal) {
   connectAuthEmulator(auth, 'http://127.0.0.1:9909', { disableWarnings: true })
   connectFirestoreEmulator(db, '127.0.0.1', 8180)
+  connectFunctionsEmulator(cloudFunctions, '127.0.0.1', 5002)
 }

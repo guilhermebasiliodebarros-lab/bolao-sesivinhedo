@@ -17,7 +17,10 @@
     "validar:operacao": "node scripts/validate-operations.mjs",
     "validar:acesso": "node scripts/validate-auth-access.mjs",
     "validar:cadastros": "node scripts/validate-registration-approval.mjs",
-    "validar:teste-interno": "node scripts/validate-local-test.mjs"
+    "validar:teste-interno": "node scripts/validate-local-test.mjs",
+    "validar:melhorias": "node scripts/validate-improvements.mjs",
+    "validar:evolucao": "node scripts/validate-evolution.mjs",
+    "check:functions": "npm --prefix functions run check"
   },
   "dependencies": {
     "firebase": "^12.15.0",

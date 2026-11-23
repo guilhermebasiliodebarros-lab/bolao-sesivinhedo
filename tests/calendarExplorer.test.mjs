@@ -45,7 +45,7 @@ test('home upcoming games include closed predictions and exclude past or changed
 })
 
 test('ranking search preserves original positions and handles accents and empty results', () => {
-  const ranking = [{ id: '1', nome: 'Ana' }, { id: '2', nome: 'João' }, { id: '3', nome: 'Maria' }]
+  const ranking = [{ id: '1', nome: 'Ana', pontos: 3 }, { id: '2', nome: 'João', pontos: 2 }, { id: '3', nome: 'Maria', pontos: 1 }]
   assert.deepEqual(findRankingEntries(ranking, '  joao '), [{ participant: ranking[1], position: 2 }])
   assert.deepEqual(findRankingEntries(ranking, 'inexistente'), [])
   assert.equal(findRankingEntries(ranking).length, 3)

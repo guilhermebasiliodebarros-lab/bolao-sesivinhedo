@@ -93,9 +93,16 @@ export function createRealtimeChannel({ listen, read, interval = 30000, environm
   }
 }
 
+const changeTime = (item) => Math.max(0, ...['updatedAt', 'scoreUpdatedAt'].map((field) => item.data()[field]?.toMillis?.() || 0))
+export function mergeChangedSnapshots(snapshots) {
+  const documents = new Map()
+  for (const snapshot of snapshots) for (const item of snapshot.docs) if (!documents.has(item.id) || changeTime(item) >= changeTime(documents.get(item.id))) documents.set(item.id, item)
+  return { docs: [...documents.values()] }
+}
+
 export async function recoverCollection(snapshot, { readAll, readChanged, readCount }) {
   if (!snapshot || snapshot.metadata?.fromCache) return readAll()
-  const timestamps = snapshot.docs.map((item) => item.data().updatedAt).filter((value) => typeof value?.toMillis === 'function')
+  const timestamps = snapshot.docs.flatMap((item) => [item.data().updatedAt, item.data().scoreUpdatedAt]).filter((value) => typeof value?.toMillis === 'function')
   const cursor = timestamps.reduce((latest, value) => !latest || value.toMillis() > latest.toMillis() ? value : latest, null)
   if (!cursor) return readAll()
   const [changed, count] = await Promise.all([readChanged(cursor), readCount()])

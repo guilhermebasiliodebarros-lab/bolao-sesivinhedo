@@ -4,7 +4,7 @@ import { COPY } from '../content/copy.js'
 import { useAuth } from '../context/useAuth.js'
 import { CONSULTATION_VIEWS, PARTICIPANT_VIEWS } from '../utils/navigation.js'
 
-export default function Header({ activeView, onNavigate, theme, onToggleTheme }) {
+export default function Header({ activeView, onNavigate, theme, onToggleTheme, onSearch }) {
   const { user, profile, isMaster, isViewer, isParticipant, canReviewRegistrations, hasEventAccess, logout } = useAuth()
   const participantAccount = Boolean(user && isParticipant)
   const accountHome = isViewer ? 'calendario' : isMaster ? 'admin' : participantAccount ? 'dashboard' : canReviewRegistrations ? 'cadastros' : user ? 'aprovacao' : 'home'
@@ -88,7 +88,7 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
         <div className="header-topbar">
           <button className="brand" type="button" onClick={() => handleNavigate(brandHome)}>
             {logoLoaded ? (
-              <img className="brand-logo" src="/logo-interclasse.png" alt="Interclasse SESI Vinhedo" onError={() => setLogoLoaded(false)} />
+              <img className="brand-logo" src="/logo-interclasse.webp" alt="Interclasse SESI Vinhedo" onError={() => setLogoLoaded(false)} />
             ) : (
               <><span className="brand-mark">{COPY.brand.shortMark}</span><strong>{COPY.brand.name}</strong></>
             )}
@@ -98,6 +98,7 @@ export default function Header({ activeView, onNavigate, theme, onToggleTheme })
             <span>Jogos, resultados e classificação em um só lugar.</span>
           </div>
           <div className="header-quick-actions">
+            {hasEventAccess ? <button className="global-search-trigger" type="button" onClick={onSearch} aria-label="Busca geral"><span aria-hidden="true">⌕</span><span className="global-search-label">Buscar</span><kbd>Ctrl K</kbd></button> : null}
             <button className="theme-toggle desktop-theme-toggle" type="button" onClick={onToggleTheme}>
               {theme === 'dark' ? COPY.header.lightMode : COPY.header.darkMode}
             </button>

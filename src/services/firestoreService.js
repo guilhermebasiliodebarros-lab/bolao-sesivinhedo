@@ -4,6 +4,8 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
+  orderBy,
   query,
   runTransaction as firestoreRunTransaction,
   serverTimestamp,
@@ -17,8 +19,9 @@ import { auth, db } from './firebase.js'
 import { watchGames, watchSnapshot as onSnapshot } from './realtime.js'
 import { trackWrite } from './pendingWrites.js'
 import { asNumberOrNull, toDate } from '../utils/format.js'
-import { calcularPontuacao, hasFinalScore } from '../utils/scoring.js'
-import { getMatchState, getMatchCondition, getMatchOutcome, isPredictionVoided, MATCH_STATE } from '../utils/match.js'
+import { requestServerRecalculation } from './serverService.js'
+import { hasFinalScore } from '../utils/scoring.js'
+import { getMatchState, getMatchCondition, getMatchOutcome, MATCH_STATE } from '../utils/match.js'
 import { normalizeMatchReportInput } from '../utils/matchReport.js'
 import { eventDate } from '../utils/tvSchedule.js'
 import { clockRevision, matchClockValue, stoppedMatchClock } from '../utils/matchClock.js'
@@ -43,6 +46,8 @@ import { buildDelayImpact, delayPlanFingerprint, delayScheduleFingerprint } from
 import { deletionFingerprint, validateDeletionSelection } from '../utils/bulkGameDeletion.js'
 import { getSportProfile, normalizeMatchDetails, normalizeSetScores, validateFinalSets, validateSportScores } from '../utils/sportRules.js'
 import { APPROVAL_STATUS, isApprovedParticipant, isRegistrationReviewer, registrationApprovalStatus } from '../utils/registrationApproval.js'
+import { compareRankingScores } from '../utils/rankingPresentation.js'
+import { buildScheduleChange, mergeReadNoticeIds, normalizeScheduleNotice } from '../utils/scheduleNotices.js'
 
 const runTransaction = (...args) => trackWrite(() => firestoreRunTransaction(...args))
 const setDoc = (...args) => trackWrite(() => firestoreSetDoc(...args))
@@ -108,12 +113,6 @@ function sortByDate(a, b) {
 
 function sortByName(a, b) {
   return String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR')
-}
-
-function getSportRankingKey(game) {
-  const key = String(game?.sportId || game?.esporteNome || 'geral').trim() || 'geral'
-
-  return key.replace(/[./[\]~*]/g, '-')
 }
 
 function getGroupSeedLabel(position, groupName) {
@@ -692,12 +691,54 @@ export async function reviewRegistration({ userId, status, expectedStatus }) {
 }
 
 export function sortRanking(users) {
-  return [...users].sort((a, b) => {
-    const pointsDiff = (b.pontos || 0) - (a.pontos || 0)
-    const exactDiff = (b.acertosExatos || 0) - (a.acertosExatos || 0)
-    const resultDiff = (b.acertosResultado || 0) - (a.acertosResultado || 0)
+  return [...users].sort((a, b) => compareRankingScores(a, b) || String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR'))
+}
 
-    return pointsDiff || exactDiff || resultDiff || String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR')
+export function queueScheduleNotice(transaction, pairs) {
+  const changes = pairs.map(([before, after]) => buildScheduleChange(before, after)).filter(Boolean)
+  if (!changes.length) return
+  transaction.set(doc(collection(ensureDb(), 'scheduleNotices')), {
+    changes, createdAt: serverTimestamp(), createdBy: auth?.currentUser?.uid || null,
+  })
+}
+
+export function subscribeScheduleNotices(onData, onError) {
+  const target = query(collection(ensureDb(), 'scheduleNotices'), orderBy('createdAt', 'desc'), limit(50))
+  return onSnapshot(target, (snapshot) => onData(snapshot.docs.map((item) => normalizeScheduleNotice(item.id, item.data())).filter(Boolean)), (error) => onError?.(error ? toFriendlyError(error) : ''))
+}
+
+export function subscribeScoringStatus(onData, onError) {
+  return onSnapshot(doc(ensureDb(), 'system', 'scoring'), (snapshot) => onData(snapshot.exists() ? snapshot.data() : null), (error) => onError?.(error ? toFriendlyError(error) : ''))
+}
+
+export function subscribePredictionStats(gameId, onData, onError) {
+  return onSnapshot(doc(ensureDb(), 'games', gameId, 'public', 'predictionStats'), (snapshot) => onData(snapshot.exists() ? snapshot.data() : null), (error) => onError?.(error ? toFriendlyError(error) : ''))
+}
+
+export async function loadSearchPlayers(teamIds) {
+  const players = []
+  for (let index = 0; index < teamIds.length; index += 6) {
+    const result = await Promise.all(teamIds.slice(index, index + 6).map(async (teamId) => {
+      const snapshot = await getDocs(collection(ensureDb(), 'teams', teamId, 'players'))
+      return snapshot.docs.map((item) => ({ ...item.data(), id: item.id, teamId }))
+    }))
+    players.push(...result.flat())
+  }
+  return players
+}
+
+export function subscribeScheduleNoticeReads(userId, onData, onError) {
+  return onSnapshot(doc(ensureDb(), 'users', userId, 'preferences', 'scheduleNotices'), (snapshot) => onData(snapshot.exists() ? snapshot.data().readIds || [] : []), (error) => onError?.(error ? toFriendlyError(error) : ''))
+}
+
+export async function markScheduleNoticesRead(userId, previousIds, ids) {
+  if (!userId || auth?.currentUser?.uid !== userId) throw new Error('Entre na sua conta para marcar os avisos como lidos.')
+  const ref = doc(ensureDb(), 'users', userId, 'preferences', 'scheduleNotices')
+  return runTransaction(ensureDb(), async (transaction) => {
+    const snapshot = await transaction.get(ref)
+    const readIds = mergeReadNoticeIds(snapshot.exists() ? snapshot.data().readIds || [] : previousIds, ids)
+    transaction.set(ref, { readIds, updatedAt: serverTimestamp() })
+    return readIds
   })
 }
 
@@ -761,6 +802,7 @@ export async function saveGame(game) {
         placarB: current.placarB,
         updatedAt: serverTimestamp(),
       })
+      queueScheduleNotice(transaction, [[current, { ...current, ...payload }]])
     })
   } else {
     const gameRef = doc(collection(firestore, 'games'))
@@ -799,6 +841,7 @@ export async function redistributeTournamentSchedule({ tournamentId, expectedGam
         transaction.update(doc(firestore, 'games', scheduled.id), { ...(change ? { dataHora: change.dataHora, preparation: null } : {}), limitePalpites: Timestamp.fromDate(deadline), updatedAt: serverTimestamp() })
       }
     }
+    queueScheduleNotice(transaction, plan.after.map((after) => [games.find((game) => game.id === after.id), after]))
     return plan.changes.length
   })
 }
@@ -884,6 +927,7 @@ export async function saveCalendarGame({ gameId, expectedFingerprint, change, ac
       dataHora: candidate.dataHora, venue: candidate.venue, venueArea: candidate.venueArea, durationMinutes: candidate.durationMinutes,
       limitePalpites: Timestamp.fromDate(automaticPredictionDeadline(candidate)), preparation: null, updatedAt: serverTimestamp(),
     })
+    queueScheduleNotice(transaction, [[game, candidate]])
     return { conflicts: conflicts.length }
   })
 }
@@ -908,6 +952,7 @@ export async function applyScheduleDelay({ anchorId, minutes, expectedSchedule, 
     for (const { game, after } of plan.changes) transaction.update(doc(firestore, 'games', game.id), {
       dataHora: after.dataHora, limitePalpites: Timestamp.fromDate(automaticPredictionDeadline(after)), preparation: null, updatedAt: serverTimestamp(),
     })
+    queueScheduleNotice(transaction, plan.changes.map(({ game, after }) => [game, after]))
     return { changed: plan.changes.length, maxDelay: plan.maxDelay }
   })
 }
@@ -1310,6 +1355,7 @@ export async function changeMatchCondition({ gameId, action, reason, winnerSide,
     }
     if (action !== 'reschedule') fields.clock = stoppedMatchClock(game, new Date())
     transaction.update(gameRef, fields)
+    queueScheduleNotice(transaction, [[game, { ...game, ...fields }]])
     return { ...game, ...fields }
   })
   if (action === 'walkover') await advanceCompletedMatch(firestore, updated)
@@ -1499,6 +1545,7 @@ export async function saveGamePreparation(gameId, preparation) {
     const item = await readPreparedGame(transaction, firestore, gameId, candidates, preparation)
     transaction.set(doc(firestore, 'games', gameId, 'documents', 'attendance'), item.attendance)
     transaction.update(doc(firestore, 'games', gameId), item.fields)
+    queueScheduleNotice(transaction, [[normalizeGame(gameId, item.raw), item.game]])
   })
 }
 
@@ -1537,6 +1584,7 @@ async function startSelectedGames(gameIds, submissions, requirePrepared) {
         clock: { elapsedMs: game.startedAt ? matchClockValue(game, new Date()).elapsedMs : 0, runningSince: game.period?.phase === 'interval' ? null : serverTimestamp(), revision: clockRevision(game) + 1 },
       })
     }
+    queueScheduleNotice(transaction, prepared.map(({ raw, game }) => [normalizeGame(game.id, raw), game]))
   })
 }
 
@@ -1688,7 +1736,7 @@ async function advanceGroupQualifiers(firestore, game) {
   const groupGamesSnapshot = await getDocs(query(collection(firestore, 'games'), where('tournamentId', '==', game.tournamentId)))
   const groupGames = groupGamesSnapshot.docs
     .map((item) => normalizeGame(item.id, item.data()))
-    .filter((item) => item.stageType === 'group' && item.groupName === game.groupName)
+    .filter((item) => item.stageType === 'group' && item.groupName === game.groupName && item.sportId === game.sportId && getGameShift(item) === getGameShift(game))
 
   if (!groupGames.length || groupGames.some((item) => !getMatchOutcome(item))) {
     return
@@ -1697,57 +1745,20 @@ async function advanceGroupQualifiers(firestore, game) {
   const standings = calculateGroupStandings(groupGames)
   const batch = writeBatch(firestore)
   let updates = 0
-
-  await Promise.all(
-    standings.map(async (team, index) => {
+  for (const nextGameDoc of groupGamesSnapshot.docs) {
+    const nextGame = normalizeGame(nextGameDoc.id, nextGameDoc.data())
+    if (nextGame.stageType === 'group' || nextGame.sportId !== game.sportId || getGameShift(nextGame) !== getGameShift(game)) continue
+    const fields = {}
+    for (const [index, team] of standings.entries()) for (const side of ['A', 'B']) {
       const seedLabel = getGroupSeedLabel(index + 1, game.groupName)
-      const appearance = groupGames.find((match) => ['A', 'B'].some((side) => match[`time${side}`] === team.nome))
-      const side = appearance?.timeA === team.nome ? 'A' : 'B'
-      const teamId = appearance?.[`teamId${side}`] || '', turma = appearance?.[`turma${side}`] || ''
-      const [slotASnapshot, slotBSnapshot] = await Promise.all([
-        getDocs(query(collection(firestore, 'games'), where('seedLabelA', '==', seedLabel))),
-        getDocs(query(collection(firestore, 'games'), where('seedLabelB', '==', seedLabel))),
-      ])
-
-      slotASnapshot.forEach((nextGameDoc) => {
-        const nextGame = normalizeGame(nextGameDoc.id, nextGameDoc.data())
-
-        if (nextGame.tournamentId !== game.tournamentId) {
-          return
-        }
-
-        batch.update(nextGameDoc.ref, {
-          timeA: team.nome,
-          teamIdA: teamId, turmaA: turma,
-          seedLabelA: '',
-          qualifierGroupA: game.groupName, qualifierSeedA: seedLabel,
-          updatedAt: serverTimestamp(),
-        })
-        updates += 1
-      })
-
-      slotBSnapshot.forEach((nextGameDoc) => {
-        const nextGame = normalizeGame(nextGameDoc.id, nextGameDoc.data())
-
-        if (nextGame.tournamentId !== game.tournamentId) {
-          return
-        }
-
-        batch.update(nextGameDoc.ref, {
-          timeB: team.nome,
-          teamIdB: teamId, turmaB: turma,
-          seedLabelB: '',
-          qualifierGroupB: game.groupName, qualifierSeedB: seedLabel,
-          updatedAt: serverTimestamp(),
-        })
-        updates += 1
-      })
-    }),
-  )
-
-  if (updates > 0) {
-    await batch.commit()
+      if ((nextGame[`qualifierSeed${side}`] || nextGame[`seedLabel${side}`]) !== seedLabel) continue
+      const appearance = groupGames.find((match) => ['A', 'B'].some((slot) => match[`time${slot}`] === team.nome))
+      const sourceSide = appearance?.timeA === team.nome ? 'A' : 'B'
+      Object.assign(fields, { [`time${side}`]: team.nome, [`teamId${side}`]: appearance?.[`teamId${sourceSide}`] || '', [`turma${side}`]: appearance?.[`turma${sourceSide}`] || '', [`seedLabel${side}`]: '', [`qualifierGroup${side}`]: game.groupName, [`qualifierSeed${side}`]: seedLabel })
+    }
+    if (Object.keys(fields).length) { batch.update(nextGameDoc.ref, { ...fields, preparation: null, updatedAt: serverTimestamp() }); updates++ }
   }
+  if (updates) await batch.commit()
 }
 
 export async function finalizeGame({ gameId, placarA, placarB, user, setScores, tieBreak, expectedScoreRevision }) {
@@ -1768,8 +1779,12 @@ export async function finalizeGame({ gameId, placarA, placarB, user, setScores, 
     const partials = normalizeSetScores(setScores ?? current.setScores)
     validateFinalSets(profile, finalA, finalB, partials)
     const decider = normalizeTieBreak({ ...current, ...profile }, tieBreak === undefined ? current.tieBreak : tieBreak, finalA, finalB, { final: true })
+    const recordedA = getMatchState(current) === MATCH_STATE.FINISHED ? current.placarA : current.liveScoreA
+    const recordedB = getMatchState(current) === MATCH_STATE.FINISHED ? current.placarB : current.liveScoreB
+    const manualChange = recordedA !== finalA || recordedB !== finalB || JSON.stringify(partials) !== JSON.stringify(current.setScores)
     transaction.update(gameRef, {
       ...profile,
+      ...(manualChange ? { liveEvents: [], scorerStats: [], eventsAdjusted: true } : {}),
       setScores: partials,
       tieBreak: decider,
       placarA: finalA,
@@ -1896,78 +1911,7 @@ export async function savePrediction({ user, profile, game, palpiteA, palpiteB, 
 }
 
 export async function recalculateScores() {
-  const firestore = ensureDb()
-  const [usersSnapshot, gamesSnapshot, predictionsSnapshot] = await Promise.all([
-    getDocs(collection(firestore, 'users')),
-    getDocs(collection(firestore, 'games')),
-    getDocs(collection(firestore, 'predictions')),
-  ])
-
-  const users = usersSnapshot.docs.map((item) => normalizeUserProfile(item.id, item.data()))
-  const games = gamesSnapshot.docs.map((item) => normalizeGame(item.id, item.data()))
-  const predictions = predictionsSnapshot.docs.map((item) => normalizePrediction(item.id, item.data()))
-  const participants = users.filter(isRankingProfile)
-  const participantsIds = new Set(participants.map((user) => user.id))
-  const finishedGames = new Map(
-    games.filter((game) => game.status === GAME_STATUS.FINISHED && hasFinalScore(game) && !isPredictionVoided(game)).map((game) => [game.id, game]),
-  )
-  const stats = new Map(
-    participants.map((user) => [
-      user.id,
-      {
-        pontos: 0,
-        acertosExatos: 0,
-        acertosResultado: 0,
-        rankingPorEsporte: {},
-      },
-    ]),
-  )
-  const batch = writeBatch(firestore)
-
-  predictions.forEach((prediction) => {
-    const game = finishedGames.get(prediction.gameId)
-    const canScore = game && participantsIds.has(prediction.userId)
-    const result = canScore
-      ? calcularPontuacao(prediction.palpiteA, prediction.palpiteB, game.placarA, game.placarB)
-      : { pontos: 0, acertoExato: false, acertoResultado: false }
-
-    if (canScore) {
-      const userStats = stats.get(prediction.userId)
-      const sportKey = getSportRankingKey(game)
-      const sportStats = userStats.rankingPorEsporte[sportKey] || {
-        sportId: game.sportId || sportKey,
-        esporteNome: game.esporteNome || 'Geral',
-        pontos: 0,
-        acertosExatos: 0,
-        acertosResultado: 0,
-      }
-
-      userStats.pontos += result.pontos
-      userStats.acertosExatos += result.acertoExato ? 1 : 0
-      userStats.acertosResultado += result.acertoResultado ? 1 : 0
-      sportStats.pontos += result.pontos
-      sportStats.acertosExatos += result.acertoExato ? 1 : 0
-      sportStats.acertosResultado += result.acertoResultado ? 1 : 0
-      userStats.rankingPorEsporte[sportKey] = sportStats
-    }
-
-    batch.update(doc(firestore, 'predictions', prediction.id), {
-      pontos: result.pontos,
-      acertoExato: result.acertoExato,
-      acertoResultado: result.acertoResultado,
-      updatedAt: serverTimestamp(),
-    })
-  })
-
-  stats.forEach((userStats, userId) => {
-    batch.update(doc(firestore, 'users', userId), {
-      ...userStats,
-      updatedAt: serverTimestamp(),
-      scoreUpdatedAt: serverTimestamp(),
-    })
-  })
-
-  await batch.commit()
+  return requestServerRecalculation()
 }
 
 export const subscribeUserGuesses = subscribeUserPredictions

@@ -1,5 +1,6 @@
 import ShiftSelector from './ShiftSelector.jsx'
 import usePredictionClock from '../hooks/usePredictionClock.js'
+import useSearchFocus from '../hooks/useSearchFocus.js'
 import { getGameShift } from '../utils/schoolShifts.js'
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/useAuth.js'
@@ -24,17 +25,18 @@ const filters = [
   { id: GAME_STATUS.FINISHED, label: 'Finalizados' },
 ]
 
-export default function Jogos({ onNavigate, onQuickMode }) {
+export default function Jogos({ onNavigate, onQuickMode, focusTarget }) {
   const { user, isParticipant, isMaster } = useAuth()
   const [games, setGames] = useState([])
   const now = usePredictionClock(games)
   const [predictions, setPredictions] = useState([])
   const [predictionUser, setPredictionUser] = useState(null)
   const [activeFilter, setActiveFilter] = useState(ALL_ITEMS_FILTER)
-  const [sportFilter, setSportFilter] = useState(ALL_ITEMS_FILTER)
+  const [sportFilter, setSportFilter] = useState(focusTarget?.sportId || ALL_ITEMS_FILTER)
   const [turno, setTurno] = useState('')
   const [phaseFilter, setPhaseFilter] = useState(ALL_ITEMS_FILTER)
-  const [searchTerm, setSearchTerm] = useState('')
+  const [searchTerm, setSearchTerm] = useState(focusTarget?.searchText || '')
+  const [focusedGame, setFocusedGame] = useState(focusTarget?.gameId || '')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -92,9 +94,10 @@ export default function Jogos({ onNavigate, onQuickMode }) {
         sportFilter === ALL_ITEMS_FILTER || game.sportId === sportFilter || game.esporteNome === sportFilter
       const matchesPhase = phaseFilter === ALL_ITEMS_FILTER || game.fase === phaseFilter
 
-      return matchesStatus && matchesSport && matchesPhase && gameMatchesSearch(game, searchTerm)
+      return (!focusedGame || game.id === focusedGame) && matchesStatus && matchesSport && matchesPhase && gameMatchesSearch(game, searchTerm)
     })
-  }, [activeFilter, games, phaseFilter, searchTerm, sportFilter, now])
+  }, [activeFilter, games, phaseFilter, searchTerm, sportFilter, now, focusedGame])
+  useSearchFocus(focusedGame, !loading && (!isParticipant || predictionUser === user?.uid), 'game-')
   const groupedGames = useMemo(() => {
     const groups = new Map()
 
@@ -141,6 +144,7 @@ export default function Jogos({ onNavigate, onQuickMode }) {
       ) : null}
 
       {error ? <div className="alert alert-error" role="alert">{error}</div> : null}
+      {focusTarget && (focusedGame || searchTerm) ? <div className="search-focus-note"><span>Resultado da busca: <strong>{focusTarget.label}</strong></span><button className="btn btn-outline btn-small" type="button" onClick={() => { setFocusedGame(''); setSearchTerm(''); setSportFilter(ALL_ITEMS_FILTER) }}>Ver todos os jogos</button></div> : null}
 
       <section className="match-center-panel" aria-label="Resumo dos jogos">
         <div>

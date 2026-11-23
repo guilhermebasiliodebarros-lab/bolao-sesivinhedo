@@ -37,7 +37,7 @@ export default function PredictionReminders({ userId, showSettings, onNavigate }
           setNotices((current) => [...current, id])
           if ('Notification' in window && Notification.permission === 'granted') {
             try {
-              const notification = new Notification('Seu palpite ainda não foi enviado', { body: `${game.timeA} × ${game.timeB} · ${game.esporteNome}. Fecha em ${formatDateTime(automaticPredictionDeadline(game))}.`, tag: `${key}:${id}`, icon: '/logo-interclasse.png' })
+              const notification = new Notification('Seu palpite ainda não foi enviado', { body: `${game.timeA} × ${game.timeB} · ${game.esporteNome}. Fecha em ${formatDateTime(automaticPredictionDeadline(game))}.`, tag: `${key}:${id}`, icon: '/logo-interclasse.webp' })
               notification.onclick = () => { window.focus(); onNavigate('jogos'); notification.close() }
             } catch { /* Some mobile browsers only support service-worker notifications. */ }
           }

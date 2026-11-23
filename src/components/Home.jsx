@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import usePredictionClock from '../hooks/usePredictionClock.js'
-import heroImage from '../assets/bolao-hero.png'
+import heroImage from '../assets/bolao-hero.webp'
 import { COPY } from '../content/copy.js'
 import { canEditPrediction, subscribeGames } from '../services/bolaoService.js'
 import { getGameStageLabel, getSportIcon } from '../utils/game.js'

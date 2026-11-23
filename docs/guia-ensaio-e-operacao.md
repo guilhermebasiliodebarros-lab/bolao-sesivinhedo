@@ -19,6 +19,7 @@ O modo usa os mesmos controles e a mesma apresentação de placar dos jogos, com
 Na pasta do projeto, dê dois cliques em **Iniciar-Ensaio.cmd**, ou abra um terminal nessa pasta e execute:
 
 ```powershell
+npm ci --prefix functions
 npm run ensaio
 ```
 
@@ -67,7 +68,7 @@ Para simular uma queda apenas na aba da TV durante o ensaio local, abra as ferra
 6. **Marcar os lances.** No futebol, faça dois gols de Ana na equipe A e um de Carla na B. Veja o placar da outra janela chegar a `2 × 1` e mostrar o primeiro nome do autor.
 7. **Corrigir um erro.** Acrescente um gol por engano e use **Desfazer último lance**. Teste também **Equipe errada? Corrigir**, selecionando o autor da equipe correta. O placar e as estatísticas devem acompanhar a correção.
 8. **Pausar o tempo.** Use **Pausar cronômetro**; confira o tempo parado na TV. Depois clique em **Retomar cronômetro**.
-9. **Encerrar.** Confira o placar e clique em **Encerrar partida → Encerrar e publicar resultado**. A TV mantém o resultado escolhido, e o palpite do professor deve receber `4,2` pontos.
+9. **Encerrar.** Confira o placar e clique em **Encerrar partida → Encerrar e publicar resultado**. A TV mantém o resultado escolhido, e o palpite exato do professor deve receber `2` pontos: 1 pelo resultado e 1 extra pelo placar.
 10. **Dois jogos simultâneos.** Inicie as duas partidas de basquete ou vôlei, usando áreas distintas, e transmita as duas. Lance pontos em uma e confirme que somente o placar correspondente muda.
 11. **Vôlei.** Registre pontos, use **Encerrar set → Confirmar encerramento do set** e confira os pontos zerados para o próximo set e o aumento no total de sets. Na melhor de três do ensaio, encerre a partida após dois sets vencidos. O palpite usa o resultado de sets, não os pontos de uma parcial.
 12. **Estatísticas e consulta.** Abra **Estatísticas** e confira os atletas e totais. Entre também como `sesivinhedo` para verificar os cinco menus de consulta.
@@ -128,10 +129,26 @@ O encerramento é manual: **Encerrar partida → Encerrar e publicar resultado**
 
 | Palpite | Pontos |
 | --- | ---: |
-| `2 × 1`: placar exato | 4,2 |
-| `2 × 0`: vencedor e placar de uma equipe | 3,6 |
-| `3 × 0`: somente o vencedor | 3 |
+| `2 × 1`: placar exato | 2 |
+| `2 × 0`: vencedor e placar de uma equipe | 1 |
+| `3 × 0`: somente o vencedor | 1 |
 | `0 × 1`: resultado errado | 0 |
+
+No vôlei, o formato é melhor de três sets: `2 × 0`, `2 × 1`, `0 × 2` ou `1 × 2`. O vencedor correto vale 1 ponto e o placar exato em sets dá mais 1. A quantidade de pontos de cada set não entra no palpite. Acertar apenas a quantidade de sets, com o vencedor errado, vale 0. No xadrez, o resultado correto vale 1 ponto, sem bônus.
+
+Para atualizar pontos de resultados já finalizados após a publicação da nova regra, use **Painel master → Sistema → Apuração automática → Recalcular agora**. Publique as Cloud Functions, `firestore.rules` e a interface. Os gatilhos calculam os pontos mesmo depois de fechar o navegador; o painel informa o andamento.
+
+## Busca, correções e relatório de encerramento
+
+O painel reúne as ferramentas em **Operação**, **Campeonato**, **Participantes** e **Sistema**. No celular, escolha a seção no campo **Ferramenta do painel**. **Buscar** ou **Ctrl/Cmd + K** encontra jogos, equipes e atletas, conforme a permissão da conta. Professores não acessam o elenco privado; a conta de consulta encontra somente primeiros nomes das estatísticas públicas.
+
+Os jogos mostram **Favoritos nos palpites** após o prazo dos palpites ou o início da partida. São somente contagens anônimas de professores aprovados. Antes desse prazo, a leitura também é bloqueada nas regras do servidor.
+
+Ao corrigir um resultado ou reabrir uma partida finalizada, confira a prévia de pontos, posições, tabela e vagas seguintes. A confirmação exige uma prévia válida; placar alterado em outra sessão e próxima fase iniciada bloqueiam a operação.
+
+Em **Campeonato → Relatório final / PDF**, escolha os filtros e use **Conferir relatório**. Jogos pendentes geram relatório parcial. **Baixar PDF completo** inclui resultados, campeões definidos, ranking, tabelas dos grupos e artilharia com primeiros nomes dos atletas. Use **Atualizar conferência** se houver alterações após preparar o documento.
+
+Com o ensaio aberto, `npm run validar:evolucao` verifica essas funções, incluindo apuração com o navegador fechado e PDFs com muitas páginas, apenas no projeto fictício.
 
 Palpites fecham cinco minutos antes do horário do jogo e também ficam bloqueados quando a organização inicia a partida. A conta master opera o evento; a conta `sesivinhedo` é de consulta. Para participar dos palpites, utilize uma conta normal de participante.
 

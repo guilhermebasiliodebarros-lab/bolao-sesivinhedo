@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import usePredictionClock from '../hooks/usePredictionClock.js'
 import { useAuth } from '../context/useAuth.js'
+import { findRankingEntries } from '../utils/rankingPresentation.js'
 import {
   canEditPrediction,
   GAME_STATUS,
@@ -67,7 +68,7 @@ export default function Dashboard({ onNavigate }) {
   const nextGameToGuess = pendingOpenGames[0] || openGamesAll[0] || null
   const latestScore = scoredHistory[0] || null
   const latestScoreGame = latestScore ? gamesById.get(latestScore.gameId) : null
-  const participantPosition = ranking.findIndex((item) => item.id === user?.uid) + 1
+  const participantPosition = findRankingEntries(ranking).find(({ participant }) => participant.id === user?.uid)?.position || 0
 
   if (!user) {
     return null

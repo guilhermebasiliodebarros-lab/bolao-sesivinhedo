@@ -2,6 +2,7 @@ import ShiftSelector from './ShiftSelector.jsx'
 import { getGameShift } from '../utils/schoolShifts.js'
 import { useEffect, useMemo, useState } from 'react'
 import usePredictionClock from '../hooks/usePredictionClock.js'
+import useSearchFocus from '../hooks/useSearchFocus.js'
 import { useAuth } from '../context/useAuth.js'
 import {
   calculateGroupStandings,
@@ -69,14 +70,15 @@ function getTournamentKnockoutGames(games) {
   return games.filter((game) => game.stageType === 'knockout' || ['Quartas de final', 'Semifinal', 'Final'].includes(game.fase))
 }
 
-export default function Calendario({ onNavigate }) {
+export default function Calendario({ onNavigate, focusTarget }) {
   const { user, isParticipant, isViewer } = useAuth()
   const [games, setGames] = useState([])
   const [predictions, setPredictions] = useState([])
-  const [sportFilter, setSportFilter] = useState(ALL_ITEMS_FILTER)
+  const [sportFilter, setSportFilter] = useState(focusTarget?.sportId || ALL_ITEMS_FILTER)
   const [turno, setTurno] = useState('')
   const [phaseFilter, setPhaseFilter] = useState(ALL_ITEMS_FILTER)
-  const [searchTerm, setSearchTerm] = useState('')
+  const [searchTerm, setSearchTerm] = useState(focusTarget?.searchText || '')
+  const [focusedGame, setFocusedGame] = useState(focusTarget?.gameId || '')
   const [dayFilter, setDayFilter] = useState('')
   const [stateFilter, setStateFilter] = useState('')
   const [venueFilter, setVenueFilter] = useState('')
@@ -113,7 +115,8 @@ export default function Calendario({ onNavigate }) {
     shift: turno, phase: phaseFilter === ALL_ITEMS_FILTER ? '' : phaseFilter,
     search: searchTerm, day: dayFilter, venue: venueFilter,
   }, now), [games, sportFilter, turno, phaseFilter, searchTerm, dayFilter, venueFilter, now])
-  const visibleGames = useMemo(() => filteredGames.filter((game) => !stateFilter || getMatchState(game) === stateFilter), [filteredGames, stateFilter])
+  const visibleGames = useMemo(() => filteredGames.filter((game) => (!focusedGame || game.id === focusedGame) && (!stateFilter || getMatchState(game) === stateFilter)), [filteredGames, stateFilter, focusedGame])
+  useSearchFocus(focusedGame, !loading, 'calendar-game-')
   const viewGroups = useMemo(() => groupMode === 'day' ? groupCalendarDays(visibleGames) : groupGamesBySport(visibleGames), [visibleGames, groupMode])
   const nextGames = useMemo(() => eventOverview(visibleGames, now).upcoming.slice(0, 3), [visibleGames, now])
   const visibleTournaments = useMemo(() => {
@@ -124,7 +127,7 @@ export default function Calendario({ onNavigate }) {
   const pendingGuessCount = isParticipant ? games.filter((game) => canEditPrediction(game, now) && !predictionsByGame.has(game.id)).length : Number.NaN
   const statusCounts = useMemo(() => Object.fromEntries(CALENDAR_STATES.map((state) => [state.id, filteredGames.filter((game) => !state.id || getMatchState(game) === state.id).length])), [filteredGames])
   const hasFilters = Boolean(sportFilter !== ALL_ITEMS_FILTER || turno || phaseFilter !== ALL_ITEMS_FILTER || searchTerm || dayFilter || stateFilter || venueFilter)
-  const clearFilters = () => { setSportFilter(ALL_ITEMS_FILTER); setTurno(''); setPhaseFilter(ALL_ITEMS_FILTER); setSearchTerm(''); setDayFilter(''); setStateFilter(''); setVenueFilter('') }
+  const clearFilters = () => { setFocusedGame(''); setSportFilter(ALL_ITEMS_FILTER); setTurno(''); setPhaseFilter(ALL_ITEMS_FILTER); setSearchTerm(''); setDayFilter(''); setStateFilter(''); setVenueFilter('') }
 
   if (loading) {
     return <LoadingState label="Montando calendário…" variant="calendar" error={error} />
@@ -147,6 +150,7 @@ export default function Calendario({ onNavigate }) {
       </div>
 
       {error ? <div className="alert alert-error" role="alert">{error}</div> : null}
+      {focusTarget && (focusedGame || searchTerm) ? <div className="search-focus-note"><span>Resultado da busca: <strong>{focusTarget.label}</strong></span><button className="btn btn-outline btn-small" type="button" onClick={clearFilters}>Ver todos os jogos</button></div> : null}
 
       <PendingGuessBanner count={pendingGuessCount} onNavigate={onNavigate} />
 
@@ -269,7 +273,7 @@ export default function Calendario({ onNavigate }) {
             <section className="calendar-sport-group" key={group.id}>
               <div className="section-heading"><h2>{group.nome}</h2><span>{group.games.length} jogo(s)</span></div>
               {group.games.map((game) => (
-                <article className={`calendar-row match-calendar-card game-status-${game.status}`} key={game.id}>
+                <article id={`calendar-game-${game.id}`} tabIndex={-1} className={`calendar-row match-calendar-card game-status-${game.status}`} key={game.id}>
                   <MatchOverview game={game} row />
                   <MatchNotice game={game} />
                   <MatchDetailsDisclosure game={game} />

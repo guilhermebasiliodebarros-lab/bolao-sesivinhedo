@@ -1,5 +1,5 @@
 import { getCountFromServer, getDocFromServer, getDocsFromServer, onSnapshot, query, queryEqual, refEqual, where } from 'firebase/firestore'
-import { createRealtimeChannel, recoverCollection } from '../utils/realtimeChannel.js'
+import { createRealtimeChannel, mergeChangedSnapshots, recoverCollection } from '../utils/realtimeChannel.js'
 import { createSharedSubscriptions } from '../utils/sharedSubscriptions.js'
 import { updateRealtimeStatus } from './realtimeStatus.js'
 
@@ -23,7 +23,7 @@ function subscribe(source, onData, onError, onSync) {
           read: singleDocument ? () => getDocFromServer(target) : target.type === 'collection' && target.path !== 'announcements'
             ? (snapshot) => recoverCollection(snapshot, {
               readAll: () => getDocsFromServer(target),
-              readChanged: (cursor) => getDocsFromServer(query(target, where('updatedAt', '>=', cursor))),
+              readChanged: async (cursor) => mergeChangedSnapshots(await Promise.all((['users', 'predictions'].includes(target.path) ? ['updatedAt', 'scoreUpdatedAt'] : ['updatedAt']).map((field) => getDocsFromServer(query(target, where(field, '>=', cursor)))))),
               readCount: async () => (await getCountFromServer(target)).data().count,
             })
             // Preserve exact filters and permissions without requiring new composite indexes.

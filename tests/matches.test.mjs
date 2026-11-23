@@ -1,6 +1,7 @@
 import { registerHooks } from 'node:module'
 import { beforeEach, test } from 'node:test'
 import assert from 'node:assert/strict'
+import { calculateRankingData } from '../functions/domain/ranking.js'
 import { getMatchScore, getMatchState, MATCH_STATE } from '../src/utils/match.js'
 import { attendanceTeamKey } from '../src/utils/attendance.js'
 import { isMatchPrepared } from '../src/utils/matchStart.js'
@@ -14,6 +15,7 @@ let useCurrentTimestamp = false
 let failBatchNumber = 0
 let batchCommitSizes = []
 let inspectBatch = null
+let inspectTransaction = null
 const snapshot = (ref) => ({ id: ref.id, ref, exists: () => documents.has(ref.path), data: () => structuredClone(documents.get(ref.path)) })
 const apply = (ref, fields) => {
   if (!documents.has(ref.path)) throw new Error('Document not found')
@@ -27,19 +29,22 @@ const sdk = {
   },
   getDoc: async (ref) => snapshot(ref),
   getDocFromServer: async (ref) => snapshot(ref),
-  getDocsFromServer: async () => { throw new Error('Unexpected recovery read in a service test') },
+  getDocsFromServer: async (target) => sdk.getDocs(target),
   getCountFromServer: async () => { throw new Error('Unexpected count read in a service test') },
   getDocs: async (query) => {
     const docs = [...documents.keys()].filter((path) => path.split('/').slice(0, -1).join('/') === query.name).map((path) => snapshot({ path, id: path.split('/').at(-1) })).filter((doc) => (query.filters || []).every((filter) => doc.data()[filter.field] === filter.value))
     return { docs, empty: !docs.length, size: docs.length, forEach: (callback) => docs.forEach(callback) }
   },
   query: (collection, ...filters) => ({ ...collection, filters }),
+  orderBy: (field, direction) => ({ orderBy: field, direction }),
+  limit: (count) => ({ limit: count }),
   queryEqual: (first, second) => JSON.stringify(first) === JSON.stringify(second),
   refEqual: (first, second) => first.path === second.path,
   where: (field, operator, value) => { assert.equal(operator, '=='); return { field, value } },
   runTransaction: async (_db, callback) => {
     const changes = []
     const result = await callback({ get: async (ref) => snapshot(ref), update: (ref, fields) => changes.push(() => apply(ref, fields)), set: (ref, fields) => changes.push(() => documents.set(ref.path, structuredClone(fields))), delete: (ref) => changes.push(() => documents.delete(ref.path)) })
+    inspectTransaction?.()
     changes.forEach((commit) => commit())
     return result
   },
@@ -49,7 +54,7 @@ const sdk = {
     return { set: (ref, fields) => changes.push(() => documents.set(ref.path, structuredClone(fields))), update: (ref, fields) => changes.push(() => apply(ref, fields)), delete: (ref) => changes.push(() => documents.delete(ref.path)), commit: async () => { batchCommitSizes.push(changes.length); inspectBatch?.(); if (failBatchNumber === batchCommitSizes.length) { failBatchNumber = 0; throw new Error('Falha de conexão simulada') } changes.forEach((commit) => commit()) } }
   },
   serverTimestamp: () => useCurrentTimestamp ? new Date() : new Date('2026-11-06T12:00:00Z'),
-  Timestamp: { fromDate: (date) => date },
+  Timestamp: class { constructor(seconds, nanoseconds) { return new Date(seconds * 1000 + nanoseconds / 1000000) } static fromDate(date) { return date } },
   onSnapshot: () => { throw new Error('Unexpected listener in a service test') },
   setDoc: async (ref, fields) => documents.set(ref.path, structuredClone(fields)),
   deleteDoc: async (ref) => documents.delete(ref.path),
@@ -57,14 +62,28 @@ const sdk = {
 globalThis.__matchTestSdk = sdk
 const testAuth = { currentUser: null }
 globalThis.__matchTestAuth = testAuth
+globalThis.__serverTestSdk = { httpsCallable: (_functions, name) => async () => {
+  if (name !== 'recalculateRanking') throw new Error(`Unexpected callable: ${name}`)
+  const rows = (name) => [...documents.entries()].filter(([path]) => path.split('/').length === 2 && path.startsWith(`${name}/`)).map(([path, data]) => ({ ...structuredClone(data), id: path.split('/')[1] }))
+  const plan = calculateRankingData({ users: rows('users'), games: rows('games'), predictions: rows('predictions') })
+  const updates = [...plan.predictionUpdates.map((item) => ({ ...item, collection: 'predictions' })), ...plan.userUpdates.map((item) => ({ ...item, collection: 'users' }))]
+  for (let index = 0; index < Math.max(updates.length, 1); index += 400) {
+    const batch = sdk.writeBatch({})
+    for (const item of updates.slice(index, index + 400)) batch.update(sdk.doc({}, item.collection, item.id), { ...item.fields, scoreUpdatedAt: sdk.serverTimestamp() })
+    await batch.commit()
+  }
+  return { data: { complete: true } }
+} }
 registerHooks({
   resolve(specifier, context, next) {
     if (specifier === 'firebase/firestore') return { url: 'test:firestore', shortCircuit: true }
-    if (specifier === './firebase.js' && context.parentURL?.endsWith('/services/firestoreService.js')) return { url: 'test:config', shortCircuit: true }
+    if (specifier === 'firebase/functions') return { url: 'test:functions', shortCircuit: true }
+    if (specifier === './firebase.js' && /\/services\/(firestoreService|eventBackupService|serverService)\.js$/.test(context.parentURL || '')) return { url: 'test:config', shortCircuit: true }
     return next(specifier, context)
   },
   load(url, context, next) {
-    if (url === 'test:config') return { format: 'module', source: 'export const db = {}; export const auth = globalThis.__matchTestAuth', shortCircuit: true }
+    if (url === 'test:config') return { format: 'module', source: 'export const db = { app: { options: { projectId: "demo-interclasse-ensaio" } } }; export const auth = globalThis.__matchTestAuth; export const cloudFunctions = {}', shortCircuit: true }
+    if (url === 'test:functions') return { format: 'module', source: 'export const httpsCallable = globalThis.__serverTestSdk.httpsCallable', shortCircuit: true }
     if (url === 'test:firestore') return { format: 'module', source: Object.keys(sdk).map((name) => `export const ${name} = globalThis.__matchTestSdk.${name};`).join('\n'), shortCircuit: true }
     return next(url, context)
   },
@@ -184,6 +203,44 @@ test('recalculating scores excludes unreviewed accounts and cannot restore appro
   assert.equal(documents.get('users/teacher').approvalStatus, 'rejected')
   assert.equal(documents.get('users/teacher').participaRanking, false)
 })
+
+test('recalculation replaces old points consistently across predictions, sport rankings and reopened results', async () => {
+  documents.set('users/teacher', { role: 'user', approvalStatus: 'approved', participaRanking: true, pontos: 29.4 })
+  const cases = [
+    ['one', 'football', 'Futebol', 2, 1, 2, 1, 2, true, true],
+    ['hand', 'handball', 'Handebol', 7, 5, 7, 4, 1, false, true],
+    ['basket', 'basketball', 'Basquete', 54, 50, 49, 50, 0, false, false],
+    ['volley', 'volleyball', 'Vôlei', 2, 0, 2, 1, 1, false, true],
+    ['volley-exact', 'volleyball', 'Vôlei', 1, 2, 1, 2, 2, true, true],
+    ['chess', 'chess', 'Xadrez', 0.5, 0.5, 0.5, 0.5, 1, false, true],
+    ['draw', 'football', 'Futebol', 0, 0, 1, 1, 1, false, true],
+  ]
+  for (const [id, sportId, esporteNome, placarA, placarB, palpiteA, palpiteB] of cases) {
+    documents.set(`games/${id}`, { ...original, sportId, esporteNome, status: 'finalizado', placarA, placarB })
+    documents.set(`predictions/teacher_${id}`, { userId: 'teacher', gameId: id, palpiteA, palpiteB, pontos: 4.2 })
+  }
+  for (let run = 0; run < 2; run += 1) {
+    await recalculateScores()
+    for (const [id, , , , , , , pontos, acertoExato, acertoResultado] of cases) {
+      const prediction = documents.get(`predictions/teacher_${id}`)
+      assert.equal(prediction.pontos, pontos)
+      assert.equal(prediction.acertoExato, acertoExato)
+      assert.equal(prediction.acertoResultado, acertoResultado)
+    }
+    const user = documents.get('users/teacher')
+    assert.equal(user.pontos, 8)
+    assert.equal(user.acertosExatos, 2)
+    assert.equal(user.acertosResultado, 6)
+    assert.deepEqual(Object.fromEntries(Object.entries(user.rankingPorEsporte).map(([id, stats]) => [id, [stats.pontos, stats.acertosExatos, stats.acertosResultado]])), {
+      football: [3, 1, 2], handball: [1, 0, 1], basketball: [0, 0, 0], volleyball: [3, 1, 2], chess: [1, 0, 1],
+    })
+  }
+  await reopenGame('one')
+  assert.equal(documents.get('predictions/teacher_one').pontos, 0)
+  assert.equal(documents.get('users/teacher').pontos, 6)
+  assert.equal(documents.get('users/teacher').acertosExatos, 1)
+  assert.equal(documents.get('users/teacher').acertosResultado, 5)
+})
 const { calendarCandidate, calendarConflicts, calendarConflictSignature, calendarFingerprint } = await import('../src/utils/visualSchedule.js')
 const { deletionFingerprint } = await import('../src/utils/bulkGameDeletion.js')
 const { planBracketSchedule } = await import('../src/utils/bracketSchedule.js')
@@ -195,7 +252,7 @@ const original = {
 }
 const game = (id = 'one') => normalizeGame(id, documents.get(`games/${id}`))
 const preparationFor = (id, area = '') => ({ expectedTeamKey: attendanceTeamKey(game(id)), venue: 'Quadra principal', venueArea: area, vestA: 'Azul', vestB: 'Amarelo', responsible: 'Professor responsável', sides: { A: { status: 'present', players: {} }, B: { status: 'present', players: {} } } })
-beforeEach(() => { testAuth.currentUser = null; useCurrentTimestamp = false; failBatchNumber = 0; batchCommitSizes = []; inspectBatch = null; documents.clear(); documents.set('games/one', structuredClone(original)) })
+beforeEach(() => { testAuth.currentUser = null; useCurrentTimestamp = false; failBatchNumber = 0; batchCommitSizes = []; inspectBatch = null; inspectTransaction = null; documents.clear(); documents.set('games/one', structuredClone(original)) })
 
 test('visual scheduling rechecks other sports, requires the reviewed conflict signature and preserves match identity and betting status', async () => {
   documents.set('games/one', { ...original, turno: 'manha', tournamentId: 'cup', timeA: '9º A', timeB: '9º B', preparation: { key: 'old' } })
@@ -559,6 +616,29 @@ test('group qualification preserves team identities for semifinal rosters and la
   assert.equal(game('semi').teamIdB, 'branco')
   assert.equal(game('semi').turmaA, 'Azul')
   assert.equal(game('semi').seedLabelA, '')
+})
+
+test('correcting a completed group changes already assigned qualifiers before the next phase starts', async () => {
+  documents.set('games/one', { ...original, turno: 'manha', status: 'encerrado', stageType: 'group', groupName: 'Grupo A', tournamentId: 'cup', teamIdA: 'azul', teamIdB: 'branco' })
+  documents.set('games/semi', { ...original, turno: 'manha', stageType: 'knockout', fase: 'Semifinal', tournamentId: 'cup', timeA: '1o Grupo A', seedLabelA: '1o Grupo A', timeB: '2o Grupo A', seedLabelB: '2o Grupo A' })
+  await finalizeGame({ gameId: 'one', placarA: 1, placarB: 0 })
+  assert.equal(game('semi').teamIdA, 'azul')
+  await finalizeGame({ gameId: 'one', placarA: 0, placarB: 1 })
+  assert.equal(game('semi').teamIdA, 'branco')
+  assert.equal(game('semi').teamIdB, 'azul')
+  documents.set('games/semi', { ...documents.get('games/semi'), status: 'encerrado', liveStatus: 'live' })
+  await assert.rejects(finalizeGame({ gameId: 'one', placarA: 3, placarB: 0 }), /próxima fase/)
+  assert.equal(game('one').placarA, 0)
+})
+
+test('a manual final-result correction clears incompatible public scorers but preserves authors when the recorded score stays equal', async () => {
+  documents.set('games/one', { ...original, status: 'encerrado', liveStatus: 'live', liveScoreA: 2, liveScoreB: 1, scorerStats: [{ playerId: 'ana', playerName: 'Ana', side: 'A', total: 2 }], liveEvents: [{ id: 'goal', side: 'A' }] })
+  await finalizeGame({ gameId: 'one', placarA: 2, placarB: 1 })
+  assert.equal(game('one').scorerStats[0].playerName, 'Ana')
+  await finalizeGame({ gameId: 'one', placarA: 0, placarB: 1 })
+  assert.deepEqual(game('one').scorerStats, [])
+  assert.deepEqual(game('one').liveEvents, [])
+  assert.equal(game('one').eventsAdjusted, true)
 })
 
 test('saving a new modality creates its fourteen class teams in the same batch', async () => {
@@ -1043,7 +1123,7 @@ test('penalties advance a knockout winner while teacher guesses use the normal-t
   assert.deepEqual(getMatchScore(game()), [1, 1])
   assert.equal(game().tieBreak.scoreA, 4)
   assert.equal(documents.get('games/final').timeA, 'Azul')
-  assert.equal(documents.get('predictions/pick').pontos, 4.2)
+  assert.equal(documents.get('predictions/pick').pontos, 2)
   await reopenGame('one')
   assert.equal(game().tieBreak, null)
   assert.equal(documents.get('games/final').timeA, 'A definir')
@@ -1285,12 +1365,13 @@ test('chess half points and volleyball set partials survive the live/final lifec
   documents.set('games/volley', { ...volleyball, attendanceSummary: { ...volleyball.attendanceSummary, teamKey: attendanceTeamKey(volleyball) } })
   documents.set('sports/v', { nome: 'Vôlei', scoringMode: 'sets', volleyballBestOf: 5 })
   await startGame('volley')
-  assert.equal(game('volley').volleyballBestOf, 5)
-  await assert.rejects(finalizeGame({ gameId: 'volley', placarA: 2, placarB: 1 }), /vencer 3/)
-  const partials = [{ a: 25, b: 20 }, { a: 20, b: 25 }, { a: 25, b: 10 }, { a: 20, b: 25 }, { a: 15, b: 12 }]
-  await updateLiveScore({ gameId: 'volley', placarA: 3, placarB: 2, setScores: partials })
-  await finalizeGame({ gameId: 'volley', placarA: 3, placarB: 2 })
-  assert.equal(game('volley').setScores.length, 5)
+  assert.equal(game('volley').volleyballBestOf, 3)
+  await assert.rejects(finalizeGame({ gameId: 'volley', placarA: 3, placarB: 2 }), /melhor de 3/)
+  await assert.rejects(finalizeGame({ gameId: 'volley', placarA: 1, placarB: 1 }), /vencer 2/)
+  const partials = [{ a: 25, b: 20 }, { a: 20, b: 25 }, { a: 15, b: 12 }]
+  await updateLiveScore({ gameId: 'volley', placarA: 2, placarB: 1, setScores: partials })
+  await finalizeGame({ gameId: 'volley', placarA: 2, placarB: 1 })
+  assert.equal(game('volley').setScores.length, 3)
 })
 
 test('announcements validate public messages and expire automatically by timestamp', async () => {
@@ -1301,4 +1382,175 @@ test('announcements validate public messages and expire automatically by timesta
   assert.equal(announcement.active, true)
   assert.equal(announcement.type, 'chamada')
   assert(announcement.expiresAt.getTime() > Date.now())
+})
+
+const { exportEventBackup, finalizeEventRecovery, previewEventRestore, restoreEventBackup } = await import('../src/services/eventBackupService.js')
+const { createEventBackup } = await import('../src/utils/eventBackup.js')
+const { markScheduleNoticesRead } = await import('../src/services/firestoreService.js')
+const backupMaster = () => { testAuth.currentUser = { uid: 'backup-master' }; documents.set('users/backup-master', { role: 'master', participaRanking: false }) }
+
+test('schedule changes publish one atomic notice with before and after; unchanged and rejected saves publish none', async () => {
+  documents.set('games/one', { ...original, timeA: '9º A', timeB: '9º B', turno: 'manha' })
+  const change = { dataHora: '2099-11-10T10:00', venue: 'Quadra 2', venueArea: '', durationMinutes: 30 }
+  await saveCalendarGame({ gameId: 'one', expectedFingerprint: calendarFingerprint(game()), change })
+  const notices = () => [...documents.entries()].filter(([path]) => path.startsWith('scheduleNotices/'))
+  assert.equal(notices().length, 1)
+  assert.deepEqual(notices()[0][1].changes[0].fields, ['time', 'venue'])
+  assert.equal(notices()[0][1].changes[0].current.venue, 'Quadra 2')
+  await saveCalendarGame({ gameId: 'one', expectedFingerprint: calendarFingerprint(game()), change })
+  assert.equal(notices().length, 1)
+  await assert.rejects(saveCalendarGame({ gameId: 'one', expectedFingerprint: 'stale', change }), /mudou/)
+  assert.equal(notices().length, 1)
+  await changeMatchCondition({ gameId: 'one', action: 'postpone', reason: 'Motivo privado da organização' })
+  assert.equal(notices().length, 2)
+  assert(!JSON.stringify(notices()).includes('Motivo privado'))
+})
+
+test('notice receipts merge concurrent-device history and reject another user identity', async () => {
+  testAuth.currentUser = { uid: 'teacher' }
+  documents.set('users/teacher/preferences/scheduleNotices', { readIds: ['device-b'], updatedAt: new Date() })
+  assert.deepEqual(await markScheduleNoticesRead('teacher', ['stale'], ['device-a']), ['device-a', 'device-b'])
+  await assert.rejects(markScheduleNoticesRead('someone-else', [], ['notice']), /sua conta/)
+  assert.equal(documents.has('users/someone-else/preferences/scheduleNotices'), false)
+})
+
+test('backup export requires a current master and includes private rosters, match documents and events without accounts', async () => {
+  await assert.rejects(exportEventBackup(), /organização/)
+  testAuth.currentUser = { uid: 'teacher' }
+  documents.set('users/teacher', { role: 'user', approvalStatus: 'approved' })
+  await assert.rejects(exportEventBackup(), /Somente/)
+  backupMaster()
+  documents.set('teams/blue', { nome: 'Azul', sportId: 'football' })
+  documents.set('teams/blue/players/ana', { nome: 'Ana', capitao: true })
+  documents.set('games/one/documents/attendance', { responsible: 'Professor', checkedAt: new Date('2026-11-23T12:00:00Z') })
+  documents.set('games/one/events/goal', { event: { kind: 'goal', side: 'A' } })
+  const backup = await exportEventBackup()
+  for (const path of ['games/one', 'teams/blue', 'teams/blue/players/ana', 'games/one/documents/attendance', 'games/one/events/goal']) assert(backup.documents.some((record) => record.path === path), path)
+  assert.equal(backup.documents.some((record) => record.path.startsWith('users/')), false)
+  assert.equal(backup.projectId, 'demo-interclasse-ensaio')
+})
+
+test('backup recovery restores parents, private records and deleted predictions, recalculates scores and preserves accounts and later data', async () => {
+  backupMaster()
+  documents.set('users/teacher', { role: 'user', approvalStatus: 'approved', participaRanking: true, pontos: 0 })
+  documents.set('users/rejected', { role: 'user', approvalStatus: 'rejected', participaRanking: false })
+  documents.set('sports/football', { nome: 'Futebol' })
+  documents.set('teams/blue', { nome: 'Azul', sportId: 'football' })
+  documents.set('teams/blue/players/ana', { nome: 'Ana' })
+  documents.set('games/one', { ...original, status: 'finalizado', placarA: 2, placarB: 1 })
+  documents.set('games/one/documents/attendance', { checkedAt: new Date('2026-11-23T12:00:00Z') })
+  documents.set('games/one/events/goal', { event: { side: 'A', kind: 'goal' } })
+  documents.set('predictions/pick', { userId: 'teacher', gameId: 'one', palpiteA: 2, palpiteB: 1, pontos: 4.2 })
+  const backup = await exportEventBackup()
+  for (const record of backup.documents) if (record.path !== 'sports/football') documents.delete(record.path)
+  documents.set('sports/football', { nome: 'Nome atualizado' })
+  documents.set('games/later', { ...original, timeA: 'Jogo novo' })
+  const plan = await previewEventRestore(backup)
+  const progress = []
+  await restoreEventBackup(backup, plan, (value) => progress.push(value.completed))
+  assert.equal(documents.get('games/one').placarA, 2)
+  assert.equal(documents.get('teams/blue/players/ana').nome, 'Ana')
+  assert.equal(documents.get('teams/blue').playerCount, 1)
+  assert.deepEqual(documents.get('games/one/documents/attendance').checkedAt, new Date('2026-11-23T12:00:00Z'))
+  assert.equal(documents.get('games/one/events/goal').event.kind, 'goal')
+  assert.equal(documents.get('predictions/pick').pontos, 2)
+  assert.equal(documents.get('users/teacher').pontos, 2)
+  assert.equal(documents.get('users/teacher').approvalStatus, 'approved')
+  assert.equal(documents.get('users/rejected').approvalStatus, 'rejected')
+  assert.equal(documents.get('users/backup-master').role, 'master')
+  assert.equal(documents.get('sports/football').nome, 'Nome atualizado')
+  assert.equal(documents.get('games/later').timeA, 'Jogo novo')
+  assert.equal(progress.at(-1), plan.changes.length)
+  assert.equal((await previewEventRestore(backup)).changes.length, 0)
+})
+
+test('replacement recovery rejects stale reviews and corrupted files before writing and blocks recovery during live matches', async () => {
+  backupMaster()
+  const backup = await exportEventBackup()
+  documents.set('games/one', { ...original, venue: 'Quadra alterada' })
+  const plan = await previewEventRestore(backup, 'replace')
+  documents.set('games/one', { ...documents.get('games/one'), venue: 'Edição posterior' })
+  await assert.rejects(restoreEventBackup(backup, plan), /mudaram desde a prévia/)
+  assert.equal(documents.get('games/one').venue, 'Edição posterior')
+  const corrupted = structuredClone(backup)
+  corrupted.documents[0].data.timeA = 'Outra equipe'
+  await assert.rejects(previewEventRestore(corrupted), /corrompido/)
+  documents.set('games/one', { ...documents.get('games/one'), status: 'encerrado', liveStatus: 'live' })
+  await assert.rejects(previewEventRestore(backup), /partidas ao vivo/)
+  assert((await exportEventBackup()).documents.length > 0)
+})
+
+test('recovering a live snapshot pauses its saved clock and advances the score revision', async () => {
+  backupMaster()
+  const capturedAt = new Date('2026-11-23T12:05:00Z')
+  const backup = await createEventBackup('demo-interclasse-ensaio', [{ path: 'games/one', data: { ...original, status: 'encerrado', liveStatus: 'live', startedAt: new Date('2026-11-23T12:00:00Z'), clock: { elapsedMs: 0, runningSince: new Date('2026-11-23T12:00:00Z'), revision: 1 }, scoreRevision: 3 } }], capturedAt)
+  const plan = await previewEventRestore(backup, 'replace')
+  await restoreEventBackup(backup, plan)
+  const restored = documents.get('games/one')
+  assert.equal(restored.clock.elapsedMs, 300000)
+  assert.equal(restored.clock.runningSince, null)
+  assert.equal(restored.scoreRevision, 4)
+  assert.equal(restored.liveStatus, 'live')
+})
+
+test('interrupted recovery reports committed chunks and can resume from a fresh missing-only preview', async () => {
+  backupMaster()
+  const backup = await createEventBackup('demo-interclasse-ensaio', Array.from({ length: 101 }, (_, index) => ({ path: `teams/team-${index}`, data: { nome: `Equipe ${index}` } })))
+  const plan = await previewEventRestore(backup)
+  let attempts = 0
+  inspectTransaction = () => { if (++attempts === 2) throw new Error('Falha de conexão simulada') }
+  await assert.rejects(restoreEventBackup(backup, plan), /100 de 101/)
+  assert.equal([...documents.keys()].filter((path) => path.startsWith('teams/')).length, 100)
+  inspectTransaction = null
+  const remaining = await previewEventRestore(backup)
+  assert.equal(remaining.changes.length, 1)
+  await restoreEventBackup(backup, remaining)
+  assert.equal([...documents.keys()].filter((path) => path.startsWith('teams/')).length, 101)
+})
+
+test('large score recalculations commit bounded batches and produce one consistent total per participant', async () => {
+  for (const id of ['one', 'two', 'three']) documents.set(`games/${id}`, { ...original, status: 'finalizado', placarA: 2, placarB: 1 })
+  for (let index = 0; index < 201; index++) {
+    const uid = `teacher-${index}`
+    documents.set(`users/${uid}`, { role: 'user', approvalStatus: 'approved', participaRanking: true })
+    for (const id of ['one', 'two', 'three']) documents.set(`predictions/${uid}_${id}`, { userId: uid, gameId: id, palpiteA: 2, palpiteB: 1 })
+  }
+  await recalculateScores()
+  assert.deepEqual(batchCommitSizes, [400, 400, 4])
+  for (let index = 0; index < 201; index++) {
+    assert.equal(documents.get(`users/teacher-${index}`).pontos, 6)
+    assert.equal(documents.get(`users/teacher-${index}`).acertosExatos, 3)
+    assert.equal(documents.get(`users/teacher-${index}`).acertosResultado, 3)
+  }
+})
+
+test('replacement recovery recounts rosters without removing athletes added after the backup', async () => {
+  backupMaster()
+  documents.set('teams/blue', { nome: 'Azul', playerCount: 1 })
+  documents.set('teams/blue/players/ana', { nome: 'Ana' })
+  const backup = await exportEventBackup()
+  documents.set('teams/blue/players/bruna', { nome: 'Bruna' })
+  documents.set('teams/blue', { nome: 'Azul', playerCount: 2 })
+  documents.delete('teams/blue/players/ana')
+  await restoreEventBackup(backup, await previewEventRestore(backup, 'replace'))
+  assert.equal(documents.get('teams/blue').playerCount, 2)
+  assert.equal(documents.get('teams/blue/players/ana').nome, 'Ana')
+  assert.equal(documents.get('teams/blue/players/bruna').nome, 'Bruna')
+})
+
+test('a failed final score calculation can finish without replaying recovered documents', async () => {
+  backupMaster()
+  documents.set('users/teacher', { role: 'user', approvalStatus: 'approved', participaRanking: true, pontos: 0 })
+  const backup = await createEventBackup('demo-interclasse-ensaio', [
+    { path: 'games/one', data: { ...original, status: 'finalizado', placarA: 2, placarB: 1 } },
+    { path: 'predictions/pick', data: { userId: 'teacher', gameId: 'one', palpiteA: 2, palpiteB: 1, pontos: 0 } },
+  ])
+  const plan = await previewEventRestore(backup, 'replace')
+  failBatchNumber = 1
+  await assert.rejects(restoreEventBackup(backup, plan), (error) => error.needsFinalization === true)
+  assert.equal(documents.get('games/one').placarA, 2)
+  const revision = documents.get('games/one').scoreRevision
+  await finalizeEventRecovery(backup)
+  assert.equal(documents.get('users/teacher').pontos, 2)
+  assert.equal(documents.get('games/one').scoreRevision, revision)
 })

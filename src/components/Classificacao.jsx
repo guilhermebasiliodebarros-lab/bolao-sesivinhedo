@@ -5,6 +5,8 @@ import EmptyState from './EmptyState.jsx'
 import LoadingState from './LoadingState.jsx'
 import PendingGuessBanner from './PendingGuessBanner.jsx'
 import RankingTable from './RankingTable.jsx'
+import ScoringStatus from './ScoringStatus.jsx'
+import { rankingEntries } from '../utils/rankingPresentation.js'
 
 const GENERAL_RANKING = 'geral'
 
@@ -78,7 +80,9 @@ export default function Classificacao({ onNavigate }) {
       (participant.acertosResultado || 0) > 0,
   )
   const leader = visibleRanking[0] || null
-  const runnerUp = visibleRanking[1] || null
+  const rankedEntries = rankingEntries(visibleRanking)
+  const leaders = rankedEntries.filter((entry) => entry.position === 1)
+  const runnerUp = rankedEntries.find((entry) => entry.position !== 1)?.participant || null
   const leaderGap = leader && runnerUp ? Math.max((leader.pontos || 0) - (runnerUp.pontos || 0), 0) : 0
   const predictionsByGame = useMemo(() => new Map(predictions.map((prediction) => [prediction.gameId, prediction])), [predictions])
   const pendingGuessCount = isParticipant ? games.filter((game) => canEditPrediction(game) && !predictionsByGame.has(game.id)).length : Number.NaN
@@ -102,6 +106,7 @@ export default function Classificacao({ onNavigate }) {
       </div>
 
       {error ? <div className="alert alert-error" role="alert">{error}</div> : null}
+      <ScoringStatus />
 
       <PendingGuessBanner count={pendingGuessCount} onNavigate={onNavigate} />
 
@@ -130,13 +135,13 @@ export default function Classificacao({ onNavigate }) {
       <section className="ranking-insight-panel" aria-label="Resumo da classificação">
         <article>
           <span className="eyebrow">Liderança</span>
-          <strong>{leader?.nome || 'Aguardando participantes'}</strong>
+          <strong>{leaders.length > 1 ? `${leaders.length} líderes empatados` : leader?.nome || 'Aguardando participantes'}</strong>
           <small>{leader ? `${leader.pontos || 0} ponto(s)` : 'O ranking aparece assim que houver cadastro.'}</small>
         </article>
         <article>
           <span className="eyebrow">Disputa</span>
           <strong>{runnerUp ? `${leaderGap} ponto(s)` : '-'}</strong>
-          <small>{runnerUp ? `Diferença para ${runnerUp.nome}` : 'Sem segundo colocado ainda.'}</small>
+          <small>{runnerUp ? `Diferença para a próxima posição: ${runnerUp.nome}` : leaders.length > 1 ? 'Todos compartilham a liderança.' : 'Sem próxima posição ainda.'}</small>
         </article>
         <article>
           <span className="eyebrow">Base ativa</span>

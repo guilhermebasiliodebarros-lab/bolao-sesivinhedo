@@ -1,0 +1,24 @@
+.global-search-dialog { width: min(680px, calc(100vw - 32px)); max-height: min(720px, calc(100dvh - 40px)); padding: 24px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface-strong); color: var(--text); box-shadow: 0 24px 90px #0004; }
+.global-search-dialog::backdrop { background: #101b2c88; backdrop-filter: blur(3px); }
+.global-search-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.global-search-header h2 { margin: 4px 0 0; font-size: 1.6rem; }
+.global-search-input { display: grid; gap: 8px; font-size: .85rem; font-weight: 650; }
+.global-search-input input { width: 100%; min-height: 48px; padding: 12px; box-sizing: border-box; }
+.global-search-help, .global-search-footer { color: var(--muted); font-size: .75rem; line-height: 1.6; }
+.global-search-error { color: var(--red); font-size: .8rem; }
+.global-search-results { max-height: 440px; overflow: auto; margin: 0; padding: 0; list-style: none; overscroll-behavior: contain; }
+.global-search-results button { display: flex; align-items: center; gap: 14px; width: 100%; padding: 14px 10px; border: 0; border-bottom: 1px solid var(--border); color: var(--text); background: transparent; text-align: left; cursor: pointer; border-radius: 6px; }
+.global-search-results button[aria-selected='true'] { background: var(--red-soft); }
+.global-search-results button > span:nth-child(2) { flex: 1; min-width: 0; }
+.global-search-results strong, .global-search-results small { display: block; overflow-wrap: anywhere; }
+.global-search-results strong { font-size: .9rem; }
+.global-search-results small { margin-top: 5px; color: var(--muted); font-size: .75rem; line-height: 1.6; }
+.global-search-kind { min-width: 44px; color: var(--muted); font-size: .65rem; text-transform: uppercase; }
+.global-search-empty { padding: 28px 0; text-align: center; }
+.global-search-footer { border-top: 1px solid var(--border); padding-top: 12px; margin-bottom: 0; }
+@media (max-width: 600px) {
+  .global-search-dialog { padding: 16px; width: calc(100vw - 20px); max-height: calc(100dvh - 20px); }
+  .global-search-results { max-height: 55dvh; }
+  .global-search-results button { gap: 8px; padding: 14px 4px; }
+  .global-search-kind { min-width: 38px; font-size: .6rem; }
+}
