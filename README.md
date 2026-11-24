@@ -24,7 +24,7 @@ Com o ensaio local aberto, `npm run validar:cadastros` verifica cadastro pela in
 
 ## Ensaio antes do evento
 
-Para experimentar o placar sem sair do sistema, abra **Painel master → Ensaio geral → Iniciar modo de teste**. A simulação cria seis jogos e alunos fictícios apenas na memória do navegador. Use os mesmos controles de arbitragem para gols, pontos, cartões, presença, relógio e períodos; a prévia reutiliza o mesmo componente da TV oficial e pode ser ampliada. Futebol e handebol mostram um jogo; basquete e vôlei mostram dois. Reiniciar ou sair descarta somente os dados fictícios. O modo não faz gravações no Firebase nem muda a seleção da TV oficial, e não depende de um servidor de ensaio.
+Para experimentar o placar sem sair do sistema, abra **Painel master → Ensaio geral → Iniciar modo de teste**. A simulação cria seis jogos e alunos fictícios apenas na memória do navegador. Em **Equipes para testar o placar**, escolha os dois lados entre as 14 turmas e confira suas décadas e cores, sem perder os lances já feitos. Use os mesmos controles de arbitragem para gols, pontos, cartões, presença, relógio e períodos; a prévia reutiliza o mesmo componente da TV oficial e pode ser ampliada. Futebol e handebol mostram um jogo; basquete e vôlei mostram dois, com equipes escolhidas separadamente em **Jogo para operar**. Reiniciar zera a simulação e mantém as equipes escolhidas; sair descarta os testes. O modo não faz gravações no Firebase nem muda a seleção da TV oficial, e não depende de um servidor de ensaio.
 
 O ambiente abaixo é opcional para conferir também autenticação, palpites e comunicação com o banco de teste:
 
@@ -366,6 +366,10 @@ Na lista de partidas, use **Definir data e horário** ou **Mais opções → Edi
 
 Local, área, duração, presença e coletes continuam em **Preparar partida**. Ao preencher a agenda, considere as outras modalidades, a duração e o descanso das turmas. O sorteio não altera jogos existentes; os grupos e vínculos de semifinal, final e terceiro lugar são preservados ao preencher as datas.
 
+
+## Programação oficial de 2026
+
+Os murais oficiais de 30/11 a 03/12 foram transcritos em uma agenda com 96 partidas: 60 pela manhã e 36 à tarde. O comando `npm run agenda:oficial` permite conferir e aplicar datas, horários, quadras, grupos e mata-mata, com prazo de palpites cinco minutos antes de cada partida. Veja o [guia da programação oficial](docs/programacao-oficial-2026.md) para os comandos, a política de abertura e os registros de conferência.
 
 ## Palpite rápido no celular
 

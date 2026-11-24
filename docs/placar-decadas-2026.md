@@ -9,11 +9,11 @@ O placar e o Modo TV exigem login. Em cada navegador da transmissão, entre com 
 1. Selecione um ou dois jogos em **Painel master → Ao vivo / TV → Escolher jogos do placar**.
 2. Abra **Placar ao vivo** na TV. As identidades são aplicadas automaticamente às turmas e acompanham as mudanças de seleção.
 3. Use **Ajustar placar da TV → Décadas e cores das turmas** para consultar a legenda completa.
-4. Para experimentar sem alterar o campeonato, abra **Painel master → Ensaio geral → Iniciar modo de teste**. A prévia e sua versão ampliada usam o mesmo placar temático.
+4. Para experimentar sem alterar o campeonato, abra **Painel master → Ensaio geral → Iniciar modo de teste**. Em **Equipes para testar o placar**, escolha **Equipe A** e **Equipe B** entre as 14 turmas; as opções mostram a década e a cor de cada uma. No basquete e no vôlei, use **Jogo para operar** para escolher as equipes de cada partida separadamente. A prévia e sua versão ampliada usam o mesmo placar temático e refletem a seleção imediatamente. Trocar as turmas mantém o placar, os lances, o relógio e os alunos fictícios; reiniciar os testes zera os resultados, preservando as equipes escolhidas até sair do modo de teste.
 
 A programação rotativa do **Modo TV** também identifica as décadas com seus ícones, cores e fontes, em uma apresentação compacta.
 
-As paletas das 14 turmas usam tons vivos e saturados, com molduras sólidas e ilustrações sem a transparência geral que deixava as cores apagadas. O laranja tem faixas fortes em laranja e âmbar; prata/rosa mantém o acabamento metálico com rosa mais intenso. Os fundos recebem a cor da turma, e uma sombra central preserva a leitura dos números. O mesmo ajuste aparece no placar, no Modo TV e nas prévias do modo de teste.
+As paletas das 14 turmas usam tons vivos e saturados, com molduras sólidas e ilustrações sem a transparência geral que deixava as cores apagadas. O laranja tem faixas fortes em laranja e âmbar; os Anos 2000 usam rosa pink vivo nas molduras, nos fundos e nas ilustrações Y2K. Os fundos recebem a cor da turma, e uma sombra central preserva a leitura dos números. O mesmo ajuste aparece no placar, no Modo TV e nas prévias do modo de teste.
 
 ## Identidades das turmas
 
@@ -24,14 +24,14 @@ As paletas das 14 turmas usam tons vivos e saturados, com molduras sólidas e il
 | Tarde | 7º A | Anos 50 | Vermelho |
 | Tarde | 7º B | Anos 90 | Verde / verde-militar |
 | Tarde | 8º A | Anos 80 | Azul |
-| Tarde | 8º B | Anos 2000 | Prata / rosa |
+| Tarde | 8º B | Anos 2000 | Rosa pink (Hot Pink, #FF69B4) |
 | Manhã | 9º A | Anos 60 | Laranja |
 | Manhã | 9º B | Anos 70 | Preto |
 | Manhã | 1º A | Anos 20 | Dourado / amarelo |
 | Manhã | 1º B | Anos 50 | Vermelho |
 | Manhã | 2º A | Anos 90 | Verde / verde-militar |
 | Manhã | 2º B | Anos 80 | Azul |
-| Manhã | 3º A | Anos 2000 | Prata / rosa |
+| Manhã | 3º A | Anos 2000 | Rosa pink (Hot Pink, #FF69B4) |
 | Manhã | 3º B | Anos 40 | Roxo |
 
 ## Referências visuais
@@ -45,7 +45,7 @@ As paletas das 14 turmas usam tons vivos e saturados, com molduras sólidas e il
 | Anos 70 | Globo de discoteca, reflexos e curvas arredondadas, nas versões dourada e preta |
 | Anos 80 | Grade em perspectiva, máquina de arcade, pixels e linhas de neon |
 | Anos 90 | Janela de computador, cursor, pixels, riscos e bordas grunge |
-| Anos 2000 | Órbitas, disco metálico, estrelas cromadas e detalhes Y2K em prata e rosa |
+| Anos 2000 | Órbitas, disco, estrelas e detalhes Y2K com brilho em tons de rosa |
 
 As ilustrações são vetoriais e locais. O tema não exige baixar imagens ou fontes externas. Os desenhos ficam nas bordas e ao fundo; uma camada escura protege o contraste dos nomes e da pontuação. Elementos decorativos são ignorados pelos leitores de tela, e a preferência por movimento reduzido é respeitada.
 

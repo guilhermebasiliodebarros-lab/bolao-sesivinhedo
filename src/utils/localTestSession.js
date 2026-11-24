@@ -6,6 +6,7 @@ import { periodRevision, planPeriodChange } from './matchPeriods.js'
 import { getMatchState, MATCH_STATE } from './match.js'
 import { normalizeSetScores, validateFinalSets, validateSportScores } from './sportRules.js'
 import { normalizeTieBreak } from './tieBreak.js'
+import { SCHOOL_CLASSES } from './schoolClasses.js'
 
 export const TEST_SPORTS = [
   { id: 'futebol', nome: 'Futebol', scoringMode: 'goals', pairs: [['9º A', '9º B']] },
@@ -21,11 +22,14 @@ export function createLocalTestSession({ now = () => new Date() } = {}) {
   let snapshot, serial = 0, generation = 0
   const emit = () => listeners.forEach((listener) => listener())
   function reset() {
+    const selectedTeams = new Map((snapshot?.games || []).map((game) => [game.id, [game.timeA, game.timeB]]))
     rosters.clear(); attendance.clear(); histories.clear(); cards.clear(); requests.clear()
     const games = [], teams = [], stamp = now()
-    for (const sport of TEST_SPORTS) sport.pairs.forEach(([timeA, timeB], index) => {
+    for (const sport of TEST_SPORTS) sport.pairs.forEach((pair, index) => {
       const id = `teste-${sport.id}-${index + 1}`, sportId = `teste-esporte-${sport.id}`
-      const game = { id, sportId, esporteNome: sport.nome, scoringMode: sport.scoringMode, timeA, timeB, teamIdA: `${id}-a`, teamIdB: `${id}-b`, fase: 'Jogo de demonstração', stageType: 'group', tournamentName: 'MODO TESTE · JOGO FICTÍCIO', turno: ['futebol', 'volei'].includes(sport.id) ? 'manha' : 'tarde', status: 'encerrado', liveStatus: 'live', matchCondition: 'normal', venue: 'Quadra de teste', venueArea: `Jogo ${index + 1}`, vestA: 'Azul', vestB: 'Vermelho', durationMinutes: 20, volleyballBestOf: 3, liveScoreA: 0, liveScoreB: 0, placarA: null, placarB: null, clock: { elapsedMs: 0, runningSince: stamp, revision: 0 }, startedAt: stamp, period: null, currentSet: { a: 0, b: 0 }, setScores: [], liveEvents: [], scorerStats: [], publicCardEvents: [], scoreRevision: 0, lastScoreEventId: null }
+      const [timeA, timeB] = selectedTeams.get(id) || pair
+      const classes = [timeA, timeB].map((name) => SCHOOL_CLASSES.find((item) => item.nome === name))
+      const game = { id, sportId, esporteNome: sport.nome, scoringMode: sport.scoringMode, timeA, timeB, turmaA: timeA, turmaB: timeB, teamIdA: `${id}-a`, teamIdB: `${id}-b`, fase: 'Jogo de demonstração', stageType: 'group', tournamentName: 'MODO TESTE · JOGO FICTÍCIO', turno: classes[0].turno === classes[1].turno ? classes[0].turno : '', status: 'encerrado', liveStatus: 'live', matchCondition: 'normal', venue: 'Quadra de teste', venueArea: `Jogo ${index + 1}`, vestA: 'Azul', vestB: 'Vermelho', durationMinutes: 20, volleyballBestOf: 3, liveScoreA: 0, liveScoreB: 0, placarA: null, placarB: null, clock: { elapsedMs: 0, runningSince: stamp, revision: 0 }, startedAt: stamp, period: null, currentSet: { a: 0, b: 0 }, setScores: [], liveEvents: [], scorerStats: [], publicCardEvents: [], scoreRevision: 0, lastScoreEventId: null }
       const checked = { teamKey: attendanceTeamKey(game), responsible: 'Professor de teste', checkedAt: stamp.getTime() }
       for (const side of ['A', 'B']) {
         const teamId = game[`teamId${side}`]
@@ -33,7 +37,8 @@ export function createLocalTestSession({ now = () => new Date() } = {}) {
         const players = names.map((nome, i) => ({ id: `${teamId}-aluno-${i + 1}`, nome, posicao: '', capitao: i === 0 }))
         rosters.set(teamId, players)
         checked[side] = normalizeAttendanceSide({ status: 'present', players: Object.fromEntries(players.map((player) => [player.id, 'present'])) }, players)
-        teams.push({ id: teamId, nome: game[`time${side}`], sportId, esporteNome: sport.nome, turno: game.turno, playerCount: players.length })
+        const schoolClass = classes[side === 'A' ? 0 : 1]
+        teams.push({ id: teamId, nome: schoolClass.nome, turma: schoolClass.turma, categoria: schoolClass.categoria, sportId, esporteNome: sport.nome, turno: schoolClass.turno, playerCount: players.length })
       }
       attendance.set(id, checked); histories.set(id, [])
       game.attendanceSummary = { teamKey: checked.teamKey, teamA: 'present', teamB: 'present', checkedAt: stamp.getTime() }
@@ -151,6 +156,19 @@ export function createLocalTestSession({ now = () => new Date() } = {}) {
     api, reset,
     getSnapshot: () => snapshot,
     subscribe: (listener) => { listeners.add(listener); return () => listeners.delete(listener) },
+    selectTeams(gameId, selection) {
+      const game = getGame(gameId)
+      const classes = ['A', 'B'].map((side) => SCHOOL_CLASSES.find((item) => item.code === selection?.[side]))
+      if (classes.some((item) => !item)) throw new Error('Escolha as duas turmas do jogo de teste.')
+      if (classes[0].code === classes[1].code) throw new Error('Escolha duas turmas diferentes para o jogo de teste.')
+      if (classes[0].nome === game.timeA && classes[1].nome === game.timeB) return
+      const selected = new Map(classes.map((item, index) => [game[index === 0 ? 'teamIdA' : 'teamIdB'], item]))
+      snapshot = { ...snapshot, teams: snapshot.teams.map((team) => {
+        const schoolClass = selected.get(team.id)
+        return schoolClass ? { ...team, nome: schoolClass.nome, turma: schoolClass.turma, categoria: schoolClass.categoria, turno: schoolClass.turno } : team
+      }) }
+      publish({ ...game, timeA: classes[0].nome, timeB: classes[1].nome, turmaA: classes[0].turma, turmaB: classes[1].turma, turno: classes[0].turno === classes[1].turno ? classes[0].turno : '' })
+    },
     advance(gameId, seconds = 60) {
       const game = liveGame(gameId), value = matchClockValue(game, now())
       if (!Number.isInteger(seconds) || seconds < 1 || seconds > 3600 || game.period?.phase === 'interval') throw new Error('Avance de 1 a 3.600 segundos durante um período em andamento.')

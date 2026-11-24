@@ -2,6 +2,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createLocalTestSession } from '../src/utils/localTestSession.js'
 import { matchPeriod } from '../src/utils/matchPeriods.js'
+import { SCHOOL_CLASSES } from '../src/utils/schoolClasses.js'
+import { matchDecadeIdentities } from '../src/utils/decadeIdentities.js'
 
 function setup() {
   let time = new Date('2026-11-13T15:00:00Z').getTime(), serial = 0
@@ -91,4 +93,58 @@ test('local presence removes absent goal authors and finalizing a fixture never 
   assert.equal(game().status, 'finalizado'); assert.equal(game().clock.runningSince, null)
   assert.equal(game('teste-handebol-1').status, 'encerrado')
   await assert.rejects(score(game().id, 'B'), /encerrado/)
+})
+
+test('all fourteen classes can be previewed on either side and each fixture retains its selection after a reset', () => {
+  const { session, game } = setup(), second = setup()
+  const otherGame = structuredClone(game('teste-basquete-2'))
+  for (const item of SCHOOL_CLASSES) {
+    const opponent = item.code === '6-a' ? '6-b' : '6-a'
+    session.selectTeams('teste-basquete-1', { A: item.code, B: opponent })
+    assert.equal(matchDecadeIdentities(game('teste-basquete-1')).A.code, item.code)
+    session.selectTeams('teste-basquete-1', { A: opponent, B: item.code })
+    assert.equal(matchDecadeIdentities(game('teste-basquete-1')).B.code, item.code)
+  }
+  session.selectTeams('teste-basquete-1', { A: '3-a', B: '8-b' })
+  session.selectTeams('teste-volei-2', { A: '1-a', B: '2-b' })
+  assert.equal(matchDecadeIdentities(game('teste-basquete-1')).A.accent, '#ff69b4')
+  assert.equal(matchDecadeIdentities(game('teste-basquete-1')).B.accent, '#ff69b4')
+  assert.deepEqual(game('teste-basquete-2'), otherGame)
+  assert.equal(second.game('teste-basquete-1').timeA, '7º A')
+  session.reset()
+  assert.equal(game('teste-basquete-1').timeA, '3º A')
+  assert.equal(game('teste-basquete-1').timeB, '8º B')
+  assert.equal(game('teste-volei-2').timeB, '2º B')
+})
+
+test('changing test teams preserves goals, cards, clock, presence and fictitious players, including undo', async () => {
+  const { session, game, score } = setup()
+  session.advance(game().id)
+  await score(game().id)
+  const report = await session.api.loadMatchReport(game())
+  await session.api.saveDisciplinaryRecord(game().teamIdB, { gameId: game().id, playerId: report.playersB[0].id, type: 'yellow', reason: 'Teste de cartão.' })
+  const before = structuredClone(game()), snapshot = session.getSnapshot()
+  session.selectTeams(game().id, { A: '3-a', B: '8-b' })
+  for (const key of ['liveScoreA', 'liveScoreB', 'liveEvents', 'publicCardEvents', 'scorerStats', 'clock', 'scoreRevision', 'attendanceSummary', 'teamIdA', 'teamIdB']) assert.deepEqual(game()[key], before[key], key)
+  assert.equal(snapshot.games.find((item) => item.id === game().id).timeA, '9º A')
+  assert.deepEqual(await session.api.loadMatchReport(game()), report)
+  assert.equal(session.getSnapshot().teams.find((team) => team.id === game().teamIdA).nome, '3º A')
+  await score(game().id, 'B')
+  await session.api.undoLiveEvent({ gameId: game().id, eventId: game().lastScoreEventId, expectedScoreRevision: game().scoreRevision })
+  assert.equal(game().liveScoreA, 1)
+  assert.equal(game().liveScoreB, 0)
+  assert.equal(game().timeA, '3º A')
+  assert.equal(game().publicCardEvents.length, 1)
+  session.reset()
+  assert.equal(game().timeA, '3º A')
+  assert.equal(game().liveScoreA, 0)
+  assert.equal(game().publicCardEvents.length, 0)
+  assert.equal((await session.api.loadMatchReport(game())).playersA[0].nome, 'Ana Beatriz de Teste')
+})
+
+test('team selectors reject official IDs, missing classes and duplicated opponents without changing the session', () => {
+  const { session, game } = setup(), before = session.getSnapshot()
+  assert.throws(() => session.selectTeams('official-game', { A: '3-a', B: '8-b' }), /somente os jogos fictícios/)
+  for (const selection of [undefined, { A: '3-a' }, { A: '4-a', B: '8-b' }, { A: '3-a', B: '3-a' }]) assert.throws(() => session.selectTeams(game().id, selection), /Escolha/)
+  assert.equal(session.getSnapshot(), before)
 })

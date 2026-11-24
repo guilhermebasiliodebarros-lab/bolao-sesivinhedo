@@ -17,7 +17,7 @@ const palettes = Object.freeze({
   red: Object.freeze({ color: 'Vermelho', accent: '#ff3548', secondary: '#ff5e38', background: '#4d0019', wash: '#780020', swatch: '#ff3548' }),
   olive: Object.freeze({ color: 'Verde / militar', accent: '#b6dc26', secondary: '#71c831', background: '#182c09', wash: '#314f0b', swatch: '#8fba14' }),
   blue: Object.freeze({ color: 'Azul', accent: '#329dff', secondary: '#00ddff', background: '#061b50', wash: '#083c89', swatch: '#1a8cff' }),
-  silver: Object.freeze({ color: 'Prata / rosa', accent: '#f4f7ff', secondary: '#ff3db6', background: '#321044', wash: '#621358', swatch: '#ff3db6' }),
+  pink: Object.freeze({ color: 'Rosa pink', accent: '#ff69b4', secondary: '#ff90c8', background: '#50102f', wash: '#8f2057', swatch: '#ff69b4' }),
   ink: Object.freeze({ color: 'Preto', accent: '#f0f2f5', secondary: '#8d99a8', background: '#070709', wash: '#202127', swatch: '#08080a' }),
   purple: Object.freeze({ color: 'Roxo', accent: '#c450ff', secondary: '#de64ff', background: '#300d4e', wash: '#551178', swatch: '#aa35ff' }),
 })
@@ -25,11 +25,11 @@ const palettes = Object.freeze({
 const assignments = [
   ['6-a', '6º A', 'tarde', 70, 'gold'], ['6-b', '6º B', 'tarde', 60, 'orange'],
   ['7-a', '7º A', 'tarde', 50, 'red'], ['7-b', '7º B', 'tarde', 90, 'olive'],
-  ['8-a', '8º A', 'tarde', 80, 'blue'], ['8-b', '8º B', 'tarde', 2000, 'silver'],
+  ['8-a', '8º A', 'tarde', 80, 'blue'], ['8-b', '8º B', 'tarde', 2000, 'pink'],
   ['9-a', '9º A', 'manha', 60, 'orange'], ['9-b', '9º B', 'manha', 70, 'ink'],
   ['1-a', '1º A', 'manha', 20, 'gold'], ['1-b', '1º B', 'manha', 50, 'red'],
   ['2-a', '2º A', 'manha', 90, 'olive'], ['2-b', '2º B', 'manha', 80, 'blue'],
-  ['3-a', '3º A', 'manha', 2000, 'silver'], ['3-b', '3º B', 'manha', 40, 'purple'],
+  ['3-a', '3º A', 'manha', 2000, 'pink'], ['3-b', '3º B', 'manha', 40, 'purple'],
 ]
 
 export const CLASS_DECADE_IDENTITIES = Object.freeze(Object.fromEntries(assignments.map(([code, className, shift, decade, palette]) => [code, Object.freeze({ code, className, shift, palette, known: true, ...DECADE_STYLES[decade], ...palettes[palette] })])))

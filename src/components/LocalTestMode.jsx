@@ -3,10 +3,35 @@ import { useAuth } from '../context/useAuth.js'
 import { MatchOperationsContext } from '../context/match-operations-context.js'
 import { createLocalTestSession, TEST_SPORTS } from '../utils/localTestSession.js'
 import { getMatchState, MATCH_STATE } from '../utils/match.js'
+import { SCHOOL_CLASSES, schoolClassCode } from '../utils/schoolClasses.js'
+import { SCHOOL_SHIFTS } from '../utils/schoolShifts.js'
+import { classDecadeIdentity } from '../utils/decadeIdentities.js'
 import useModalDialog from '../hooks/useModalDialog.js'
 import RefereePanel from './RefereePanel.jsx'
 import ScoreboardMatch from './ScoreboardMatch.jsx'
 import './LocalTestMode.css'
+
+function TestTeamPicker({ game, onChange }) {
+  const selection = { A: schoolClassCode(game.timeA), B: schoolClassCode(game.timeB) }
+  return <fieldset className="local-test-team-picker">
+    <legend>Equipes para testar o placar</legend>
+    <p>Escolha entre as 14 turmas para comparar cores e décadas. O placar e os lances de teste são mantidos.</p>
+    <div className="local-test-team-fields">{['A', 'B'].map((side) => {
+      const identity = classDecadeIdentity(game[`time${side}`])
+      const id = `test-team-${game.id}-${side}`
+      return <div className="local-test-team-field" key={side}>
+        <label htmlFor={id}>Equipe {side}</label>
+        <select id={id} value={selection[side]} aria-describedby={`${id}-identity`} onChange={(event) => onChange({ ...selection, [side]: event.target.value })}>
+          {SCHOOL_SHIFTS.map((shift) => <optgroup label={shift.label} key={shift.id}>{SCHOOL_CLASSES.filter((item) => item.turno === shift.id).map((item) => {
+            const theme = classDecadeIdentity(item.nome)
+            return <option value={item.code} disabled={item.code === selection[side === 'A' ? 'B' : 'A']} key={item.code}>{item.nome} · {theme.label} · {theme.color}</option>
+          })}</optgroup>)}
+        </select>
+        <span className="local-test-team-identity" id={`${id}-identity`}><i style={{ backgroundColor: identity.swatch }} aria-hidden="true" />{identity.label} · {identity.color}</span>
+      </div>
+    })}</div>
+  </fieldset>
+}
 
 function TestPreview({ games, now, full = false, onExpand, tools }) {
   return <section className={`scoreboard-screen local-test-preview${full ? ' is-full' : ' is-embedded'}`} aria-label="TV de teste">
@@ -59,10 +84,13 @@ export default function LocalTestMode({ onClose }) {
       <div className="local-test-heading"><div><span className="eyebrow">Teste dentro do sistema</span><h2>Experimente antes dos jogos.</h2><p>Marque gols, pontos e cartões nos alunos fictícios e acompanhe a prévia da TV ao lado.</p></div><button className="btn btn-outline" type="button" onClick={onClose}>Sair do modo teste</button></div>
       <div className="local-test-notice" role="status"><strong>MODO TESTE · DADOS FICTÍCIOS</strong><span>Os comandos valem apenas nesta sessão. Não alteram jogos, alunos, palpites ou a TV oficial. Ao sair, os testes são descartados.</span></div>
       <div className="local-test-actions"><nav className="segmented-control" aria-label="Esporte do teste">{TEST_SPORTS.map((item) => <button type="button" key={item.id} className={item.id === sport ? 'is-active' : ''} aria-pressed={item.id === sport} onClick={() => { setSport(item.id); setSelectedId(`teste-${item.id}-1`); setMessage('') }}>{item.nome}{item.pairs.length === 2 ? ' · 2 jogos' : ''}</button>)}</nav><button type="button" className="btn btn-outline btn-small" onClick={() => { session.reset(); setNow(new Date()); setMessage('Os seis jogos fictícios foram reiniciados. Os jogos oficiais permanecem iguais.') }}>Reiniciar todos os testes</button></div>
-      <p className="local-test-how">Escolha o esporte, toque no nome do aluno para marcar e abra <strong>Cartões da partida</strong> para testar amarelo e vermelho. Use <strong>Ampliar TV de teste</strong> para ver a apresentação maior.</p>
+      <p className="local-test-how">Escolha o esporte e as equipes, toque no nome do aluno para marcar e abra <strong>Cartões da partida</strong> para testar amarelo e vermelho. Use <strong>Ampliar TV de teste</strong> para ver a apresentação maior. Ao reiniciar os testes, as equipes escolhidas são mantidas.</p>
       {message ? <p className="alert" role="status">{message}</p> : null}
       <div className="local-test-columns">
         <div className="local-test-operation"><div className="local-test-operation-heading"><h3>Operar jogo de teste</h3>{games.length === 2 ? <label>Jogo para operar<select value={game.id} onChange={(event) => setSelectedId(event.target.value)}>{games.map((item, index) => <option key={item.id} value={item.id}>Jogo {index + 1}: {item.timeA} × {item.timeB}</option>)}</select></label> : null}<button type="button" className="btn btn-outline btn-small" disabled={getMatchState(game) !== MATCH_STATE.LIVE || game.period?.phase === 'interval'} onClick={advance}>Adiantar 1 minuto neste jogo</button></div>
+          <TestTeamPicker game={game} onChange={(selection) => {
+            try { session.selectTeams(game.id, selection); setMessage('') } catch (error) { setMessage(error.message) }
+          }} />
           <div className="local-test-control-scroll"><RefereePanel key={`${snapshot.generation}:${game.id}`} game={game} teams={snapshot.teams} user={user} onSaved={() => setMessage('Resultado do jogo de teste publicado somente na prévia. Reinicie os testes para jogar novamente.')} /></div>
         </div>
         <div className="local-test-preview-wrap"><TestPreview games={games} now={now} onExpand={() => setExpanded(true)} /></div>

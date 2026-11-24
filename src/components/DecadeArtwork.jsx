@@ -20,7 +20,7 @@ function DecadeArtwork({ decade }) {
   return <svg className="decade-artwork" viewBox="0 0 420 560" preserveAspectRatio="xMidYMid meet" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true" focusable="false">
     <defs>
       <pattern id={grain} width="17" height="17" patternUnits="userSpaceOnUse"><path d="M2 1h1M11 8h2M6 14h1" strokeWidth="1" /></pattern>
-      <linearGradient id={metallic} x1="0" y1="0" x2="1" y2="1"><stop stopColor="#ffffff" /><stop offset=".25" stopColor="#9aa8c0" /><stop offset=".5" stopColor="#ff53be" /><stop offset=".72" stopColor="#e7f0ff" /><stop offset="1" stopColor="#ff2da6" /></linearGradient>
+      <linearGradient id={metallic} x1="0" y1="0" x2="1" y2="1"><stop stopColor="var(--era-secondary)" /><stop offset=".25" stopColor="#eb338f" /><stop offset=".5" stopColor="var(--era-accent)" /><stop offset=".72" stopColor="#ffb3d9" /><stop offset="1" stopColor="#db1c78" /></linearGradient>
     </defs>
     {decade === 20 ? <g className="era-art-deco">
       <path d="M16 160V18h134l60 60 60-60h134v142M28 152V30h115l67 67 67-67h115v122M40 143V42h96l74 74 74-74h96v101" />

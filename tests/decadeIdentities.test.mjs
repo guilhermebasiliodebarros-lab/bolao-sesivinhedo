@@ -8,11 +8,11 @@ test('all fourteen classes receive exactly the requested decade, color and schoo
   const expected = [
     ['6º A', 70, 'gold', 'tarde'], ['6º B', 60, 'orange', 'tarde'],
     ['7º A', 50, 'red', 'tarde'], ['7º B', 90, 'olive', 'tarde'],
-    ['8º A', 80, 'blue', 'tarde'], ['8º B', 2000, 'silver', 'tarde'],
+    ['8º A', 80, 'blue', 'tarde'], ['8º B', 2000, 'pink', 'tarde'],
     ['9º A', 60, 'orange', 'manha'], ['9º B', 70, 'ink', 'manha'],
     ['1º A', 20, 'gold', 'manha'], ['1º B', 50, 'red', 'manha'],
     ['2º A', 90, 'olive', 'manha'], ['2º B', 80, 'blue', 'manha'],
-    ['3º A', 2000, 'silver', 'manha'], ['3º B', 40, 'purple', 'manha'],
+    ['3º A', 2000, 'pink', 'manha'], ['3º B', 40, 'purple', 'manha'],
   ]
   assert.equal(Object.keys(CLASS_DECADE_IDENTITIES).length, SCHOOL_CLASSES.length)
   for (const [name, decade, palette, shift] of expected) {

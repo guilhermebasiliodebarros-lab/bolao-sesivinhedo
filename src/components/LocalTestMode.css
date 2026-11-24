@@ -14,6 +14,15 @@
 .local-test-operation-heading h3 { margin: 0; font-size: 18px; }
 .local-test-operation-heading label { display: grid; gap: 6px; font-size: 13px; }
 .local-test-operation-heading select { width: 100%; min-width: 0; }
+.local-test-team-picker { min-width: 0; margin: 16px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.local-test-team-picker legend { padding: 0 5px; font-size: 14px; font-weight: 750; }
+.local-test-team-picker > p { margin: 0 0 12px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.local-test-team-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.local-test-team-field { display: grid; align-content: start; gap: 7px; min-width: 0; }
+.local-test-team-field label { font-size: 13px; font-weight: 650; }
+.local-test-team-field select { width: 100%; min-width: 0; }
+.local-test-team-identity { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.local-test-team-identity i { width: 12px; height: 12px; flex-shrink: 0; border: 1px solid #0003; border-radius: 50%; }
 .local-test-control-scroll { max-height: 770px; overflow: auto; padding: 16px; }
 .local-test-operation .referee-scoreboard strong { font-size: 58px; }
 .local-test-operation .referee-scoreboard > div > span { font-size: 24px; }
@@ -66,3 +75,4 @@
 .local-test-screen-message { position: fixed; bottom: 20px; left: 20px; background: #273748; padding: 12px; color: #fff; border-radius: 8px; }
 @media (max-width: 1100px) { .local-test-columns { grid-template-columns: 1fr; } .local-test-preview-wrap { position: static; } .local-test-control-scroll { max-height: 600px; } .local-test-preview.is-embedded { height: 650px; } }
 @media (max-width: 600px) { .local-test-heading { flex-direction: column; } .local-test-control-scroll { max-height: 600px; padding: 10px; } .local-test-preview.is-embedded { height: auto; min-height: 500px; } .is-embedded .sb-match { min-height: 330px; } .local-test-preview.is-full { height: auto; min-height: 100dvh; } .local-test-tv-tools { flex-wrap: wrap; } }
+@media (max-width: 600px) { .local-test-team-picker { margin: 12px 10px; } .local-test-team-fields { grid-template-columns: 1fr; } }
