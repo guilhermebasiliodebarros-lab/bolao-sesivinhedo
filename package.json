@@ -21,7 +21,8 @@
     "validar:melhorias": "node scripts/validate-improvements.mjs",
     "validar:evolucao": "node scripts/validate-evolution.mjs",
     "check:functions": "npm --prefix functions run check",
-    "agenda:oficial": "node scripts/sync-official-schedule.mjs"
+    "agenda:oficial": "node scripts/sync-official-schedule.mjs",
+    "inscricoes:sincronizar": "node scripts/sync-rosters.mjs"
   },
   "dependencies": {
     "firebase": "^12.15.0",

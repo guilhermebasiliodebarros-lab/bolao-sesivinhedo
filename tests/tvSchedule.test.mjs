@@ -64,9 +64,11 @@ test('compact TV pages show two live games at a time while retaining all simulta
   assert.deepEqual(new Set(schedule.pages.flatMap((page) => page.games.map((game) => game.id))), new Set(games.map((game) => game.id)))
 })
 
-test('player registration keeps names, positions and captains without shirt numbers', () => {
-  assert.deepEqual(normalizePlayerInput({ nome: '  Ana   Silva ', posicao: ' Levantadora ', capitao: true }), { nome: 'Ana Silva', posicao: 'Levantadora', capitao: true })
-  assert.equal(normalizePlayerInput({ nome: 'Aluno de xadrez' }).posicao, '')
+test('player registration uses only starter or reserve and defaults unspecified players to starters', () => {
+  assert.deepEqual(normalizePlayerInput({ nome: '  Ana   Silva ', posicao: ' Reserva ', capitao: true }), { nome: 'Ana Silva', posicao: 'Reserva', capitao: true })
+  assert.equal(normalizePlayerInput({ nome: 'Aluno de xadrez' }).posicao, 'Titular')
+  assert.equal(normalizePlayerInput({ nome: 'Aluno', posicao: 'titulares' }).posicao, 'Titular')
+  assert.throws(() => normalizePlayerInput({ nome: 'Aluno', posicao: 'Goleiro' }), /Titular ou Reserva/)
   assert.equal('numero' in normalizePlayerInput({ nome: 'Aluno', numero: '07' }), false)
   assert.throws(() => normalizePlayerInput({ nome: ' ' }), /nome/)
 })

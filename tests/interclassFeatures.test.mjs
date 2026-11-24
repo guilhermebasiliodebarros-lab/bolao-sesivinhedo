@@ -110,9 +110,11 @@ test('TV separates cancelled and postponed matches from the live and upcoming ag
   assert.deepEqual(new Set(schedule.pages.find((page) => page.kind === 'changes').games.map((game) => game.id)), new Set(['p', 'c']))
 })
 
-test('roster previews parse Word-style tables, text lists, captains and duplicates', () => {
-  const rows = parseRosterText('Nome\tPosição\tCapitão\nAna Silva\tGoleira\tSim\nBruno Souza\t\tSim\nAna Silva\t\tNão', [{ nome: 'Bruno Souza' }])
+test('roster previews parse starter/reserve tables, text lists, legacy captain metadata and duplicates', () => {
+  const rows = parseRosterText('Nome\tPosição\tCapitão\nAna Silva\tReserva\tSim\nBruno Souza\t\tSim\nAna Silva\t\tNão', [{ nome: 'Bruno Souza' }])
   assert.equal(rows[0].nome, 'Ana Silva')
+  assert.equal(rows[0].posicao, 'Reserva')
+  assert.equal(rows[1].posicao, 'Titular')
   assert.equal(rows[0].capitao, true)
   assert.equal(rows[1].capitao, true)
   assert.equal(rows[1].selected, false)
