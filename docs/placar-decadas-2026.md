@@ -13,6 +13,8 @@ O placar e o Modo TV exigem login. Em cada navegador da transmissão, entre com 
 
 A programação rotativa do **Modo TV** também identifica as décadas com seus ícones, cores e fontes, em uma apresentação compacta.
 
+As paletas das 14 turmas usam tons vivos e saturados, com molduras sólidas e ilustrações sem a transparência geral que deixava as cores apagadas. O laranja tem faixas fortes em laranja e âmbar; prata/rosa mantém o acabamento metálico com rosa mais intenso. Os fundos recebem a cor da turma, e uma sombra central preserva a leitura dos números. O mesmo ajuste aparece no placar, no Modo TV e nas prévias do modo de teste.
+
 ## Identidades das turmas
 
 | Turno | Turma | Década | Cor |

@@ -8,7 +8,7 @@
 .sb-match.is-decade-match::before { inset: 0 0 auto; width: 100%; height: 3px; background: linear-gradient(90deg, var(--side-a-accent) 0 50%, var(--side-b-accent) 50% 100%); }
 .sb-match.is-decade-match .sb-sport { color: #e6e7ed; }
 .sb-grid .sb-match.is-decade-match .sb-duel { gap: clamp(76px, 10cqw, 180px); align-items: stretch; }
-.sb-match.is-decade-match .sb-team { position: relative; isolation: isolate; justify-content: center; align-self: stretch; gap: clamp(7px, 1cqw, 16px); min-width: 0; min-height: 0; padding: clamp(18px, 2cqw, 40px) clamp(10px, 1.5cqw, 30px); overflow: hidden; color: #f6f6f5; border: 1px solid var(--era-line); border-radius: 16px; background: linear-gradient(160deg, var(--era-wash), transparent 60%), var(--era-background); }
+.sb-match.is-decade-match .sb-team { position: relative; isolation: isolate; justify-content: center; align-self: stretch; gap: clamp(7px, 1cqw, 16px); min-width: 0; min-height: 0; padding: clamp(18px, 2cqw, 40px) clamp(10px, 1.5cqw, 30px); overflow: hidden; color: #f6f6f5; border: 1px solid var(--era-line); border-radius: 16px; background: linear-gradient(160deg, var(--era-wash), var(--era-background) 70%), var(--era-background); }
 .decade-team { --era-font: var(--font); --era-tracking: -.025em; --era-name-style: normal; }
 .decade-team[data-era='20'] { --era-font: Georgia, 'Times New Roman', serif; --era-tracking: .04em; }
 .decade-team[data-era='40'] { --era-font: Georgia, 'Times New Roman', serif; --era-name-style: italic; --era-tracking: -.015em; }
@@ -18,25 +18,21 @@
 .decade-team[data-era='80'] { --era-font: Consolas, 'Courier New', monospace; --era-tracking: -.06em; }
 .decade-team[data-era='90'] { --era-font: 'Courier New', Consolas, monospace; --era-tracking: -.075em; }
 .decade-team[data-era='2000'] { --era-font: 'Trebuchet MS', Arial, sans-serif; --era-name-style: italic; --era-tracking: -.04em; }
-.sb-match.is-decade-match .sb-team::before { content: ''; position: absolute; inset: 6px; z-index: -1; pointer-events: none; border: 1px solid var(--era-line); border-radius: inherit; opacity: .5; }
-.sb-match.is-decade-match .sb-team::after { content: ''; position: absolute; inset: 12% 0 0; z-index: -1; pointer-events: none; background: radial-gradient(ellipse at 50% 53%, #090d15d6, #090d15a6 38%, transparent 76%); }
-.decade-artwork { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; color: var(--era-accent); opacity: .5; pointer-events: none; }
+.sb-match.is-decade-match .sb-team::before { content: ''; position: absolute; inset: 6px; z-index: -1; pointer-events: none; border: 1px solid var(--era-line); border-radius: inherit; opacity: 1; }
+.sb-match.is-decade-match .sb-team::after { content: ''; position: absolute; inset: 12% 0 0; z-index: -1; pointer-events: none; background: radial-gradient(ellipse at 50% 53%, #090d1599, #090d1559 38%, transparent 76%); }
+.decade-artwork { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; color: var(--era-accent); opacity: 1; pointer-events: none; }
 .sb-match.is-decade-match .sb-team[data-era='20'] { border-radius: 3px; }
-.sb-match.is-decade-match .sb-team[data-era='20']::before { inset: 10px; opacity: .75; border-radius: 0; }
-.sb-match.is-decade-match .sb-team[data-era='40'] { border-radius: 5px; background-image: linear-gradient(180deg, #ffffff08, transparent 45%); }
-.sb-match.is-decade-match .sb-team[data-era='40'] .decade-artwork { opacity: .62; }
+.sb-match.is-decade-match .sb-team[data-era='20']::before { inset: 10px; border-radius: 0; }
+.sb-match.is-decade-match .sb-team[data-era='40'] { border-radius: 5px; background-image: linear-gradient(180deg, var(--era-wash), var(--era-background) 75%); }
 .sb-match.is-decade-match .sb-team[data-era='50'] { border-radius: 24px 24px 12px 12px; border-top: 3px solid var(--era-accent); box-shadow: inset 0 1px #fff5; }
 .sb-match.is-decade-match .sb-team[data-era='60'] { border-radius: 44px 18px 44px 18px; }
-.sb-match.is-decade-match .sb-team[data-era='60'] .decade-artwork { opacity: .35; }
 .sb-match.is-decade-match .sb-team[data-era='70'] { border-radius: 34px; }
-.sb-match.is-decade-match .sb-team[data-era='70'] .decade-artwork { opacity: .56; }
 .sb-match.is-decade-match .sb-team[data-era='80'] { border-radius: 5px; box-shadow: inset 0 0 24px #3e79e919; }
-.sb-match.is-decade-match .sb-team[data-era='80']::before { inset: 5px; border-color: var(--era-secondary); opacity: .5; }
+.sb-match.is-decade-match .sb-team[data-era='80']::before { inset: 5px; border-color: var(--era-secondary); }
 .sb-match.is-decade-match .sb-team[data-era='90'] { border-radius: 3px; border-style: dashed; }
 .sb-match.is-decade-match .sb-team[data-era='90']::before { inset: 8px; border-style: dotted; }
-.sb-match.is-decade-match .sb-team[data-era='2000'] { border-radius: 36px 16px 36px 16px; border-color: #ded7ed80; background-image: linear-gradient(135deg, #d0d8ec19, transparent 35%, #f4a2ce0d 100%); box-shadow: inset 0 1px #fff5, inset 0 -1px #f4a2ce44; }
-.sb-match.is-decade-match .sb-team[data-era='2000'] .decade-artwork { opacity: .72; }
-.sb-era-heading { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: clamp(8px, .8cqw, 18px); color: var(--era-accent); }
+.sb-match.is-decade-match .sb-team[data-era='2000'] { border-radius: 36px 16px 36px 16px; background-image: linear-gradient(135deg, var(--era-wash), var(--era-background) 60%, #7a164e); box-shadow: inset 0 1px #fff5, inset 0 -1px var(--era-secondary); }
+.sb-era-heading { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: clamp(8px, .8cqw, 18px); color: var(--era-accent); text-shadow: 0 2px 4px #000; }
 .decade-emblem { width: 32px; height: 32px; flex-shrink: 0; }
 .sb-era-title { display: grid; gap: 3px; text-align: left; }
 .sb-era-title > strong { font-family: var(--era-font); font-size: clamp(17px, 2cqw, 34px); font-weight: 800; font-style: var(--era-name-style); letter-spacing: var(--era-tracking); line-height: 1.15; }
@@ -48,7 +44,7 @@
 .sb-match.is-decade-match .sb-score > span[data-digits='5'] { font-size: .52em; }
 .sb-match.is-decade-match .sb-awaiting-score { position: relative; z-index: 1; color: #e8e6e0; font-size: min(calc(var(--sb-score-size) * .65), 18cqw, 22vh); }
 .sb-match.is-decade-match .sb-team-detail { position: relative; z-index: 1; color: #d2d2d2; }
-.sb-match.is-decade-match .sb-team-detail > b { color: var(--era-accent); }
+.sb-match.is-decade-match .sb-team-detail > b { color: var(--era-accent); text-shadow: 0 2px 4px #000; }
 .sb-match.is-decade-match .sb-vest { color: #c3c5cb; font-size: .8em; }
 .sb-grid .sb-match.is-decade-match .sb-duel-center { z-index: 2; width: clamp(84px, 9cqw, 164px); padding: clamp(10px, 1.3cqw, 20px) 6px; border: 1px solid #ffffff26; border-radius: 12px; background: #10151f; box-shadow: 0 8px 28px #0005; }
 .sb-match.is-decade-match .sb-match-clock { color: #f7f3e7; font-variant-numeric: tabular-nums; }
@@ -64,9 +60,9 @@
 .sb-match.is-decade-match .sb-incidents-team.is-A { --incident-accent: var(--side-a-accent); }
 .sb-match.is-decade-match .sb-incidents-team.is-B { --incident-accent: var(--side-b-accent); }
 .sb-match.is-decade-match .sb-incidents-team-heading > strong, .sb-match.is-decade-match .sb-incidents-team .sb-incident-ball { color: var(--incident-accent); }
-.sb-match.is-decade-match .sb-match-note .sb-note-line:first-child { background: var(--side-a-accent); }
-.sb-match.is-decade-match .sb-match-note .sb-note-line:last-child { background: var(--side-b-accent); }
-.tv-team.tv-decade-team { padding: 8px 4px; border-block: 1px solid var(--era-line); }
+.sb-match.is-decade-match .sb-match-note .sb-note-line:first-child { background: var(--side-a-accent); opacity: 1; }
+.sb-match.is-decade-match .sb-match-note .sb-note-line:last-child { background: var(--side-b-accent); opacity: 1; }
+.tv-team.tv-decade-team { padding: 8px 4px; border-block: 1px solid var(--era-line); background: linear-gradient(160deg, var(--era-wash), var(--era-background)); }
 .tv-team.tv-decade-team > strong { font-family: var(--era-font); font-style: var(--era-name-style); letter-spacing: var(--era-tracking); }
 .tv-era-label { display: inline-flex; align-items: center; justify-content: center; gap: 6px; color: var(--era-accent); font-size: 11px; font-weight: 650; }
 .tv-era-label .decade-emblem { width: 20px; height: 20px; }

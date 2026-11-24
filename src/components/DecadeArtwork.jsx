@@ -20,7 +20,7 @@ function DecadeArtwork({ decade }) {
   return <svg className="decade-artwork" viewBox="0 0 420 560" preserveAspectRatio="xMidYMid meet" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true" focusable="false">
     <defs>
       <pattern id={grain} width="17" height="17" patternUnits="userSpaceOnUse"><path d="M2 1h1M11 8h2M6 14h1" strokeWidth="1" /></pattern>
-      <linearGradient id={metallic} x1="0" y1="0" x2="1" y2="1"><stop stopColor="#fefbff" /><stop offset=".25" stopColor="#8e87a2" /><stop offset=".5" stopColor="#f3d9ef" /><stop offset=".72" stopColor="#adb4c8" /><stop offset="1" stopColor="#f4a2ce" /></linearGradient>
+      <linearGradient id={metallic} x1="0" y1="0" x2="1" y2="1"><stop stopColor="#ffffff" /><stop offset=".25" stopColor="#9aa8c0" /><stop offset=".5" stopColor="#ff53be" /><stop offset=".72" stopColor="#e7f0ff" /><stop offset="1" stopColor="#ff2da6" /></linearGradient>
     </defs>
     {decade === 20 ? <g className="era-art-deco">
       <path d="M16 160V18h134l60 60 60-60h134v142M28 152V30h115l67 67 67-67h115v122M40 143V42h96l74 74 74-74h96v101" />
@@ -44,7 +44,7 @@ function DecadeArtwork({ decade }) {
       {Array.from({ length: 14 }, (_, index) => <rect key={index} x={(index % 7) * 60} y={index < 7 ? 530 : 545} width="30" height="15" fill="currentColor" opacity=".45" transform={index < 7 ? '' : 'translate(30 0)'} />)}
       <path d="M18 160V19h133M402 390v130H269" strokeWidth="3" />
     </g> : decade === 60 ? <g className="era-art-psychedelic">
-      {[0, 1, 2, 3, 4].map((index) => <path key={index} d={`M${-170 + index * 30} 560C${-35 + index * 30} 440 ${-20 + index * 30} 470 ${20 + index * 30} 360S${15 + index * 30} 170 ${150 + index * 30} 90S${310 + index * 30} 80 ${450 + index * 30} -50`} strokeWidth="17" stroke={index % 2 ? 'var(--era-secondary)' : 'currentColor'} opacity={index % 2 ? '.5' : '.7'} />)}
+      {[0, 1, 2, 3, 4].map((index) => <path key={index} d={`M${-170 + index * 30} 560C${-35 + index * 30} 440 ${-20 + index * 30} 470 ${20 + index * 30} 360S${15 + index * 30} 170 ${150 + index * 30} 90S${310 + index * 30} 80 ${450 + index * 30} -50`} strokeWidth="17" stroke={index % 2 ? 'var(--era-secondary)' : 'currentColor'} />)}
       <g transform="translate(335 453)">{[0, 45, 90, 135, 180, 225, 270, 315].map((angle) => <ellipse key={angle} cy="-32" rx="14" ry="28" transform={`rotate(${angle})`} />)}<circle r="15" fill="currentColor" fillOpacity=".25" /></g>
       <g transform="translate(64 73)"><circle r="51" /><circle r="35" /><circle r="19" /></g>
     </g> : decade === 70 ? <g className="era-art-disco">

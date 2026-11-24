@@ -12,14 +12,14 @@ export const DECADE_STYLES = Object.freeze({
 })
 
 const palettes = Object.freeze({
-  gold: Object.freeze({ color: 'Dourado / amarelo', accent: '#f4ca69', secondary: '#ffe8ac', background: '#252013', swatch: '#e5bb45' }),
-  orange: Object.freeze({ color: 'Laranja', accent: '#ffa15d', secondary: '#f9cb82', background: '#2c1a13', swatch: '#ed803c' }),
-  red: Object.freeze({ color: 'Vermelho', accent: '#ff7c83', secondary: '#f2b7b1', background: '#2c141c', swatch: '#d63a49' }),
-  olive: Object.freeze({ color: 'Verde / militar', accent: '#b9d084', secondary: '#8fba91', background: '#1b241b', swatch: '#788c47' }),
-  blue: Object.freeze({ color: 'Azul', accent: '#78a9ff', secondary: '#79e7ff', background: '#121e38', swatch: '#367ee0' }),
-  silver: Object.freeze({ color: 'Prata / rosa', accent: '#e5def2', secondary: '#f4a2ce', background: '#251b2d', swatch: '#e9afce' }),
-  ink: Object.freeze({ color: 'Preto', accent: '#d2d1cb', secondary: '#929597', background: '#101114', swatch: '#151515' }),
-  purple: Object.freeze({ color: 'Roxo', accent: '#d1b1ef', secondary: '#b5a2d4', background: '#231b30', swatch: '#9a6ac1' }),
+  gold: Object.freeze({ color: 'Dourado / amarelo', accent: '#ffca05', secondary: '#ffdf38', background: '#382000', wash: '#704300', swatch: '#ffca05' }),
+  orange: Object.freeze({ color: 'Laranja', accent: '#ff7a00', secondary: '#ffb000', background: '#4a1500', wash: '#862700', swatch: '#ff7a00' }),
+  red: Object.freeze({ color: 'Vermelho', accent: '#ff3548', secondary: '#ff5e38', background: '#4d0019', wash: '#780020', swatch: '#ff3548' }),
+  olive: Object.freeze({ color: 'Verde / militar', accent: '#b6dc26', secondary: '#71c831', background: '#182c09', wash: '#314f0b', swatch: '#8fba14' }),
+  blue: Object.freeze({ color: 'Azul', accent: '#329dff', secondary: '#00ddff', background: '#061b50', wash: '#083c89', swatch: '#1a8cff' }),
+  silver: Object.freeze({ color: 'Prata / rosa', accent: '#f4f7ff', secondary: '#ff3db6', background: '#321044', wash: '#621358', swatch: '#ff3db6' }),
+  ink: Object.freeze({ color: 'Preto', accent: '#f0f2f5', secondary: '#8d99a8', background: '#070709', wash: '#202127', swatch: '#08080a' }),
+  purple: Object.freeze({ color: 'Roxo', accent: '#c450ff', secondary: '#de64ff', background: '#300d4e', wash: '#551178', swatch: '#aa35ff' }),
 })
 
 const assignments = [
@@ -53,6 +53,6 @@ export function decadeTeamStyle(identity) {
   return {
     '--era-accent': identity.accent, '--era-secondary': identity.secondary,
     '--era-background': identity.background, '--era-swatch': identity.swatch,
-    '--era-line': `${identity.accent}55`, '--era-wash': `${identity.accent}12`,
+    '--era-line': identity.accent, '--era-wash': identity.wash || identity.background,
   }
 }
