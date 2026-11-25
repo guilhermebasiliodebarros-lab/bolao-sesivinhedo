@@ -47,16 +47,31 @@ test('reimporting is idempotent even when Firestore returns source map keys in a
   assert(!next.changes.some((change) => change.path.startsWith('teams/9-b')))
 })
 
-test('missing FIFA and RPG get separate sports and school teams without inventing matches or sharing players', () => {
-  const input = initial(), file = manifest([group('9-b', [{ nome: 'Mesmo aluno' }], 'fifa'), group('9-b', [{ nome: 'Mesmo aluno' }], 'rpg')])
+test('missing active sports get separate school teams without inventing matches or sharing players', () => {
+  const input = initial(), file = manifest([group('9-b', [{ nome: 'Mesmo aluno' }], 'volei'), group('9-b', [{ nome: 'Mesmo aluno' }], 'xadrez')])
   const plan = buildRosterSyncPlan(input, file), after = applyPlan(input, plan)
   assert.equal(plan.summary.createSports, 2)
   assert.equal(plan.summary.createTeams, 28)
   assert.equal(plan.summary.createPlayers, 2)
-  assert.equal(after.sports.find((sport) => sport.nome === 'FIFA').scoringMode, 'goals')
-  assert.equal(after.sports.find((sport) => sport.nome === 'RPG').scoringMode, 'points')
+  assert.equal(after.sports.find((sport) => sport.nome === 'Vôlei').scoringMode, 'sets')
+  assert.equal(after.sports.find((sport) => sport.nome === 'Xadrez').scoringMode, 'chess')
   assert.notEqual(after.players[0].teamId, after.players[1].teamId)
   assert(plan.changes.every((change) => /^(sports|teams)\//.test(change.path)))
+  assert.equal(buildRosterSyncPlan(after, file).changes.length, 0)
+})
+
+test('old registrations cannot recreate RPG, FIFA or afternoon Mancala', () => {
+  const input = initial(), before = structuredClone(input)
+  const rows = [{ nome: 'Aluno de teste' }]
+  const file = manifest([group('9-b', rows, 'rpg'), group('6-a', rows, 'rpg'), group('9-b', rows, 'fifa'), group('6-a', rows, 'fifa'), group('6-a', rows, 'mancala'), group('9-b', rows, 'mancala')])
+  const plan = buildRosterSyncPlan(input, file), after = applyPlan(input, plan)
+  assert.equal(plan.summary.createSports, 1)
+  assert.equal(plan.summary.createTeams, 8)
+  assert.equal(plan.summary.createPlayers, 1)
+  assert.equal(plan.summary.classes, 1)
+  assert(after.sports.every((sport) => !['RPG', 'FIFA'].includes(sport.nome)))
+  assert(after.teams.filter((team) => team.esporteNome === 'Mancala').every((team) => team.turno === 'manha'))
+  assert.deepEqual(input, before)
   assert.equal(buildRosterSyncPlan(after, file).changes.length, 0)
 })
 

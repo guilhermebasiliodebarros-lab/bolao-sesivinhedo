@@ -1,9 +1,11 @@
+import { parsePredictionPlayerKey } from './predictionPlayers.js'
+
 export const PREDICTION_DRAFT_EVENT = 'bolao:prediction-draft'
 export const predictionDraftKey = (userId, gameId) => userId && gameId ? `bolao:prediction-draft:v1:${encodeURIComponent(userId)}:${encodeURIComponent(gameId)}` : ''
 const stamp = (value) => value?.toMillis?.() ?? value?.getTime?.() ?? value ?? null
 
 export function predictionDraftScope(userId, game, prediction) {
-  return JSON.stringify([userId, game.id, game.timeA, game.timeB, game.teamIdA || '', game.teamIdB || '', game.seedLabelA || '', game.seedLabelB || '', game.scoringMode || '', game.volleyballBestOf || '', prediction ? [prediction.palpiteA, prediction.palpiteB, stamp(prediction.updatedAt)] : null])
+  return JSON.stringify([userId, game.id, game.timeA, game.timeB, game.teamIdA || '', game.teamIdB || '', game.seedLabelA || '', game.seedLabelB || '', game.scoringMode || '', game.volleyballBestOf || '', prediction ? [prediction.palpiteA, prediction.palpiteB, stamp(prediction.updatedAt), ...(prediction.topScorerPlayerId ? [prediction.topScorerTeamId, prediction.topScorerPlayerId, prediction.topScorerSide] : [])] : null])
 }
 
 export function parsePredictionDraft(raw, scope) {
@@ -12,6 +14,10 @@ export function parsePredictionDraft(raw, scope) {
   try {
     const draft = JSON.parse(raw)
     if (!Number.isFinite(draft.updatedAt) || !['palpiteA', 'palpiteB'].every((field) => typeof draft.value?.[field] === 'string' && /^(?:\d{1,5}(?:\.\d{0,2})?)?$/.test(draft.value[field]))) throw new Error('invalid')
+    if (draft.value.topScorer != null) {
+      if (typeof draft.value.topScorer !== 'string') throw new Error('invalid')
+      parsePredictionPlayerKey(draft.value.topScorer)
+    }
     if (draft.scope !== scope) return { draft: null, error: 'Há um rascunho antigo que não corresponde mais às equipes ou ao palpite enviado. Confira os dados atuais antes de editar.' }
     return { draft, error: '' }
   } catch { return { draft: null, error: 'Não foi possível recuperar o rascunho deste jogo.' } }

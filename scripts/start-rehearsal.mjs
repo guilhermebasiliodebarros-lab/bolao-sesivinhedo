@@ -62,11 +62,10 @@ process.on('SIGTERM', () => { stop(); process.exit(0) })
 process.on('exit', stop)
 
 try {
-  if (!existsSync(join(root, 'functions', 'node_modules', 'firebase-functions', 'package.json'))) throw new Error('Prepare a apuração local com npm ci --prefix functions e execute o ensaio novamente.')
-  for (const port of [9909, 8180, 5002, 9298, 4001, 4401, 4501, 5179]) await checkPort(port)
+  for (const port of [9909, 8180, 4001, 4401, 4501, 5179]) await checkPort(port)
   const env = await javaEnvironment()
-  console.log('Iniciando ensaio local: autenticação, banco e apuração de teste. Os dados oficiais não serão utilizados.')
-  const args = ['--yes', 'firebase-tools@15.36.0', 'emulators:start', '--project', PROJECT, '--only', 'auth,firestore,functions,eventarc', '--config', 'firebase.rehearsal.json', '--non-interactive']
+  console.log('Iniciando ensaio local no plano gratuito: autenticação e banco. A conta da organização apura os palpites no site. Os dados oficiais não serão utilizados.')
+  const args = ['--yes', 'firebase-tools@15.36.0', 'emulators:start', '--project', PROJECT, '--only', 'auth,firestore', '--config', 'firebase.rehearsal.json', '--non-interactive']
   const emulators = process.platform === 'win32'
     ? spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `npx ${args.join(' ')}`], { cwd: root, env, windowsHide: true, stdio: 'inherit' })
     : spawn('npx', args, { cwd: root, env, stdio: 'inherit' })
@@ -78,7 +77,7 @@ try {
     try {
       const response = await fetch('http://127.0.0.1:4401/emulators', { signal: AbortSignal.timeout(1000) })
       const endpoints = await response.json()
-      if (endpoints.auth && endpoints.firestore && endpoints.functions) {
+      if (endpoints.auth && endpoints.firestore) {
         const database = await fetch(`http://127.0.0.1:8180/v1/projects/${PROJECT}/databases/(default)/documents/games?pageSize=1`, { headers: { Authorization: 'Bearer owner' }, signal: AbortSignal.timeout(2000) })
         if (database.ok) { ready = true; break }
       }

@@ -1,4 +1,5 @@
-.quick-predictions { width: min(600px, calc(100% - 32px)); margin: 20px auto; padding-bottom: env(safe-area-inset-bottom); }
+.quick-predictions { width: min(var(--quick-content-width, 600px), calc(100% - 32px)); margin: 20px auto; padding-bottom: env(safe-area-inset-bottom); }
+.quick-prediction-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; align-items: start; }
 .quick-intro h1 { margin: 5px 0 8px; font-size: clamp(1.35rem, 5vw, 1.85rem); line-height: 1.2; }
 .quick-intro p, .quick-footnote { color: var(--muted); font-size: .85rem; line-height: 1.5; }
 .quick-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 18px 0 12px; }
@@ -52,5 +53,12 @@
 .quick-empty p { margin: 0; color: var(--muted); font-size: .9rem; line-height: 1.5; }
 .quick-predictions button:disabled { cursor: not-allowed; opacity: .55; }
 .quick-loading { padding: 24px 0; color: var(--muted); }
+@media (min-width: 701px) {
+  .quick-prediction-grid, .quick-predictions .skeleton-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .quick-prediction-card { min-width: 0; padding: 18px; }
+}
+@media (min-width: 1001px) {
+  .quick-prediction-grid, .quick-predictions .skeleton-card-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 @media (max-width: 430px) { .quick-app-header { gap: 8px; } .quick-app-header > div { flex-basis: 110px; } .quick-app-header > img { width: 60px; height: 40px; } .quick-app-header > button.btn { padding-inline: 10px; } }
 @media (max-width: 360px) { .quick-score-fields { grid-template-columns: 1fr; gap: 16px; } .quick-score-field > div { grid-template-columns: 50px minmax(0, 1fr) 50px; } .quick-score-field button { width: 50px; min-height: 52px; } .quick-score-field > label { min-height: auto; margin-bottom: 6px; } .quick-score-field input { min-height: 58px; } }

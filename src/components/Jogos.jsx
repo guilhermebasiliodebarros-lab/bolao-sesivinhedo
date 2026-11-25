@@ -5,7 +5,7 @@ import { getGameShift } from '../utils/schoolShifts.js'
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/useAuth.js'
 import { canEditPrediction, GAME_STATUS, subscribeGames, subscribeUserPredictions } from '../services/bolaoService.js'
-import { gameMatchesSearch, getGameStageLabel, getUniqueGamePhases } from '../utils/game.js'
+import { gameMatchesSearch, groupPredictionGames, getUniqueGamePhases } from '../utils/game.js'
 import SportFilter from './SportFilter.jsx'
 import { getMatchState, getMatchCondition, MATCH_STATE } from '../utils/match.js'
 import EmptyState from './EmptyState.jsx'
@@ -94,29 +94,11 @@ export default function Jogos({ onNavigate, onQuickMode, focusTarget }) {
         sportFilter === ALL_ITEMS_FILTER || game.sportId === sportFilter || game.esporteNome === sportFilter
       const matchesPhase = phaseFilter === ALL_ITEMS_FILTER || game.fase === phaseFilter
 
-      return (!focusedGame || game.id === focusedGame) && matchesStatus && matchesSport && matchesPhase && gameMatchesSearch(game, searchTerm)
+      return (!turno || getGameShift(game) === turno) && (!focusedGame || game.id === focusedGame) && matchesStatus && matchesSport && matchesPhase && gameMatchesSearch(game, searchTerm)
     })
-  }, [activeFilter, games, phaseFilter, searchTerm, sportFilter, now, focusedGame])
+  }, [activeFilter, games, phaseFilter, searchTerm, sportFilter, now, focusedGame, turno])
   useSearchFocus(focusedGame, !loading && (!isParticipant || predictionUser === user?.uid), 'game-')
-  const groupedGames = useMemo(() => {
-    const groups = new Map()
-
-    visibleGames.forEach((game) => {
-      const stage = getGameStageLabel(game)
-      const key = `${game.esporteNome}-${stage}`
-      const current = groups.get(key) || {
-        key,
-        esporteNome: game.esporteNome,
-        stage,
-        games: [],
-      }
-
-      current.games.push(game)
-      groups.set(key, current)
-    })
-
-    return [...groups.values()]
-  }, [visibleGames])
+  const groupedGames = useMemo(() => groupPredictionGames(visibleGames), [visibleGames])
 
   if (loading || (isParticipant && predictionUser !== user?.uid)) {
     return <LoadingState label="Buscando jogos…" variant="cards" count={6} error={error} />
@@ -193,7 +175,7 @@ export default function Jogos({ onNavigate, onQuickMode, focusTarget }) {
       ) : null}
 
       <div className="school-shift-filter"><ShiftSelector value={turno} onChange={setTurno} /></div>
-      <SportFilter games={games} value={sportFilter} onChange={setSportFilter} allValue={ALL_ITEMS_FILTER} />
+      <SportFilter games={games.filter((game) => !turno || getGameShift(game) === turno)} value={sportFilter} onChange={setSportFilter} allValue={ALL_ITEMS_FILTER} turno={turno} />
 
       <div className="segmented-control" role="tablist" aria-label="Filtro de jogos">
         {filters.map((filter) => (

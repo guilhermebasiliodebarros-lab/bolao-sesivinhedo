@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { calcularPontuacao, calculateGuessScore, hasFinalScore } from '../src/utils/scoring.js'
 
-for (const esporteNome of ['Futebol', 'Handebol', 'Basquete']) {
+for (const esporteNome of ['Futebol', 'Futsal', 'Handebol']) {
   test(`${esporteNome}: one point for the result and one extra only for both exact scores`, () => {
     const cases = [
       [2, 1, 2, 1, 2, true, true, 'exact'],
@@ -27,16 +27,15 @@ for (const esporteNome of ['Futebol', 'Handebol', 'Basquete']) {
   })
 }
 
-test('volleyball awards the bonus for exact sets, never just the number of sets with the wrong winner', () => {
+test('volleyball awards only the winner point for exact sets without a selected top scorer', () => {
   const scores = [[2, 0], [2, 1], [0, 2], [1, 2]]
   for (const [finalA, finalB] of scores) {
     const game = { esporteNome: 'Vôlei', placarA: finalA, placarB: finalB, setScores: [{ a: 25, b: 10 }] }
     for (const [a, b] of scores) {
       const sameWinner = (a > b) === (finalA > finalB)
-      const exact = a === finalA && b === finalB
-      const points = sameWinner ? exact ? 2 : 1 : 0
+      const points = sameWinner ? 1 : 0
       assert.deepEqual(calculateGuessScore(game, { palpiteA: a, palpiteB: b }), {
-        points, type: exact ? 'exact' : sameWinner ? 'result' : 'miss',
+        points, type: sameWinner ? 'result' : 'miss',
       })
     }
   }
@@ -46,7 +45,7 @@ test('volleyball awards the bonus for exact sets, never just the number of sets 
 test('chess awards one result point for a win or draw without an exact-score bonus', () => {
   for (const [a, b] of [[1, 0], [0.5, 0.5], [0, 1]]) {
     const game = { esporteNome: 'Xadrez', placarA: a, placarB: b }
-    assert.deepEqual(calcularPontuacao(a, b, a, b, game), { pontos: 1, acertoExato: false, acertoResultado: true, tipo: 'resultado' })
+    assert.deepEqual(calcularPontuacao(a, b, a, b, game), { pontos: 1, acertoExato: false, acertoResultado: true, acertoPontuador: false, tipo: 'resultado' })
     assert.deepEqual(calculateGuessScore(game, { palpiteA: a, palpiteB: b }), { points: 1, type: 'result' })
   }
   assert.deepEqual(calculateGuessScore({ esporteNome: 'Xadrez', placarA: 1, placarB: 0 }, { palpiteA: 0.5, palpiteB: 0.5 }), { points: 0, type: 'miss' })
@@ -67,6 +66,6 @@ test('missing, invalid, unfinished and voided scores never earn points', () => {
 })
 
 test('legacy score aliases and numeric input strings follow the same scoring rule', () => {
-  assert.deepEqual(calculateGuessScore({ esporteNome: 'Basquete', finalScoreA: 72, finalScoreB: 69 }, { guessA: '72', guessB: '69' }), { points: 2, type: 'exact' })
+  assert.deepEqual(calculateGuessScore({ esporteNome: 'Basquete', finalScoreA: 72, finalScoreB: 69 }, { guessA: '72', guessB: '69' }), { points: 1, type: 'result' })
   assert.equal(calcularPontuacao('2', '0', '2', '1').pontos, 1)
 })

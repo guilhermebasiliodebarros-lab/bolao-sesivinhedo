@@ -9,6 +9,7 @@ import EmptyState from './EmptyState.jsx'
 import LoadingState from './LoadingState.jsx'
 import PendingGuessBanner from './PendingGuessBanner.jsx'
 import MatchScore from './MatchScore.jsx'
+import { PredictionPlayerSummary } from './PredictionPlayerPicker.jsx'
 import { getMatchState, MATCH_STATE } from '../utils/match.js'
 
 export default function Palpites({ onNavigate }) {
@@ -99,6 +100,7 @@ export default function Palpites({ onNavigate }) {
                   <strong>
                     Palpite: {prediction.palpiteA} x {prediction.palpiteB}
                   </strong>
+                  {game ? <PredictionPlayerSummary game={game} prediction={prediction} /> : null}
                   {game && [MATCH_STATE.LIVE, MATCH_STATE.FINISHED].includes(getMatchState(game)) ? <div className="prediction-official-score"><small>{getMatchState(game) === MATCH_STATE.LIVE ? 'Placar ao vivo' : 'Resultado final'}</small><MatchScore game={game} /></div> : null}
                 </div>
                 <div>

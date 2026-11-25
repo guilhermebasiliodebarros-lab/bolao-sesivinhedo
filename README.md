@@ -86,14 +86,23 @@ Status de jogo:
 ## Pontuação dos palpites
 
 - Acertar o vencedor ou o empate vale **1 ponto**.
-- No futebol, handebol e basquete, acertar também os dois placares vale **mais 1 ponto**, totalizando **2 pontos**.
-- No vôlei, o palpite é o placar final em sets. O formato é sempre **melhor de 3**: vence quem ganhar 2 sets. Os únicos resultados finais são **2 × 0, 2 × 1, 0 × 2 e 1 × 2**. Acertar o vencedor vale 1 ponto; acertar também os sets vale mais 1, totalizando 2. As parciais em pontos não entram no palpite.
-- Acertar só o placar de uma equipe não dá bônus. Errar o resultado vale 0; acertar a quantidade de sets com o vencedor errado também vale 0.
+- No futebol/futsal e handebol, acertar também os dois placares vale **mais 1 ponto**, totalizando **2 pontos**.
+- No basquete e vôlei, acertar o **aluno que mais pontuar naquela partida** vale **1 ponto independente**. Quem errar a sala e acertar o aluno recebe 1; acertar os dois rende 2. O aluno pode ser de qualquer uma das duas salas. Em caso de empate na maior pontuação individual, qualquer aluno empatado vale o ponto. Acertar apenas o placar exato nesses esportes não dá bônus.
+- No vôlei, o placar continua em sets, sempre **melhor de 3**: **2 × 0, 2 × 1, 0 × 2 ou 1 × 2**. O aluno é apurado pela soma de seus pontos nos sets, usando os lançamentos por jogador, sem confundir pontos individuais com sets vencidos.
+- Futmesa, tênis de mesa, Mancala da manhã e demais modalidades sem bônus dão somente **1 ponto** pelo vencedor ou empate. Acertar só o placar de uma equipe não dá bônus.
 - No xadrez, acertar vitória ou empate vale **1 ponto**, sem bônus de placar exato.
 
 Exemplo: para um resultado de `2 × 1`, os palpites `2 × 1`, `2 × 0`, `3 × 0` e `0 × 1` no futebol rendem, respectivamente, **2, 1, 1 e 0 pontos**. Acertos exatos também contam entre os acertos de resultado. W.O. e cancelamentos anulam os palpites; o desempate por pênaltis/prorrogação permanece separado do placar usado no bolão.
 
-Após publicar esta versão, use **Painel master → Sistema → Apuração automática → Recalcular agora** uma vez para atualizar os resultados já finalizados. Novas finalizações e reaberturas também recalculam os totais gerais e por esporte. Esta versão exige publicar as **Cloud Functions, as regras e a interface**; configurações antigas de cinco sets passam a usar melhor de três.
+Ao encerrar uma partida pela conta da organização, o próprio site confere os palpites e atualiza o ranking geral e por esporte. A apuração é compatível com o plano gratuito: publique as regras e a interface, sem funções pagas. Mantenha a tela aberta até a confirmação. Se a sessão for interrompida, a próxima conta master conectada retoma a conferência automaticamente. **Painel master → Sistema → Apuração dos palpites → Recalcular agora** permite repetir a conferência.
+
+Em **Jogos** e **Palpite rápido**, basquete e vôlei mostram os jogadores cadastrados nas duas equipes, agrupados por sala, em **Aluno que mais pontuará**. A escolha é opcional e acompanha o rascunho, o envio, a edição e o histórico do participante. Sem elenco, o placar pode ser enviado e a escolha pode ser acrescentada até o fechamento. Palpites anteriores sem aluno continuam válidos para o ponto de resultado; nenhum nome é escolhido automaticamente.
+
+A organização deve lançar os pontos com autor em **Marcar por jogador**. O bônus usa `scorerStats` da partida finalizada, incluindo os valores de 1, 2 ou 3 pontos no basquete e todos os sets no vôlei. Sem autores válidos, com todos zerados ou após uma correção manual que reinicia os autores, o sistema não presume quem mais pontuou. A interface informa que o bônus aguarda os pontos por aluno conferidos; o ponto de resultado continua sendo apurado. Correções dos lances, reabertura e anulação recalculam os bônus na sessão da organização. Acertos de aluno ficam em `acertoPontuador`/`acertosPontuador`, separados dos acertos de placar exato.
+
+Os elencos completos e presenças continuam privados. Somente participantes aprovados e master podem ler a projeção de nomes e IDs em `teams/{teamId}/public/predictionPlayers`. Cadastrar, renomear, importar ou excluir alunos no painel atualiza essa lista junto com o elenco. Ao abrir a conta master, cadastros antigos ou importados por outras ferramentas também são conferidos. A regra de envio confere aluno, modalidade, turno, equipe e lado da partida. Participantes não podem escrever nessa projeção nem alterar o próprio bônus. Para sincronizar cadastros existentes pela linha de comando, use `node scripts/sync-prediction-rosters.mjs --project=ID_DO_PROJETO` para revisar o plano; acrescente `--apply` para gravar. Plano, cópia anterior e comprovante ficam privados em `artifacts/rehearsal/prediction-rosters/`.
+
+Com o ensaio aberto e os elencos sincronizados usando `--emulator --project=demo-interclasse-ensaio --apply`, `node scripts/validate-top-scorer.mjs` confere nomes, rascunhos, envio, edição, permissões reais, atualização dos elencos e apuração automática dos dois pontos independentes no banco fictício. Reinicie o ensaio antes de repetir esse roteiro.
 
 ## Painel organizado, busca e carregamento
 
@@ -121,27 +130,24 @@ Em **Campeonato → Relatório final / PDF**, selecione modalidade, turno e torn
 
 O documento é marcado como **parcial** se houver partidas pendentes. Resultados ainda não publicados permanecem sem placar; W.O. e cancelamentos aparecem identificados. Os campeões dependem de uma final oficial decidida ou de uma competição de todos contra todos concluída sem empate nos critérios de liderança. O ranking respeita as posições compartilhadas e o filtro escolhido. Atletas aparecem pelo primeiro nome e pela equipe. Contas, e-mails, listas privadas de presença e observações das súmulas não entram no PDF. **Atualizar conferência** gera uma nova fotografia dos registros antes de outra exportação.
 
-## Apuração automática no servidor
+## Apuração pela organização no plano gratuito
 
-O pacote `functions/` usa Node 22, Admin SDK e Cloud Functions de segunda geração em `southamerica-east1`. Alterações em resultados, palpites e aprovação de participantes disparam a apuração geral e por modalidade, mesmo sem navegador aberto. A regra de pontos é compartilhada com a interface em `functions/domain/`, evitando cálculos diferentes na prévia e na classificação oficial.
+A sessão master calcula os pontos ao finalizar, corrigir, reabrir ou anular partidas. Enquanto estiver conectada, ela também acompanha mudanças de resultados e aprovações e recupera operações interrompidas. As contas de participantes e consulta apenas recebem a classificação atualizada pelo Firestore. A lógica compartilhada fica em `functions/domain/` e é usada tanto na prévia quanto na apuração feita pelo navegador; a configuração publicada não exige Cloud Functions ou alteração do plano Firebase.
 
-O processamento usa lotes de até 300 gravações, revisões e um token conferido em transação. Um cálculo antigo não pode sobrescrever um mais recente. As funções de evento habilitam novas tentativas; repetir a operação não soma pontos novamente. Atualizar campos derivados não inicia outro ciclo de apuração. A data da edição do palpite é preservada; a apuração usa `scoreUpdatedAt`. Clientes não podem atribuir pontos, nem mesmo pelo painel master: o botão manual chama uma função autenticada exclusiva de master. O andamento fica em `system/scoring` e aparece na seção **Apuração automática**.
+O processamento usa lotes de até 300 gravações, revisões e um token conferido em transação para coordenar os operadores. Repetir a apuração substitui os totais, sem somar pontos novamente. A conferência verifica se os resultados mudaram durante o cálculo antes de concluí-lo. Atualizar campos derivados não inicia outro ciclo; a data da edição do palpite é preservada e a apuração usa `scoreUpdatedAt`. As leituras seguintes aproveitam alterações incrementais, contagem e as assinaturas compartilhadas. Somente master pode gravar os campos derivados de pontuação, em alterações restritas a esses campos; participantes continuam bloqueados. O andamento fica em `system/scoring` e aparece em **Apuração dos palpites**. Sem nenhuma sessão master aberta, novas apurações aguardam o retorno da organização.
 
 Para preparar e validar localmente:
 
 ```powershell
 npm ci
-npm ci --prefix functions
 npm test
-npm run lint
-npm run check:functions
 npm run build
 npm run ensaio
 ```
 
-Em outro terminal, com o ensaio aberto, use `npm run validar:evolucao` para verificar gatilhos sem navegador, proteção dos favoritos, correção com prévia, busca por perfil, painel a 320 px e exportação de PDFs. O script usa somente `demo-interclasse-ensaio`, reinicia dados fictícios e salva evidências em `artifacts/rehearsal/evolution/`.
+Em outro terminal, sincronize os elencos fictícios com `node scripts/sync-prediction-rosters.mjs --emulator --project=demo-interclasse-ensaio --apply` e execute `node scripts/validate-top-scorer.mjs`. O teste usa somente autenticação e Firestore locais, sem emulador de funções: confere envio, nomes, rascunhos, edição, permissões, encerramento da partida, bônus independente, correções e recuperação ao reabrir a conta master. As evidências ficam em `artifacts/rehearsal/top-scorer/`.
 
-**Publicação:** instale as dependências de `functions/`, confira os [requisitos de implantação do Firebase](https://firebase.google.com/docs/functions/get-started) e publique primeiro as funções no projeto correto. Em seguida publique `firestore.rules` e Hosting. Publicar somente os arquivos do site não ativa a apuração automática. Use **Recalcular agora** após a primeira implantação para migrar os totais existentes. Esta alteração de código não publica serviços nem modifica os dados do projeto oficial.
+**Publicação:** publique `firestore.rules`, sincronize os elencos existentes e publique o Hosting. O comando `firebase deploy --only firestore:rules,hosting` usa somente os recursos existentes no plano gratuito. A primeira sessão master atualizada confere os totais existentes; **Recalcular agora** também permite repetir essa operação.
 
 ## Empates no ranking dos professores
 
@@ -381,6 +387,10 @@ O modo usa o mesmo login, os mesmos rascunhos e a mesma transação de envio do 
 
 **Site completo** volta à lista normal de Jogos e guarda a preferência por conta neste navegador. Para reabrir, use **Jogos → Palpite rápido**; essa opção também funciona no computador. Para compartilhar o acesso direto, acrescente `?modo=palpite#jogos` ao endereço do site (por exemplo, `/?modo=palpite#jogos`). O link pede login quando necessário e abre o modo rápido depois da autenticação. O acesso master mantém o painel administrativo. Os quatro menus do participante continuam disponíveis no site completo.
 
+No computador, a lista de Jogos e o Palpite rápido mostram três partidas por linha, ou duas em telas intermediárias. No celular, o Palpite rápido mantém uma partida por vez. A lista de Jogos agrupa por modalidade, torneio, fase e turno; o número individual de cada partida continua no cartão, sem criar uma seção separada para cada jogo.
+
+RPG e FIFA foram retirados das opções dos dois turnos. Mancala participa somente de manhã. Filtros, equipes, criação de partidas e importação de inscrições respeitam essa seleção; os cadastros anteriores são preservados no banco.
+
 ## Rascunhos e lembretes de palpites
 
 Ao preencher um placar em **Painel** ou **Jogos**, o navegador guarda um rascunho por conta e partida. Recarregar a página ou trocar de tela recupera os campos. **Rascunho · ainda não enviado** não é um palpite registrado: é necessário clicar em **Enviar** ou **Atualizar** antes do fechamento. O envio confirmado limpa o rascunho; erros de envio preservam os campos. Fechar a partida ou atingir o prazo remove o rascunho editável. Se as equipes ou o palpite salvo mudarem em outro dispositivo, um rascunho antigo não substitui os dados atuais. Limpar os dados do navegador remove os rascunhos locais; falhas de armazenamento são informadas na tela.
@@ -426,5 +436,5 @@ npm run build
 git add .
 git commit -m "Configura Firebase, usuário master e sistema do bolão"
 git push
-firebase deploy
+firebase deploy --only firestore:rules,hosting
 ```

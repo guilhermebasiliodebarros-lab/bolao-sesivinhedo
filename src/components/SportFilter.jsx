@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { subscribeSports } from '../services/bolaoService.js'
 import { getSportIcon, getUniqueGameSports } from '../utils/game.js'
+import { isSportAvailable } from '../utils/sportAvailability.js'
 
-export default function SportFilter({ games, value, onChange, allValue = '' }) {
+export default function SportFilter({ games, value, onChange, allValue = '', turno = '' }) {
   const [sports, setSports] = useState([])
   useEffect(() => subscribeSports(setSports, () => setSports([])), [])
   const options = useMemo(() => {
@@ -10,8 +11,11 @@ export default function SportFilter({ games, value, onChange, allValue = '' }) {
     getUniqueGameSports(games).forEach((sport) => {
       if (!merged.has(sport.id)) merged.set(sport.id, sport)
     })
-    return [...merged.values()].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
-  }, [games, sports])
+    return [...merged.values()].filter((sport) => isSportAvailable(sport, turno)).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+  }, [games, sports, turno])
+  useEffect(() => {
+    if (sports.length && value !== allValue && !options.some((sport) => sport.id === value || sport.nome === value)) onChange(allValue)
+  }, [allValue, onChange, options, sports.length, value])
 
   return (
     <section className="sport-filter" aria-label="Filtrar por esporte">

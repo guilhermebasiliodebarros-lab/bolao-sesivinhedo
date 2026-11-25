@@ -169,7 +169,7 @@ export default function Calendario({ onNavigate, focusTarget }) {
         </div>
       </section>
 
-      <SportFilter games={games.filter((game) => !turno || getGameShift(game) === turno)} value={sportFilter} onChange={setSportFilter} allValue={ALL_ITEMS_FILTER} />
+      <SportFilter games={games.filter((game) => !turno || getGameShift(game) === turno)} value={sportFilter} onChange={setSportFilter} allValue={ALL_ITEMS_FILTER} turno={turno} />
 
       <div className="calendar-state-filters" role="group" aria-label="Situação da partida">
         {CALENDAR_STATES.map((state) => <button type="button" key={state.id} className={stateFilter === state.id ? 'is-active' : ''} aria-pressed={stateFilter === state.id} onClick={() => setStateFilter(state.id)}>{state.id === MATCH_STATE.LIVE ? <i className="calendar-live-dot" aria-hidden="true" /> : null}{state.label}<span>{statusCounts[state.id]}</span></button>)}

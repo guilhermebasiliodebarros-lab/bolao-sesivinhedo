@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { clearPredictionDraft, parsePredictionDraft, PREDICTION_DRAFT_EVENT, predictionDraftKey, predictionDraftScope, readPredictionDraftRaw, writePredictionDraft } from '../utils/predictionDrafts.js'
+import { predictionPlayerKey } from '../utils/predictionPlayers.js'
 
 const subscribe = (callback) => {
   window.addEventListener('storage', callback)
@@ -23,8 +24,8 @@ export default function usePredictionDraft({ userId, game, prediction, editable 
   }, [editable, key, raw])
 
   const updateValues = (fields) => {
-    const next = { palpiteA: String(value?.palpiteA ?? prediction?.palpiteA ?? ''), palpiteB: String(value?.palpiteB ?? prediction?.palpiteB ?? '') }
-    for (const field of ['palpiteA', 'palpiteB']) if (Object.hasOwn(fields, field)) next[field] = String(fields[field])
+    const next = { palpiteA: String(value?.palpiteA ?? prediction?.palpiteA ?? ''), palpiteB: String(value?.palpiteB ?? prediction?.palpiteB ?? ''), topScorer: String(value?.topScorer ?? predictionPlayerKey(prediction?.topScorerTeamId, prediction?.topScorerPlayerId)) }
+    for (const field of ['palpiteA', 'palpiteB', 'topScorer']) if (Object.hasOwn(fields, field)) next[field] = String(fields[field])
     const error = writePredictionDraft(key, next, scope)
     setSession({ scope, value: error ? next : null, error })
     announce()

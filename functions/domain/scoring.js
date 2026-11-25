@@ -1,9 +1,11 @@
 const isPredictionVoided = (game) => ['cancelled', 'walkover'].includes(game?.matchCondition)
 import { getSportProfile, validateSportScores } from './sportRules.js'
+import { hasCorrectTopScorer, usesExactScoreBonus, usesTopScorer } from './predictionPlayers.js'
 
 export const POINTS = {
   RESULT: 1,
   EXACT_SCORE_BONUS: 1,
+  TOP_SCORER_BONUS: 1,
   MISS: 0,
 }
 
@@ -26,33 +28,28 @@ export function getMatchResult(scoreA, scoreB) {
   return 'draw'
 }
 
-export function calcularPontuacao(palpiteA, palpiteB, placarA, placarB, game = {}) {
+export function calcularPontuacao(palpiteA, palpiteB, placarA, placarB, game = {}, prediction = {}) {
   let guess, final
   try {
     guess = validateSportScores(game, palpiteA, palpiteB, { final: true })
     final = validateSportScores(game, placarA, placarB, { final: true })
   } catch {
-    return { pontos: POINTS.MISS, acertoExato: false, acertoResultado: false, tipo: 'pendente' }
+    return { pontos: POINTS.MISS, acertoExato: false, acertoResultado: false, acertoPontuador: false, tipo: 'pendente' }
   }
   const [guessA, guessB] = guess
   const [finalA, finalB] = final
 
   const hasCorrectResult = getMatchResult(guessA, guessB) === getMatchResult(finalA, finalB)
 
-  if (!hasCorrectResult) {
-    return { pontos: POINTS.MISS, acertoExato: false, acertoResultado: false, tipo: 'erro' }
+  const exact = hasCorrectResult && usesExactScoreBonus(game) && guessA === finalA && guessB === finalB
+  const scorer = usesTopScorer(game) && hasCorrectTopScorer(game, prediction)
+  return {
+    pontos: Number(hasCorrectResult) * POINTS.RESULT + Number(exact) * POINTS.EXACT_SCORE_BONUS + Number(scorer) * POINTS.TOP_SCORER_BONUS,
+    acertoExato: exact,
+    acertoResultado: hasCorrectResult,
+    acertoPontuador: scorer,
+    tipo: exact ? 'exato' : scorer ? hasCorrectResult ? 'resultado-pontuador' : 'pontuador' : hasCorrectResult ? 'resultado' : 'erro',
   }
-
-  if (getSportProfile(game).scoringMode !== 'chess' && guessA === finalA && guessB === finalB) {
-    return {
-      pontos: POINTS.RESULT + POINTS.EXACT_SCORE_BONUS,
-      acertoExato: true,
-      acertoResultado: true,
-      tipo: 'exato',
-    }
-  }
-
-  return { pontos: POINTS.RESULT, acertoExato: false, acertoResultado: true, tipo: 'resultado' }
 }
 
 export function calculateGuessScore(game, guess) {
@@ -67,22 +64,26 @@ export function calculateGuessScore(game, guess) {
     game.placarA ?? game.finalScoreA,
     game.placarB ?? game.finalScoreB,
     game,
+    guess,
   )
-  const types = { exato: 'exact', resultado: 'result', erro: 'miss', pendente: 'pending' }
+  const types = { exato: 'exact', resultado: 'result', erro: 'miss', pendente: 'pending', 'resultado-pontuador': 'winner-scorer', pontuador: 'scorer' }
   return { points: result.pontos, type: types[result.tipo] }
 }
 
 export function getScoringRuleText(game = {}) {
   const mode = getSportProfile(game).scoringMode
   if (mode === 'chess') return `Vencedor ou empate: ${POINTS.RESULT} ponto.`
-  const exactLabel = mode === 'sets' ? 'placar exato em sets' : 'placar exato'
   const outcomeLabel = mode === 'sets' ? 'Vencedor' : 'Vencedor ou empate'
-  return `${outcomeLabel}: ${POINTS.RESULT} ponto + ${exactLabel}: ${POINTS.EXACT_SCORE_BONUS} ponto extra (${POINTS.RESULT + POINTS.EXACT_SCORE_BONUS} no total).`
+  if (usesTopScorer(game)) return `${outcomeLabel}: ${POINTS.RESULT} ponto + aluno que mais pontuar na partida: ${POINTS.TOP_SCORER_BONUS} ponto extra (até 2 pontos).`
+  if (usesExactScoreBonus(game)) return `${outcomeLabel}: ${POINTS.RESULT} ponto + placar exato: ${POINTS.EXACT_SCORE_BONUS} ponto extra (2 no total).`
+  return `${outcomeLabel}: ${POINTS.RESULT} ponto.`
 }
 
-export function getScoreTypeLabel(type, game = {}) {
+export function getScoreTypeLabel(type) {
   const labels = {
-    exact: getSportProfile(game).scoringMode === 'sets' ? 'Vencedor e sets exatos (+1 extra)' : 'Resultado e placar exato (+1 extra)',
+    exact: 'Resultado e placar exato (+1 extra)',
+    'winner-scorer': 'Sala e aluno corretos (+1 extra)',
+    scorer: 'Aluno que mais pontuou (+1 ponto)',
     result: 'Resultado correto',
     miss: 'Palpite sem ponto',
     pending: 'Aguardando resultado',

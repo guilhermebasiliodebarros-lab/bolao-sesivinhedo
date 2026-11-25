@@ -1,0 +1,10 @@
+.prediction-player-picker { display: grid; grid-column: 1 / -1; min-width: 0; gap: 8px; padding-top: 14px; margin-top: 4px; border-top: 1px solid var(--border); }
+.prediction-player-picker > label { line-height: 1.5; font-size: .85rem; font-weight: 750; }
+.prediction-player-picker > label > span { color: var(--muted); font-weight: 500; }
+.prediction-player-picker select { width: 100%; min-width: 0; max-width: 100%; min-height: 48px; font-size: 16px; }
+.prediction-player-picker > small, .prediction-player-summary > small { color: var(--muted); font-size: .78rem; line-height: 1.5; }
+.prediction-player-picker > p { color: var(--red); font-size: .82rem; line-height: 1.5; }
+.prediction-player-picker > button { justify-self: start; min-height: 44px; }
+.prediction-player-summary { display: grid; gap: 4px; min-width: 0; padding: 12px 0; overflow-wrap: anywhere; }
+.prediction-player-summary > span { color: var(--muted); font-size: .78rem; }
+.prediction-player-summary > strong { font-size: .95rem; line-height: 1.4; }

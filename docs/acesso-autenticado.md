@@ -16,7 +16,7 @@ Para abrir uma TV em outro navegador ou dispositivo, primeiro entre com a conta 
 
 ## Proteção dos dados
 
-As regras de leitura de jogos, modalidades, equipes, configurações da transmissão e avisos ativos exigem um perfil master, de consulta ou de participante aprovado. O bloqueio também vale para chamadas diretas ao Firestore. Elencos, documentos de partidas e operações continuam reservados ao master. Participantes e contas de consulta continuam sem permissão de administrar jogos ou ler informações privadas.
+As regras de leitura de jogos, modalidades, equipes, configurações da transmissão e avisos ativos exigem um perfil master, de consulta ou de participante aprovado. O bloqueio também vale para chamadas diretas ao Firestore. Elencos completos, documentos de partidas e operações continuam reservados ao master. Para o palpite de maior pontuador no basquete e vôlei, participantes aprovados leem uma projeção com somente nomes e IDs dos jogadores, agrupados por equipe. A projeção não expõe presença, posição, capitão ou observações; contas de consulta, pendentes, recusadas e visitantes não podem acessá-la. Participantes continuam sem permissão de administrar jogos, escrever nessa projeção ou atribuir o próprio bônus.
 
 O cadastro só cria perfis `role: "user"`, `approvalStatus: "pending"` e `participaRanking: false`, com o e-mail da própria conta autenticada. Somente o e-mail autenticado de Guilherme pode aprovar ou recusar, sem alterar papéis ou pontuações pela operação de análise. Pendentes e recusados leem apenas o próprio perfil. A consulta de classificação filtra explicitamente professores aprovados; recalcular pontos não reativa cadastros recusados.
 

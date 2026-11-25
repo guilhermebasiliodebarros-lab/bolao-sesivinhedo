@@ -76,12 +76,14 @@ globalThis.__serverTestSdk = { httpsCallable: (_functions, name) => async () => 
 } }
 registerHooks({
   resolve(specifier, context, next) {
+    if (specifier === './operatorScoringService.js' && /\/services\/serverService\.js$/.test(context.parentURL || '')) return { url: 'test:operator-scoring', shortCircuit: true }
     if (specifier === 'firebase/firestore') return { url: 'test:firestore', shortCircuit: true }
     if (specifier === 'firebase/functions') return { url: 'test:functions', shortCircuit: true }
-    if (specifier === './firebase.js' && /\/services\/(firestoreService|eventBackupService|serverService)\.js$/.test(context.parentURL || '')) return { url: 'test:config', shortCircuit: true }
+    if (specifier === './firebase.js' && /\/services\/(firestoreService|eventBackupService|serverService|predictionRosterService)\.js$/.test(context.parentURL || '')) return { url: 'test:config', shortCircuit: true }
     return next(specifier, context)
   },
   load(url, context, next) {
+    if (url === 'test:operator-scoring') return { format: 'module', source: "export const recalculateWithOperator = async () => (await globalThis.__serverTestSdk.httpsCallable({}, 'recalculateRanking')()).data; export const prepareOperatorFinalReport = async () => { throw new Error('Unexpected report request') }", shortCircuit: true }
     if (url === 'test:config') return { format: 'module', source: 'export const db = { app: { options: { projectId: "demo-interclasse-ensaio" } } }; export const auth = globalThis.__matchTestAuth; export const cloudFunctions = {}', shortCircuit: true }
     if (url === 'test:functions') return { format: 'module', source: 'export const httpsCallable = globalThis.__serverTestSdk.httpsCallable', shortCircuit: true }
     if (url === 'test:firestore') return { format: 'module', source: Object.keys(sdk).map((name) => `export const ${name} = globalThis.__matchTestSdk.${name};`).join('\n'), shortCircuit: true }
@@ -211,7 +213,7 @@ test('recalculation replaces old points consistently across predictions, sport r
     ['hand', 'handball', 'Handebol', 7, 5, 7, 4, 1, false, true],
     ['basket', 'basketball', 'Basquete', 54, 50, 49, 50, 0, false, false],
     ['volley', 'volleyball', 'Vôlei', 2, 0, 2, 1, 1, false, true],
-    ['volley-exact', 'volleyball', 'Vôlei', 1, 2, 1, 2, 2, true, true],
+    ['volley-exact', 'volleyball', 'Vôlei', 1, 2, 1, 2, 1, false, true],
     ['chess', 'chess', 'Xadrez', 0.5, 0.5, 0.5, 0.5, 1, false, true],
     ['draw', 'football', 'Futebol', 0, 0, 1, 1, 1, false, true],
   ]
@@ -228,17 +230,17 @@ test('recalculation replaces old points consistently across predictions, sport r
       assert.equal(prediction.acertoResultado, acertoResultado)
     }
     const user = documents.get('users/teacher')
-    assert.equal(user.pontos, 8)
-    assert.equal(user.acertosExatos, 2)
+    assert.equal(user.pontos, 7)
+    assert.equal(user.acertosExatos, 1)
     assert.equal(user.acertosResultado, 6)
     assert.deepEqual(Object.fromEntries(Object.entries(user.rankingPorEsporte).map(([id, stats]) => [id, [stats.pontos, stats.acertosExatos, stats.acertosResultado]])), {
-      football: [3, 1, 2], handball: [1, 0, 1], basketball: [0, 0, 0], volleyball: [3, 1, 2], chess: [1, 0, 1],
+      football: [3, 1, 2], handball: [1, 0, 1], basketball: [0, 0, 0], volleyball: [2, 0, 2], chess: [1, 0, 1],
     })
   }
   await reopenGame('one')
   assert.equal(documents.get('predictions/teacher_one').pontos, 0)
-  assert.equal(documents.get('users/teacher').pontos, 6)
-  assert.equal(documents.get('users/teacher').acertosExatos, 1)
+  assert.equal(documents.get('users/teacher').pontos, 5)
+  assert.equal(documents.get('users/teacher').acertosExatos, 0)
   assert.equal(documents.get('users/teacher').acertosResultado, 5)
 })
 const { calendarCandidate, calendarConflicts, calendarConflictSignature, calendarFingerprint } = await import('../src/utils/visualSchedule.js')
@@ -1553,4 +1555,52 @@ test('a failed final score calculation can finish without replaying recovered do
   await finalizeEventRecovery(backup)
   assert.equal(documents.get('users/teacher').pontos, 2)
   assert.equal(documents.get('games/one').scoreRevision, revision)
+})
+
+test('prediction service saves and clears a roster student, verifies the latest teams and refuses stale or forged choices', async () => {
+  const topScorer = JSON.stringify(['b', 'carla'])
+  const current = { ...original, sportId: 'basket', esporteNome: 'Basquete', scoringMode: 'points', turno: 'tarde', timeA: '6º A', timeB: '6º B', teamIdA: 'a', teamIdB: 'b' }
+  documents.set('games/one', current)
+  documents.set('teams/b', { sportId: 'basket', esporteNome: 'Basquete', turno: 'tarde', nome: '6º B' })
+  const roster = { teamId: 'b', sportId: 'basket', players: [{ id: 'carla', nome: 'Carla Maria' }] }
+  documents.set('teams/b/public/predictionPlayers', roster)
+  const input = { user: { uid: 'teacher' }, profile: { role: 'user', approvalStatus: 'approved', participaRanking: true, nome: 'Professor' }, game: game(), palpiteA: 3, palpiteB: 2, topScorer }
+  await savePrediction(input)
+  const saved = documents.get('predictions/teacher_one')
+  assert.equal(saved.topScorerName, 'Carla Maria')
+  assert.equal(saved.topScorerSide, 'B')
+  assert.equal(saved.topScorerPlayerId, 'carla')
+  assert.equal(saved.acertoPontuador, false)
+  for (const value of ['broken', '["b", "missing"]', '["other", "carla"]']) await assert.rejects(savePrediction({ ...input, topScorer: value }))
+  documents.set('teams/b/public/predictionPlayers', { ...roster, players: [] })
+  await assert.rejects(savePrediction(input), /não está mais/)
+  documents.set('teams/b/public/predictionPlayers', roster)
+  documents.set('games/one', { ...current, teamIdB: 'new-team' })
+  await assert.rejects(savePrediction(input), /não está mais/)
+  documents.set('games/one', current)
+  assert.deepEqual(documents.get('predictions/teacher_one'), saved)
+  await savePrediction({ ...input, topScorer: '' })
+  assert.equal(documents.get('predictions/teacher_one').topScorerPlayerId, '')
+  assert.equal(documents.get('predictions/teacher_one').topScorerName, '')
+  documents.set('games/one', { ...current, esporteNome: 'Futsal', scoringMode: 'goals' })
+  await savePrediction(input)
+  assert.equal(documents.get('predictions/teacher_one').topScorerPlayerId, '')
+})
+
+test('free roster publication stays atomic with create, rename, import and deletion without copying private player attributes', async () => {
+  documents.set('teams/basket-roster', { nome: '6º A', esporteNome: 'Basquete', sportId: 'basket', turno: 'tarde', playerCount: 1, updatedAt: new Date('2026-11-01') })
+  documents.set('teams/basket-roster/players/gustavo', { nome: 'Gustavo Silva', posicao: 'Titular', privateNotes: 'Privado', capitao: true })
+  await savePlayer('basket-roster', { id: 'gustavo', nome: 'Gustavo Souza', posicao: 'Titular' })
+  let roster = documents.get('teams/basket-roster/public/predictionPlayers')
+  assert.deepEqual(roster.players, [{ id: 'gustavo', nome: 'Gustavo Souza' }])
+  assert.deepEqual(roster.sourceUpdatedAt, documents.get('teams/basket-roster').updatedAt)
+  assert.equal(documents.get('teams/basket-roster/players/gustavo').privateNotes, 'Privado')
+  await importPlayers('basket-roster', [{ nome: 'Outra Aluna', posicao: 'Reserva' }])
+  roster = documents.get('teams/basket-roster/public/predictionPlayers')
+  assert.equal(roster.players.length, 2)
+  assert(roster.players.every((player) => Object.keys(player).sort().join(',') === 'id,nome'))
+  await deletePlayer('basket-roster', 'gustavo')
+  assert.equal(documents.get('teams/basket-roster/public/predictionPlayers').players.some((player) => player.id === 'gustavo'), false)
+  await deleteTeam('basket-roster')
+  assert.equal(documents.has('teams/basket-roster/public/predictionPlayers'), false)
 })

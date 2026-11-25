@@ -1,4 +1,5 @@
 import { normalizeFilterText } from './game.js'
+import { isSportAvailable } from './sportAvailability.js'
 
 export const SCHOOL_CLASSES_VERSION = 1
 export const SCHOOL_CLASSES = Object.freeze([6, 7, 8, 9, 1, 2, 3].flatMap((year) => ['A', 'B'].map((letter) => Object.freeze({
@@ -21,7 +22,7 @@ export function schoolClassPlan(sport, teams = []) {
   if (!sport?.id || !String(sport.nome || sport.name || '').trim()) throw new Error('Modalidade inválida para cadastrar as turmas.')
   const sportName = sport.nome || sport.name
   const existing = teams.filter((team) => (team.sportId || team.esporteId) === sport.id)
-  return SCHOOL_CLASSES.map(({ code, ...schoolClass }) => {
+  return SCHOOL_CLASSES.filter((schoolClass) => isSportAvailable(sport, schoolClass.turno)).map(({ code, ...schoolClass }) => {
     const team = existing.find((item) => (schoolClassCode(item.turma) || schoolClassCode(item.nome || item.name || item.teamName)) === code)
     if (!team) return { type: 'create', id: schoolClassTeamId(sport.id, code), data: { ...schoolClass, sportId: sport.id, esporteNome: sportName, playerCount: 0 } }
     const data = {}
@@ -37,6 +38,7 @@ export async function synchronizeSchoolClasses(store) {
   const [sports, initialTeams] = await Promise.all([store.list('sports'), store.list('teams')])
   const result = { sports: 0, created: 0, updated: 0 }
   for (const sport of sports) {
+    if (!isSportAvailable(sport)) continue
     const initial = initialTeams.filter((team) => (team.sportId || team.esporteId) === sport.id)
     const paths = [...new Set([...SCHOOL_CLASSES.map((item) => schoolClassTeamId(sport.id, item.code)), ...initial.map((team) => team.id)])]
     const outcome = await store.runTransaction(async (transaction) => {

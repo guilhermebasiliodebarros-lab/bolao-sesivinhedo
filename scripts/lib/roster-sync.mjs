@@ -4,6 +4,7 @@ import { SCHOOL_CLASSES, schoolClassCode, schoolClassTeamId } from '../../src/ut
 import { normalizePlayerInput } from '../../src/utils/player.js'
 import { nameKey } from '../../src/utils/rosterImport.js'
 import { getSportProfile } from '../../src/utils/sportRules.js'
+import { isSportAvailable } from '../../src/utils/sportAvailability.js'
 
 export const REGISTRATION_SPORTS = {
   basquete: { nome: 'Basquete', aliases: ['basquete', 'basquete 3x3'] },
@@ -31,7 +32,9 @@ export function buildRosterSyncPlan({ sports, teams, players }, manifest) {
     if (!definition || !schoolClass || !Array.isArray(group.players) || group.players.length > 200 || !Array.isArray(group.sourcePages) || group.sourcePages.some((page) => !Number.isInteger(page) || page < 1)) throw new Error('Turma, modalidade ou lista de jogadores inválida no manifesto.')
     const groupKey = `${group.sport}/${group.classCode}`
     if (selectedGroups.has(groupKey)) throw new Error('A mesma turma e modalidade aparecem duas vezes no manifesto.')
-    selectedGroups.add(groupKey); selectedClasses.add(group.classCode)
+    selectedGroups.add(groupKey)
+    if (!isSportAvailable(definition, schoolClass.turno)) continue
+    selectedClasses.add(group.classCode)
     if (!selectedSports.has(group.sport)) {
       const current = exactlyOne(sports.filter((sport) => definition.aliases.includes(nameKey(sport.nome))), definition.nome)
       const sport = current || { id: `inscricao-2026-${group.sport}`, nome: definition.nome, ...getSportProfile(definition), schoolClassesVersion: 1 }
@@ -39,7 +42,7 @@ export function buildRosterSyncPlan({ sports, teams, players }, manifest) {
         if (sports.some((item) => item.id === sport.id)) throw new Error('O identificador da nova modalidade já está em uso.')
         const { id, ...data } = sport
         changes.push({ path: `sports/${id}`, type: 'create', fields: data })
-        for (const { code, ...info } of SCHOOL_CLASSES) {
+        for (const { code, ...info } of SCHOOL_CLASSES.filter((item) => isSportAvailable(sport, item.turno))) {
           const team = { id: schoolClassTeamId(id, code), ...info, sportId: id, esporteNome: sport.nome, playerCount: 0 }
           if (teams.some((item) => item.id === team.id)) throw new Error('O identificador da nova equipe já está em uso.')
           const { id: teamId, ...data } = team

@@ -31,3 +31,15 @@ test('corrupt or inaccessible browser storage reports recovery limits without cr
   assert.ok(writePredictionDraft('key', { palpiteA: '1', palpiteB: '' }, 'scope', blocked))
   assert.ok(parsePredictionDraft('!unavailable', 'scope').error)
 })
+
+test('student selection recovers with scores and becomes stale when another device changes the saved student', () => {
+  const target = storage(), key = predictionDraftKey('alice', game.id)
+  const selected = JSON.stringify(['team-a', 'ana'])
+  const prediction = { palpiteA: 2, palpiteB: 1, topScorerTeamId: 'team-a', topScorerPlayerId: 'ana', topScorerSide: 'A' }
+  const scope = predictionDraftScope('alice', game, prediction)
+  writePredictionDraft(key, { palpiteA: '2', palpiteB: '1', topScorer: selected }, scope, target)
+  assert.equal(parsePredictionDraft(target.getItem(key), scope).draft.value.topScorer, selected)
+  assert.equal(parsePredictionDraft(target.getItem(key), predictionDraftScope('alice', game, { ...prediction, topScorerPlayerId: 'bia' })).draft, null)
+  writePredictionDraft(key, { palpiteA: '2', palpiteB: '1', topScorer: '["other/team", "ana"]' }, scope, target)
+  assert.equal(parsePredictionDraft(target.getItem(key), scope).draft, null)
+})

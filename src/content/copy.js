@@ -42,7 +42,7 @@ export const COPY = {
         number: '02',
         title: 'Pontuação automática',
         description:
-          'Acertar vencedor ou empate vale 1 ponto. Futebol, handebol e basquete dão mais 1 pelo placar exato; vôlei, pelo placar exato em sets.',
+          'Acertar a sala vencedora ou empate vale 1 ponto. Futsal e handebol dão mais 1 pelo placar exato; basquete e vôlei, pelo aluno que mais pontuar na partida.',
       },
       {
         number: '03',

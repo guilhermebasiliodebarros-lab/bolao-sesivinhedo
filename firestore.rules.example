@@ -36,14 +36,45 @@ service cloud.firestore {
     }
 
     function scoreFieldsUnchanged() {
-      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(["pontos", "acertosExatos", "acertosResultado", "rankingPorEsporte", "scoreUpdatedAt"]);
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(["pontos", "acertosExatos", "acertosResultado", "acertosPontuador", "rankingPorEsporte", "scoreUpdatedAt"]);
     }
 
     function predictionScoreUnchanged() {
       return request.resource.data.get("pontos", 0) == resource.data.get("pontos", 0)
         && request.resource.data.get("acertoExato", false) == resource.data.get("acertoExato", false)
         && request.resource.data.get("acertoResultado", false) == resource.data.get("acertoResultado", false)
+        && request.resource.data.get("acertoPontuador", false) == resource.data.get("acertoPontuador", false)
         && request.resource.data.get("scoreUpdatedAt", null) == resource.data.get("scoreUpdatedAt", null);
+    }
+
+    function operatorPredictionScoreUpdate() {
+      let value = request.resource.data;
+      return isMaster()
+        && value.diff(resource.data).affectedKeys().hasOnly(["pontos", "acertoExato", "acertoResultado", "acertoPontuador", "scoreUpdatedAt"])
+        && value.pontos is int && value.pontos >= 0 && value.pontos <= 2
+        && value.acertoExato is bool && value.acertoResultado is bool && value.acertoPontuador is bool
+        && !(value.acertoExato && value.acertoPontuador)
+        && value.pontos == (value.acertoResultado ? 1 : 0) + (value.acertoExato ? 1 : 0) + (value.acertoPontuador ? 1 : 0)
+        && value.scoreUpdatedAt == request.time;
+    }
+
+    function operatorProfileScoreUpdate() {
+      let value = request.resource.data;
+      return isMaster()
+        && value.diff(resource.data).affectedKeys().hasOnly(["pontos", "acertosExatos", "acertosResultado", "acertosPontuador", "rankingPorEsporte", "scoreUpdatedAt"])
+        && value.pontos is int && value.pontos >= 0
+        && value.acertosExatos is int && value.acertosExatos >= 0
+        && value.acertosResultado is int && value.acertosResultado >= 0
+        && value.acertosPontuador is int && value.acertosPontuador >= 0
+        && value.rankingPorEsporte is map && value.scoreUpdatedAt == request.time;
+    }
+
+    function validPredictionStats() {
+      let value = request.resource.data;
+      return value.keys().hasOnly(["teamA", "teamB", "draw", "total", "updatedAt"])
+        && value.teamA is int && value.teamA >= 0 && value.teamB is int && value.teamB >= 0
+        && value.draw is int && value.draw >= 0 && value.total == value.teamA + value.teamB + value.draw
+        && value.updatedAt == request.time;
     }
 
     function publicPredictionStatsOpen(gameId) {
@@ -103,6 +134,31 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(["nome", "avatarUrl", "photoURL", "fotoUrl", "updatedAt"]);
     }
 
+    function selectedTopScorerIsValid() {
+      let pick = request.resource.data;
+      let game = get(/databases/$(database)/documents/games/$(pick.gameId)).data;
+      let team = get(/databases/$(database)/documents/teams/$(pick.topScorerTeamId)).data;
+      let player = get(/databases/$(database)/documents/teams/$(pick.topScorerTeamId)/players/$(pick.topScorerPlayerId)).data;
+      return game.get("esporteNome", "").lower().matches(".*(basquet|basket|v[oô]lei|voleibol|volley).*")
+        && pick.topScorerTeamId is string && pick.topScorerTeamId.size() > 0 && pick.topScorerTeamId.size() <= 256
+        && pick.topScorerPlayerId is string && pick.topScorerPlayerId.size() > 0 && pick.topScorerPlayerId.size() <= 256
+        && pick.topScorerSide in ["A", "B"]
+        && pick.topScorerName == player.nome
+        && team.sportId == game.sportId
+        && (game.get("turno", "") == "" || team.get("turno", "") == game.turno)
+        && ((pick.topScorerSide == "A" && game.get("seedLabelA", "") == ""
+            && (game.get("teamIdA", "") != "" ? pick.topScorerTeamId == game.teamIdA : team.nome == game.timeA))
+          || (pick.topScorerSide == "B" && game.get("seedLabelB", "") == ""
+            && (game.get("teamIdB", "") != "" ? pick.topScorerTeamId == game.teamIdB : team.nome == game.timeB)));
+    }
+
+    function validTopScorer() {
+      let pick = request.resource.data;
+      return pick.get("topScorerPlayerId", "") == ""
+        ? pick.get("topScorerTeamId", "") == "" && pick.get("topScorerSide", "") == "" && pick.get("topScorerName", "") == ""
+        : selectedTopScorerIsValid();
+    }
+
     function predictionCreatedByOwner() {
       return request.resource.data.userId == request.auth.uid
         && request.resource.data.keys().hasOnly([
@@ -114,12 +170,16 @@ service cloud.firestore {
           "pontos",
           "acertoExato",
           "acertoResultado",
+          "acertoPontuador",
+          "topScorerTeamId", "topScorerPlayerId", "topScorerSide", "topScorerName",
           "createdAt",
           "updatedAt"
         ])
         && request.resource.data.pontos == 0
         && request.resource.data.acertoExato == false
         && request.resource.data.acertoResultado == false
+        && request.resource.data.get("acertoPontuador", false) == false
+        && validTopScorer()
         && validNonNegativeScores()
         && gameAcceptsPredictions(request.resource.data.gameId);
     }
@@ -131,6 +191,7 @@ service cloud.firestore {
         && request.resource.data.pontos == 0
         && request.resource.data.acertoExato == false
         && request.resource.data.acertoResultado == false
+        && request.resource.data.get("acertoPontuador", false) == false
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           "nomeUsuario",
           "palpiteA",
@@ -138,9 +199,12 @@ service cloud.firestore {
           "pontos",
           "acertoExato",
           "acertoResultado",
+          "acertoPontuador",
+          "topScorerTeamId", "topScorerPlayerId", "topScorerSide", "topScorerName",
           "updatedAt"
         ])
         && validNonNegativeScores()
+        && validTopScorer()
         && gameAcceptsPredictions(resource.data.gameId);
     }
 
@@ -164,6 +228,7 @@ service cloud.firestore {
         && request.resource.data.acertosResultado == 0;
 
       allow update: if (isMaster() && approvalFieldsUnchanged() && scoreFieldsUnchanged())
+        || operatorProfileScoreUpdate()
         || validRegistrationReview()
         || (signedIn() && currentUser().role == "user" && request.auth.uid == uid && userCannotChangeScoreOrRole());
 
@@ -183,8 +248,9 @@ service cloud.firestore {
       allow create, update, delete: if isMaster();
 
       match /public/predictionStats {
-        allow get: if hasEventAccess() && publicPredictionStatsOpen(gameId);
-        allow write: if false;
+        allow get: if isMaster() || (hasEventAccess() && publicPredictionStatsOpen(gameId));
+        allow create, update: if isMaster() && exists(/databases/$(database)/documents/games/$(gameId)) && validPredictionStats();
+        allow delete: if isMaster();
       }
 
       match /documents/{documentId} {
@@ -223,7 +289,10 @@ service cloud.firestore {
 
     match /system/{stateId} {
       allow get: if hasEventAccess() && stateId == "scoring";
-      allow write: if false;
+      allow create, update: if isMaster() && stateId == "scoring"
+        && request.resource.data.keys().hasOnly(["token", "revision", "status", "mode", "startedAt", "error", "failedAt", "completedRevision", "completedAt", "predictions", "participants", "changed", "sourceKey", "rulesVersion"])
+        && request.resource.data.token is string && request.resource.data.revision is int
+        && request.resource.data.status in ["processing", "complete", "error"];
     }
 
     match /teams/{teamId} {
@@ -233,13 +302,25 @@ service cloud.firestore {
       match /players/{playerId} {
         allow read, write: if isMaster();
       }
+      match /public/predictionPlayers {
+        allow get: if isMaster() || isParticipant();
+        allow create, update: if isMaster()
+          && request.resource.data.keys().hasOnly(["teamId", "teamName", "sportId", "turno", "players", "sourceUpdatedAt", "updatedAt"])
+          && request.resource.data.teamId == teamId
+          && request.resource.data.teamName == getAfter(/databases/$(database)/documents/teams/$(teamId)).data.nome
+          && request.resource.data.sportId == getAfter(/databases/$(database)/documents/teams/$(teamId)).data.sportId
+          && request.resource.data.players is list && request.resource.data.players.size() <= 1000
+          && request.resource.data.sourceUpdatedAt == getAfter(/databases/$(database)/documents/teams/$(teamId)).data.get("updatedAt", null)
+          && request.resource.data.updatedAt == request.time;
+        allow delete: if isMaster();
+      }
     }
 
     match /predictions/{predictionId} {
       allow read: if isMaster() || (isParticipant() && resource.data.userId == request.auth.uid);
       allow get: if (isMaster() || isParticipant()) && !exists(/databases/$(database)/documents/predictions/$(predictionId));
-      allow create: if (isMaster() && request.resource.data.get("pontos", 0) == 0 && request.resource.data.get("acertoExato", false) == false && request.resource.data.get("acertoResultado", false) == false && request.resource.data.get("scoreUpdatedAt", null) == null) || (isParticipant() && predictionCreatedByOwner());
-      allow update: if (isMaster() && predictionScoreUnchanged()) || (isParticipant() && predictionEditedByOwner());
+      allow create: if (isMaster() && request.resource.data.get("pontos", 0) == 0 && request.resource.data.get("acertoExato", false) == false && request.resource.data.get("acertoResultado", false) == false && request.resource.data.get("acertoPontuador", false) == false && request.resource.data.get("scoreUpdatedAt", null) == null) || (isParticipant() && predictionCreatedByOwner());
+      allow update: if (isMaster() && predictionScoreUnchanged()) || operatorPredictionScoreUpdate() || (isParticipant() && predictionEditedByOwner());
       allow delete: if isMaster();
     }
   }

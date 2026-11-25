@@ -30,6 +30,9 @@ import { applyLiveEvent, canCorrectLiveEvent, rebuildLiveEvents, scoringSnapshot
 import { normalizeRegulation } from '../utils/regulations.js'
 import { buildScheduleRedistribution, scheduleFingerprint, schedulePlanFingerprint } from '../utils/tournamentSchedule.js'
 import { getTeamShift, getGameShift, resolveCompetitionShifts, validateTeamShift, validateGameShift } from '../utils/schoolShifts.js'
+import { isSportAvailable } from '../utils/sportAvailability.js'
+import { parsePredictionPlayerKey, predictionTeamSide, usesTopScorer } from '../utils/predictionPlayers.js'
+import { predictionRosterFields, predictionRosterRef, readRosterForWrite, syncTeamPredictionRoster } from './predictionRosterService.js'
 import { SCHOOL_CLASSES_VERSION, schoolClassPlan, synchronizeSchoolClasses } from '../utils/schoolClasses.js'
 import { normalizeTieBreak } from '../utils/tieBreak.js'
 import { attendanceTeamKey, currentAttendance, normalizeAttendanceSide } from '../utils/attendance.js'
@@ -229,6 +232,7 @@ export function normalizeUserProfile(id, data = {}) {
     pontos: numberOrZero(data.pontos ?? data.score),
     acertosExatos: numberOrZero(data.acertosExatos ?? data.exactHits),
     acertosResultado: numberOrZero(data.acertosResultado ?? data.resultHits),
+    acertosPontuador: numberOrZero(data.acertosPontuador),
     rankingPorEsporte: data.rankingPorEsporte || data.sportsRanking || {},
     createdAt: data.createdAt || null,
     updatedAt: data.updatedAt || null,
@@ -351,6 +355,11 @@ export function normalizePrediction(id, data = {}) {
     pontos: numberOrZero(data.pontos ?? data.points),
     acertoExato: Boolean(data.acertoExato ?? data.exactHit),
     acertoResultado: Boolean(data.acertoResultado ?? data.resultHit),
+    acertoPontuador: Boolean(data.acertoPontuador),
+    topScorerTeamId: String(data.topScorerTeamId || ''),
+    topScorerPlayerId: String(data.topScorerPlayerId || ''),
+    topScorerSide: String(data.topScorerSide || ''),
+    topScorerName: String(data.topScorerName || ''),
     createdAt: data.createdAt || null,
     updatedAt: data.updatedAt || null,
   }
@@ -463,6 +472,7 @@ function normalizeSportInput(sport) {
   if (!nome) {
     throw new Error('Informe o nome do esporte.')
   }
+  if (!isSportAvailable(nome)) throw new Error('Esta modalidade não participa do Interclasse.')
 
   return { nome, ...getSportProfile({ ...sport, nome }) }
 }
@@ -482,7 +492,9 @@ function normalizeTeamInput(team) {
   }
 
   const turma = String(team?.turma || '').trim().slice(0, 80)
-  return { sportId, esporteNome, nome, categoria, turma, turno: validateTeamShift({ ...team, nome, turma }) }
+  const turno = validateTeamShift({ ...team, nome, turma })
+  if (!isSportAvailable(esporteNome, turno)) throw new Error('Esta modalidade não participa deste turno do Interclasse.')
+  return { sportId, esporteNome, nome, categoria, turma, turno }
 }
 
 export async function createParticipantProfile(user, nome, avatarUrl = '') {
@@ -561,7 +573,8 @@ export function subscribeGames(onData, onError, onSync) {
   return watchGames(
     collection(db, 'games'),
     (snapshot) => {
-      const games = resolveCompetitionShifts(snapshot.docs.map((item) => normalizeGame(item.id, item.data()))).sort(sortByDate)
+      const games = resolveCompetitionShifts(snapshot.docs.map((item) => normalizeGame(item.id, item.data())))
+        .filter((game) => isSportAvailable(game, getGameShift(game))).sort(sortByDate)
 
       onData(games)
     },
@@ -579,7 +592,7 @@ export function subscribeSports(onData, onError) {
   return onSnapshot(
     collection(db, 'sports'),
     (snapshot) => {
-      onData(snapshot.docs.map((item) => normalizeSport(item.id, item.data())).sort(sortByName))
+      onData(snapshot.docs.map((item) => normalizeSport(item.id, item.data())).filter((sport) => isSportAvailable(sport)).sort(sortByName))
     },
     (error) => onError?.(error ? toFriendlyError(error) : ''),
   )
@@ -594,7 +607,7 @@ export function subscribeTeams(onData, onError) {
   return onSnapshot(
     collection(db, 'teams'),
     (snapshot) => {
-      onData(snapshot.docs.map((item) => normalizeTeam(item.id, item.data())).sort(sortByName))
+      onData(snapshot.docs.map((item) => normalizeTeam(item.id, item.data())).filter((team) => isSportAvailable(team, getTeamShift(team))).sort(sortByName))
     },
     (error) => onError?.(error ? toFriendlyError(error) : ''),
   )
@@ -767,6 +780,7 @@ async function validateShiftForSavedGames(firestore, games) {
   const competitions = new Map()
   const prepared = games.map((game) => {
     const turno = validateGameShift(game, teams)
+    if (!isSportAvailable(game, turno)) throw new Error('Esta modalidade não participa deste turno do Interclasse.')
     if (!turno && !game.id) throw new Error('Selecione o turno da partida antes de salvar.')
     if (game.tournamentId && turno) {
       const previous = competitions.get(game.tournamentId)
@@ -1104,6 +1118,7 @@ export async function saveTeam(team) {
       ...payload,
       updatedAt: serverTimestamp(),
     })
+    await syncTeamPredictionRoster(team.id)
   } else {
     const teamRef = doc(collection(firestore, 'teams'))
 
@@ -1112,6 +1127,7 @@ export async function saveTeam(team) {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     })
+    await syncTeamPredictionRoster(teamRef.id)
   }
 }
 
@@ -1123,7 +1139,10 @@ export async function deleteTeam(teamId) {
     players.docs.slice(offset, offset + 450).forEach((player) => batch.delete(player.ref))
     await batch.commit()
   }
-  await deleteDoc(doc(firestore, 'teams', teamId))
+  const cleanup = writeBatch(firestore)
+  cleanup.delete(predictionRosterRef(teamId))
+  cleanup.delete(doc(firestore, 'teams', teamId))
+  await cleanup.commit()
 }
 
 export function subscribePlayers(teamId, onData, onError) {
@@ -1131,6 +1150,30 @@ export function subscribePlayers(teamId, onData, onError) {
   return onSnapshot(collection(firestore, 'teams', teamId, 'players'), (snapshot) => {
     onData(snapshot.docs.map((item) => ({ ...item.data(), id: item.id })).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')))
   }, (error) => onError?.(error ? toFriendlyError(error) : ''))
+}
+
+export function subscribePredictionRoster(game, onData, onError) {
+  if (!db || !usesTopScorer(game)) { onData([]); return () => {} }
+  let stops = [], currentKey = '', active = true
+  const stopTeams = subscribeTeams((teams) => {
+    const selected = ['A', 'B'].flatMap((side) => {
+      const matches = teams.filter((team) => predictionTeamSide(game, team) === side)
+      return matches.length === 1 ? [{ team: matches[0], side }] : []
+    })
+    const key = JSON.stringify(selected.map(({ team, side }) => [team.id, team.nome, side]))
+    if (key === currentKey) return
+    currentKey = key
+    stops.forEach((stop) => stop())
+    const groups = selected.map(({ team, side }) => ({ teamId: team.id, teamName: team.nome, side, players: [], loading: true }))
+    onData(groups)
+    stops = selected.map(({ team }, index) => onSnapshot(doc(db, 'teams', team.id, 'public', 'predictionPlayers'), (snapshot) => {
+      if (!active || key !== currentKey) return
+      const roster = snapshot.exists() ? snapshot.data() : null
+      groups[index] = { ...groups[index], loading: false, players: roster?.teamId === team.id && roster?.sportId === game.sportId && Array.isArray(roster.players) ? roster.players : [] }
+      onData([...groups])
+    }, (error) => { if (active && key === currentKey) onError?.(error ? toFriendlyError(error) : '') }))
+  }, onError)
+  return () => { active = false; stopTeams(); stops.forEach((stop) => stop()) }
 }
 
 function teamDisciplineQuery(firestore, teamId) {
@@ -1199,14 +1242,17 @@ export async function savePlayer(teamId, player) {
   await runTransaction(firestore, async (transaction) => {
     const team = await transaction.get(teamRef)
     if (!team.exists()) throw new Error('Esta equipe não existe mais.')
+    const roster = usesTopScorer(team.data()) ? await readRosterForWrite(transaction, team) : null
     if (player.id) {
       const current = await transaction.get(playerRef)
       if (!current.exists()) throw new Error('Este jogador não está mais cadastrado na equipe.')
       transaction.update(playerRef, { ...payload, updatedAt: serverTimestamp() })
+      transaction.update(teamRef, { updatedAt: serverTimestamp() })
     } else {
       transaction.set(playerRef, { ...payload, createdAt: serverTimestamp(), updatedAt: serverTimestamp() })
       transaction.update(teamRef, { playerCount: numberOrZero(team.data().playerCount) + 1, updatedAt: serverTimestamp() })
     }
+    if (roster) transaction.set(predictionRosterRef(teamId), predictionRosterFields({ ...team.data(), id: teamId }, [...roster.filter((item) => item.id !== playerRef.id), { id: playerRef.id, nome: payload.nome }], serverTimestamp()))
   })
 }
 
@@ -1221,15 +1267,19 @@ export async function importPlayers(teamId, candidates) {
     const team = await transaction.get(teamRef)
     if (!team.exists()) throw new Error('Esta equipe não existe mais.')
     const existing = await getDocs(collection(firestore, 'teams', teamId, 'players'))
+    const roster = existing.docs.map((item) => ({ ...item.data(), id: item.id }))
     const names = new Set(existing.docs.map((player) => key(player.data().nome)))
     let added = 0
     payloads.forEach((player) => {
       if (names.has(key(player.nome))) return
       names.add(key(player.nome))
-      transaction.set(doc(collection(firestore, 'teams', teamId, 'players')), { ...player, createdAt: serverTimestamp(), updatedAt: serverTimestamp() })
+      const playerRef = doc(collection(firestore, 'teams', teamId, 'players'))
+      transaction.set(playerRef, { ...player, createdAt: serverTimestamp(), updatedAt: serverTimestamp() })
+      roster.push({ ...player, id: playerRef.id })
       added += 1
     })
     if (added) transaction.update(teamRef, { playerCount: numberOrZero(team.data().playerCount) + added, updatedAt: serverTimestamp() })
+    if (usesTopScorer(team.data())) transaction.set(predictionRosterRef(teamId), predictionRosterFields({ ...team.data(), id: teamId }, roster, added ? serverTimestamp() : team.data().updatedAt || null))
     return { added, skipped: payloads.length - added }
   })
 }
@@ -1417,8 +1467,10 @@ export async function deletePlayer(teamId, playerId) {
   await runTransaction(firestore, async (transaction) => {
     const [team, player] = await Promise.all([transaction.get(teamRef), transaction.get(playerRef)])
     if (!player.exists()) return
+    const roster = team.exists() && usesTopScorer(team.data()) ? await readRosterForWrite(transaction, team) : null
     transaction.delete(playerRef)
     if (team.exists()) transaction.update(teamRef, { playerCount: Math.max(0, numberOrZero(team.data().playerCount) - 1), updatedAt: serverTimestamp() })
+    if (roster) transaction.set(predictionRosterRef(teamId), predictionRosterFields({ ...team.data(), id: teamId }, roster.filter((item) => item.id !== playerId), serverTimestamp()))
   })
 }
 
@@ -1872,7 +1924,7 @@ export async function deleteGame(gameId) {
   await batch.commit()
 }
 
-export async function savePrediction({ user, profile, game, palpiteA, palpiteB, guessA, guessB }) {
+export async function savePrediction({ user, profile, game, palpiteA, palpiteB, guessA, guessB, topScorer = '' }) {
   const firestore = ensureDb()
 
   if (!user) {
@@ -1893,6 +1945,20 @@ export async function savePrediction({ user, profile, game, palpiteA, palpiteB, 
     if (!isPredictionDeadlineOpen(latest)) throw new Error('O prazo para palpites encerra 5 minutos antes do jogo e já terminou.')
     if (!canEditPrediction(latest)) throw new Error('Este jogo não está aberto para edição de palpites.')
     const [parsedA, parsedB] = validateSportScores(latest, palpiteA ?? guessA, palpiteB ?? guessB, { final: true })
+    const selection = usesTopScorer(latest) ? parsePredictionPlayerKey(topScorer) : null
+    let scorer = { topScorerTeamId: '', topScorerPlayerId: '', topScorerSide: '', topScorerName: '' }
+    if (selection) {
+      const [teamSnapshot, rosterSnapshot] = await Promise.all([
+        transaction.get(doc(firestore, 'teams', selection.teamId)),
+        transaction.get(doc(firestore, 'teams', selection.teamId, 'public', 'predictionPlayers')),
+      ])
+      const team = teamSnapshot.exists() ? normalizeTeam(teamSnapshot.id, teamSnapshot.data()) : null
+      const side = team ? predictionTeamSide(latest, team) : ''
+      const roster = rosterSnapshot.exists() ? rosterSnapshot.data() : null
+      const player = roster?.teamId === selection.teamId && roster?.sportId === latest.sportId ? roster.players?.find((item) => item.id === selection.playerId) : null
+      if (!side || !player?.nome) throw new Error('O aluno escolhido não está mais na lista das equipes desta partida. Atualize sua escolha.')
+      scorer = { topScorerTeamId: selection.teamId, topScorerPlayerId: selection.playerId, topScorerSide: side, topScorerName: player.nome }
+    }
     const currentSnapshot = await transaction.get(predictionRef)
     const createdAt = currentSnapshot.exists() ? currentSnapshot.data().createdAt : serverTimestamp()
     transaction.set(predictionRef, {
@@ -1904,6 +1970,8 @@ export async function savePrediction({ user, profile, game, palpiteA, palpiteB, 
       pontos: 0,
       acertoExato: false,
       acertoResultado: false,
+      acertoPontuador: false,
+      ...scorer,
       createdAt,
       updatedAt: serverTimestamp(),
     }, { merge: true })

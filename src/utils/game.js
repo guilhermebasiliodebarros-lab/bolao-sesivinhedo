@@ -9,6 +9,21 @@ export function getGameStageLabel(game) {
   return [game?.fase, game?.rodada, { manha: 'Manhã', tarde: 'Tarde' }[game?.turno]].filter(Boolean).join(' - ') || 'Fase única'
 }
 
+export function groupPredictionGames(games) {
+  const groups = new Map()
+  for (const game of games) {
+    const key = JSON.stringify([game.sportId || game.esporteNome, game.tournamentId || '', game.fase || '', game.turno || ''])
+    if (!groups.has(key)) groups.set(key, {
+      key,
+      esporteNome: game.esporteNome,
+      stage: [game.fase, { manha: 'Manhã', tarde: 'Tarde' }[game.turno]].filter(Boolean).join(' - ') || 'Fase única',
+      games: [],
+    })
+    groups.get(key).games.push(game)
+  }
+  return [...groups.values()]
+}
+
 export function gameMatchesSearch(game, searchTerm) {
   const normalizedTerm = normalizeFilterText(searchTerm).trim()
 

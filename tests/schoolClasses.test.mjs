@@ -75,6 +75,19 @@ test('class metadata matches named teams by turma and fixes their explicit shift
   assert.equal(plan.filter((item) => item.type === 'create').length, 13)
 })
 
+test('class setup skips removed sports and creates Mancala only in the morning without deleting old registrations', async () => {
+  const initial = {
+    'sports/rpg': { nome: 'RPG' }, 'sports/fifa': { nome: 'FIFA' }, 'sports/mancala': { nome: 'Mancala' },
+    'teams/previous-rpg': { nome: '6º A', sportId: 'rpg', turno: 'tarde' },
+    'teams/previous-rpg/players/student': { nome: 'Aluno anterior' },
+    'teams/previous-mancala': { nome: '6º A', sportId: 'mancala', turno: 'tarde' },
+  }
+  const store = memoryStore(initial)
+  assert.deepEqual(await synchronizeSchoolClasses(store), { sports: 1, created: 8, updated: 0 })
+  for (const path of ['sports/rpg', 'sports/fifa', 'teams/previous-rpg', 'teams/previous-rpg/players/student', 'teams/previous-mancala']) assert.deepEqual(store.records.get(path), initial[path])
+  assert.deepEqual(await synchronizeSchoolClasses(store), { sports: 0, created: 0, updated: 0 })
+})
+
 test('a failed sport commit stays pending and retries without duplicating completed sports', async () => {
   const store = memoryStore({ 'sports/a': { nome: 'Basquete' }, 'sports/b': { nome: 'Vôlei' } })
   store.fail('b')

@@ -21,6 +21,7 @@ import { reloadAppVersion } from './services/appUpdates.js'
 import ConnectionStatus from './components/ConnectionStatus.jsx'
 import LiveScoresStrip from './components/LiveScoresStrip.jsx'
 import useQuickPredictionMode from './hooks/useQuickPredictionMode.js'
+import useOperatorProcessing from './hooks/useOperatorProcessing.js'
 import { isRehearsal } from './config/rehearsal.js'
 
 const AdminPanel = lazy(() => import('./components/AdminPanel.jsx'))
@@ -76,6 +77,7 @@ function AppShell() {
     return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   })
   const { user, profile, isMaster, isViewer, isParticipant, canReviewRegistrations, hasEventAccess, loading, profileLoading, logout } = useAuth()
+  useOperatorProcessing(isMaster && !loading && !profileLoading, user?.uid)
   const { quick, setQuick } = useQuickPredictionMode(user?.uid)
   const activeView = resolveAppView(view, { signedIn: Boolean(user), isMaster, isViewer, isParticipant, canReviewRegistrations, participantHome: quick ? 'jogos' : 'dashboard' })
   const loadingVariant = { admin: 'admin', classificacao: 'ranking', calendario: 'calendar', dashboard: 'dashboard', login: 'form', cadastro: 'form' }[activeView] || 'cards'
