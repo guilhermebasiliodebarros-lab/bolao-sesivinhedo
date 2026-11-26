@@ -59,14 +59,10 @@
 .is-embedded .sb-grid .sb-incidents li { min-height: 24px; padding: 2px; gap: 4px; font-size: 12px; }
 .is-embedded .sb-incidents-teams { gap: 7px; }
 .is-embedded .sb-incidents-heading { flex-wrap: wrap; font-size: 8px; }
-.is-embedded .sb-incidents-heading > span:last-child:not(.sb-incident-flash) { font-size: 8px; }
 .is-embedded .sb-incidents-team-heading { font-size: 8px; }
 .is-embedded .sb-incident-flash { font-size: 9px; }
 .is-embedded .sb-incident-ball { width: 15px; font-size: 14px; }
 .is-embedded .sb-incident-card { width: 8px; height: 13px; margin-inline: 2px; }
-.is-embedded .sb-grid[data-count='2'] .sb-incidents-teams { grid-template-columns: 1fr; }
-.is-embedded .sb-grid[data-count='2'] .sb-incidents-team { min-height: 35px; }
-.is-embedded .sb-incidents-team > p { font-size: 9px; }
 .local-test-tv-dialog { width: 100vw; max-width: none; height: 100dvh; max-height: none; padding: 0; margin: 0; border: 0; border-radius: 0; background: #090e14; color: #f6f7f2; }
 .local-test-tv-dialog::backdrop { background: #090e14; }
 .local-test-tv-screen { width: 100%; min-height: 100dvh; background: #090e14; }
@@ -75,4 +71,5 @@
 .local-test-screen-message { position: fixed; bottom: 20px; left: 20px; background: #273748; padding: 12px; color: #fff; border-radius: 8px; }
 @media (max-width: 1100px) { .local-test-columns { grid-template-columns: 1fr; } .local-test-preview-wrap { position: static; } .local-test-control-scroll { max-height: 600px; } .local-test-preview.is-embedded { height: 650px; } }
 @media (max-width: 600px) { .local-test-heading { flex-direction: column; } .local-test-control-scroll { max-height: 600px; padding: 10px; } .local-test-preview.is-embedded { height: auto; min-height: 500px; } .is-embedded .sb-match { min-height: 330px; } .local-test-preview.is-full { height: auto; min-height: 100dvh; } .local-test-tv-tools { flex-wrap: wrap; } }
+@media (max-width: 600px) { .local-test-preview .sb-match.has-activity .sb-incidents { flex: 0 0 140px; } }
 @media (max-width: 600px) { .local-test-team-picker { margin: 12px 10px; } .local-test-team-fields { grid-template-columns: 1fr; } }

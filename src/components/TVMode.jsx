@@ -12,6 +12,8 @@ import { buildAutomaticCalls, DEFAULT_BROADCAST_SETTINGS } from '../utils/automa
 import { readPreference, writePreference } from '../utils/preferences.js'
 import TVConnectionStatus from './TVConnectionStatus.jsx'
 import { transmissionHealth } from '../utils/transmissionHealth.js'
+import useTVAnnouncement from '../hooks/useTVAnnouncement.js'
+import TVAnnouncement, { TVSirenButton } from './TVAnnouncement.jsx'
 
 const clockFormat = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', second: '2-digit' })
 const dateFormat = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit' })
@@ -42,6 +44,8 @@ export default function TVMode({ onNavigate }) {
   const [fullscreen, setFullscreen] = useState(() => Boolean(document.fullscreenElement))
   const [compactLive, setCompactLive] = useState(() => window.innerHeight < 1000)
   const [screenMessage, setScreenMessage] = useState('')
+  const broadcast = useTVAnnouncement()
+  const showScreenAnnouncement = Boolean(broadcast.announcement)
 
   useEffect(() => {
     const previousTitle = document.title
@@ -114,13 +118,13 @@ export default function TVMode({ onNavigate }) {
 
   useEffect(() => {
     const ids = JSON.parse(pageKeys)
-    if (!rotating || ids.length < 2) return
+    if (!rotating || showScreenAnnouncement || ids.length < 2) return
     const timer = window.setInterval(() => setCursor((current) => {
       const index = Math.max(0, ids.indexOf(current))
       return ids[(index + 1) % ids.length]
     }), duration * 1000)
     return () => window.clearInterval(timer)
-  }, [duration, pageKeys, rotating])
+  }, [duration, pageKeys, rotating, showScreenAnnouncement])
 
   const step = (direction) => {
     if (pages.length) setCursor(pages[(pageIndex + direction + pages.length) % pages.length].id)
@@ -140,7 +144,15 @@ export default function TVMode({ onNavigate }) {
     onNavigate('calendario')
   }
 
-  const health = transmissionHealth({ now, startedAt: healthStartedAt, online, connected: synced, error: Boolean(error), feeds: [{ name: 'Placares e programação', lastServerAt: lastSync, maxAgeMs: 75000 }] })
+  const health = transmissionHealth({
+    now, startedAt: healthStartedAt, online,
+    connected: synced && broadcast.synced,
+    error: Boolean(error || broadcast.error),
+    feeds: [
+      { name: 'Placares e programação', lastServerAt: lastSync, maxAgeMs: 75000 },
+      { name: 'Avisos da comissão', lastServerAt: broadcast.lastSync, maxAgeMs: 135000 },
+    ],
+  })
   return (
     <section className="tv-page" aria-label="Modo TV">
       <header className="tv-header">
@@ -163,6 +175,7 @@ export default function TVMode({ onNavigate }) {
           </div>
         </div>
         <div className="tv-header-end">
+          <TVSirenButton sound={broadcast.sound} />
           <div className="tv-clock"><time>{clockFormat.format(now)}</time><span>{new Intl.DateTimeFormat('pt-BR', { dateStyle: 'full', timeZone: SCHOOL_TIMEZONE }).format(now)}</span></div>
           {fullscreen && <button type="button" className="tv-settings-toggle" aria-controls="tv-toolbar" aria-expanded={settingsOpen} onClick={() => setSettingsOpen((value) => !value)}>{settingsOpen ? 'Fechar ajustes' : 'Ajustes da TV'}</button>}
         </div>
@@ -176,11 +189,12 @@ export default function TVMode({ onNavigate }) {
         <div className={`tv-slide tv-slide-${page.kind}`} key={page.id}>
           <div className="tv-slide-heading"><div><span className="tv-slide-eyebrow">{page.kind === 'live' ? `${counts.live} partida(s) simultânea(s)` : page.sportName}</span><h2>{page.title}</h2><p>{page.description}</p></div><span className="tv-slide-part">{page.kind === 'live' ? 'PLACARES AO VIVO' : page.kind === 'tomorrow' ? dateFormat.format(eventDate(`${schedule.tomorrow}T12:00`)) : page.kind === 'today' ? dateFormat.format(now) : page.sportName}<strong>Página {page.part} / {page.parts}</strong></span></div>
           <div className={`tv-slide-cards ${page.kind === 'live' ? 'is-live' : ''} ${page.games.length === 1 ? 'is-single' : ''}`} data-count={page.games.length} style={{ '--tv-rows': Math.ceil(page.games.length / (page.kind === 'live' ? 2 : 3)) }}>
-            {page.games.map((game) => <TVMatchCard key={game.id} game={game} now={now} showClock={broadcastSettings.showMatchClock !== false} />)}
+            {page.games.map((game) => <TVMatchCard key={game.id} game={game} now={now} connected={health.connected} showClock={broadcastSettings.showMatchClock !== false} />)}
           </div>
         </div>
       ) : <div className="tv-empty"><span aria-hidden="true">🏆</span><h2>{loading ? 'Carregando programação…' : 'Aguardando a programação'}</h2><p>Os jogos aparecerão aqui assim que forem cadastrados.</p></div>}
       <footer className={health.connected ? 'tv-footer' : 'tv-footer is-offline'}><strong>INTERCLASSE SESI VINHEDO <span>{health.label}{lastSync ? ` · conferido às ${clockFormat.format(new Date(lastSync))}` : ''}</span></strong><span>{rotating ? `Rotação automática · ${duration} s por página` : 'Rotação pausada'} · Tela {pages.length ? pageIndex + 1 : 0}/{pages.length}</span></footer>
+      <TVAnnouncement announcement={broadcast.announcement} />
     </section>
   )
 }

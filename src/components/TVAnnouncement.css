@@ -1,0 +1,85 @@
+.tv-siren-control { position: relative; flex-shrink: 0; }
+:is(.scoreboard-screen, .tv-page) .tv-siren-control button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 5px 9px;
+  border: 1px solid #74879c;
+  border-radius: 7px;
+  background: #19293a;
+  color: #f1f5ff;
+  cursor: pointer;
+  font: 650 12px/1.2 var(--font);
+  white-space: nowrap;
+}
+.tv-siren-control button[aria-pressed='true'] { border-color: #55a88d; color: #b3f3d6; }
+.tv-siren-control small { position: absolute; z-index: 5; inset: 100% 0 auto auto; width: 190px; padding: 7px 9px; border-radius: 5px; background: #263347; color: #fff; font-size: 12px; }
+
+html:has(.tv-announcement-overlay) { overflow: hidden; }
+.tv-announcement-overlay {
+  --announcement-accent: #ffd277;
+  position: fixed;
+  z-index: 10000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: clamp(18px, 4vw, 64px);
+  overflow: auto;
+  border: 0;
+  border-block: max(5px, .8vh) solid var(--announcement-accent);
+  background: radial-gradient(ellipse at 50% 0, #322239, #0e1523 65%);
+  color: #fff8eb;
+  font-family: var(--font);
+  text-align: center;
+}
+.tv-announcement-overlay.is-chamada { --announcement-accent: #a9eaff; background: radial-gradient(ellipse at 50% 0, #1f4360, #0b1727 65%); }
+.tv-announcement-overlay.is-atraso { --announcement-accent: #ffa38a; }
+.tv-announcement-content {
+  display: grid;
+  justify-items: center;
+  gap: clamp(14px, 3vh, 36px);
+  width: min(100%, 1580px);
+  min-width: 0;
+}
+.tv-announcement-content img {
+  width: clamp(110px, 14vw, 240px);
+  height: clamp(38px, 8vh, 82px);
+  object-fit: contain;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #fff;
+}
+.tv-announcement-content strong {
+  color: var(--announcement-accent);
+  font-size: clamp(15px, min(2.1vw, 4vh), 36px);
+  text-transform: uppercase;
+  letter-spacing: .09em;
+}
+.tv-announcement-content p {
+  margin: 0;
+  font-size: clamp(24px, min(6.4vw, 11vh), 104px);
+  font-weight: 850;
+  line-height: 1.14;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+.tv-announcement-overlay.is-long p { font-size: clamp(20px, min(4.1vw, 7vh), 74px); }
+.tv-announcement-progress {
+  position: fixed;
+  inset: auto 0 0;
+  height: max(6px, 1.1vh);
+  background: var(--announcement-accent);
+  transform-origin: left;
+  animation: tv-announcement-remaining linear forwards;
+}
+@keyframes tv-announcement-remaining { to { transform: scaleX(0); } }
+@media (prefers-reduced-motion: reduce) { .tv-announcement-progress { animation: none; } }
+@media (max-width: 540px) {
+  :is(.scoreboard-screen, .tv-page) .tv-siren-control button { gap: 4px; padding-inline: 6px; font-size: 11px; }
+}

@@ -1386,6 +1386,28 @@ test('announcements validate public messages and expire automatically by timesta
   assert(announcement.expiresAt.getTime() > Date.now())
 })
 
+test('manual TV announcements publish history and replace one live message, ending only the current notice', async () => {
+  const { setAnnouncementActive, deleteAnnouncement } = await import('../src/services/firestoreService.js')
+  const first = await saveAnnouncement({ text: 'Chamada para o campo.', type: 'chamada' })
+  const second = await saveAnnouncement({ text: 'Basquete na Quadra 2.', type: 'atraso' })
+  const current = 'broadcastSettings/announcement'
+  assert.equal(documents.get(`announcements/${first}`).presentation, 'screen')
+  assert.deepEqual(documents.get(current), {
+    id: second, text: 'Basquete na Quadra 2.', type: 'atraso',
+    publishedAt: documents.get(`announcements/${second}`).createdAt,
+  })
+  await setAnnouncementActive(first, false)
+  assert.equal(documents.get(current).id, second)
+  await setAnnouncementActive(second, false)
+  assert.equal(documents.has(current), false)
+  assert.equal(documents.has(`announcements/${second}`), true)
+
+  const third = await saveAnnouncement({ text: 'Preparem-se.' })
+  await deleteAnnouncement(third)
+  assert.equal(documents.has(current), false)
+  assert.equal(documents.has(`announcements/${third}`), false)
+})
+
 const { exportEventBackup, finalizeEventRecovery, previewEventRestore, restoreEventBackup } = await import('../src/services/eventBackupService.js')
 const { createEventBackup } = await import('../src/utils/eventBackup.js')
 const { markScheduleNoticesRead } = await import('../src/services/firestoreService.js')

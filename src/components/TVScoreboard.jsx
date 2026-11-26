@@ -7,7 +7,9 @@ import { DEFAULT_BROADCAST_SETTINGS } from '../utils/automaticCalls.js'
 import { CLASS_DECADE_IDENTITIES, decadeTeamStyle } from '../utils/decadeIdentities.js'
 import { DecadeEmblem } from './DecadeArtwork.jsx'
 import useBroadcastScreen from '../hooks/useBroadcastScreen.js'
+import useTVAnnouncement from '../hooks/useTVAnnouncement.js'
 import TVConnectionStatus from './TVConnectionStatus.jsx'
+import TVAnnouncement, { TVSirenButton } from './TVAnnouncement.jsx'
 import { transmissionHealth } from '../utils/transmissionHealth.js'
 import ScoreboardMatch, { SportGlyph } from './ScoreboardMatch.jsx'
 import './TVScoreboard.css'
@@ -35,6 +37,7 @@ export default function TVScoreboard({ onNavigate }) {
   const [shareMessage, setShareMessage] = useState('')
   const settingsRef = useRef(null)
   const { now, online, fullscreen, toggleFullscreen, message: screenMessage } = useBroadcastScreen()
+  const broadcast = useTVAnnouncement()
   const loading = gamesLoading || selectionLoading
 
   useEffect(() => {
@@ -87,7 +90,16 @@ export default function TVScoreboard({ onNavigate }) {
   }, [])
 
   const model = useMemo(() => buildSelectedScoreboard(games, selection), [games, selection])
-  const health = transmissionHealth({ now, startedAt: healthStartedAt, online, connected: gamesSynced && selectionSynced, error: Boolean(error || selectionError), feeds: [{ name: 'Placares', lastServerAt: lastSync, maxAgeMs: 75000 }, { name: 'Seleção dos jogos', lastServerAt: lastSelectionSync, maxAgeMs: 135000 }] })
+  const health = transmissionHealth({
+    now, startedAt: healthStartedAt, online,
+    connected: gamesSynced && selectionSynced && broadcast.synced,
+    error: Boolean(error || selectionError || broadcast.error),
+    feeds: [
+      { name: 'Placares', lastServerAt: lastSync, maxAgeMs: 75000 },
+      { name: 'Seleção dos jogos', lastServerAt: lastSelectionSync, maxAgeMs: 135000 },
+      { name: 'Avisos da comissão', lastServerAt: broadcast.lastSync, maxAgeMs: 135000 },
+    ],
+  })
   const connected = health.connected
   const share = async () => {
     const url = new URL(window.location.href)
@@ -118,7 +130,10 @@ export default function TVScoreboard({ onNavigate }) {
     </header>
     <div className="sb-broadcast-bar">
       <div className="sb-headline"><span className={`sb-signal${connected ? '' : ' is-disconnected'}`}><i />{connected ? 'TRANSMISSÃO AO VIVO' : !online ? 'SEM CONEXÃO' : health.state === 'stale' ? 'DADOS ATRASADOS' : 'SINCRONIZANDO'}</span><span className="sb-headline-divider" /><h2>{loading ? 'Conectando à quadra…' : titles[model.kind]}</h2></div>
-      <span className="sb-match-count">{model.games.length ? <><b>{String(model.games.length).padStart(2, '0')}</b> {model.games.length === 1 ? 'JOGO SELECIONADO' : 'JOGOS SELECIONADOS'}</> : 'AGUARDANDO SELEÇÃO'}</span>
+      <div className="sb-broadcast-tools">
+        <span className="sb-match-count">{model.games.length ? <><b>{String(model.games.length).padStart(2, '0')}</b> {model.games.length === 1 ? 'JOGO SELECIONADO' : 'JOGOS SELECIONADOS'}</> : 'AGUARDANDO SELEÇÃO'}</span>
+        <TVSirenButton sound={broadcast.sound} />
+      </div>
     </div>
     {!online || error || selectionError || settingsError || screenMessage ? <div className="sb-notice" role="status">{!online ? 'Sem conexão. A última seleção e os últimos placares continuam na tela; a atualização será retomada automaticamente.' : error || selectionError ? 'Aguardando reconexão. Exibindo a última seleção e os últimos placares recebidos.' : settingsError ? 'As configurações do cronômetro estão temporariamente indisponíveis.' : screenMessage}</div> : null}
     {model.unavailable && !loading ? <div className="sb-notice" role="status">Uma partida selecionada foi removida, cancelada ou adiada. Aguardando nova seleção da organização.</div> : null}
@@ -141,5 +156,6 @@ export default function TVScoreboard({ onNavigate }) {
       {shareMessage ? <p role="status" className="sb-share-message">{shareMessage}</p> : null}
       <nav><button type="button" onClick={() => leave('tv')}>Programação rotativa</button><button type="button" onClick={goToSite}>Voltar ao site</button></nav>
     </dialog>
+    <TVAnnouncement announcement={broadcast.announcement} />
   </section>
 }

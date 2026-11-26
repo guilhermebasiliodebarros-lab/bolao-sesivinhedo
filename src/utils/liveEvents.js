@@ -50,7 +50,8 @@ export function applyLiveEvent(game, input, { player = null, now, elapsedMs }) {
     if (player) {
       const index = after.scorerStats.findIndex((item) => item.side === input.side && item.playerId === player.id)
       const previous = index < 0 ? { side: input.side, playerId: player.id, playerName: event.playerName, total: 0, minutes: [] } : after.scorerStats[index]
-      const stat = { ...previous, playerName: event.playerName, total: previous.total + event.value, minutes: [...previous.minutes, Math.floor(event.elapsedMs / 60000)].slice(-8) }
+      const minutes = [...(previous.minutes || []), Math.floor(event.elapsedMs / 60000)].slice(kind === 'goal' ? -60 : -8)
+      const stat = { ...previous, playerName: event.playerName, total: previous.total + event.value, minutes }
       if (index < 0) after.scorerStats.push(stat); else after.scorerStats[index] = stat
     }
   }

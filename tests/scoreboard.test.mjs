@@ -48,10 +48,40 @@ test('cards are announced as cards, not points; newer scores supersede the card 
   assert.equal(recentScoreEvent({ ...match, publicCardEvents: [{ ...card, kind: 'suspension' }] }, now), null)
 })
 
-test('legacy goals without scorer summaries and basketball shots retain their author and minute', () => {
+test('legacy goals retain their minutes while basketball shows one accumulated row per author', () => {
   const event = { id: 'old-goal', kind: 'goal', side: 'A', value: 1, playerName: 'Ana Silva', elapsedMs: 61000 }
   assert.equal(scoreboardIncidents(game('legacy', 'Futebol', { liveEvents: [event] }))[0].minute, 1)
-  const shot = scoreboardIncidents(game('basket', 'Basquete', { liveEvents: [{ ...event, kind: 'point', value: 3 }] }))[0]
-  assert.equal(shot.value, 3)
-  assert.equal(shot.player, 'Ana')
+  const shots = [3, 2, 2].map((value, index) => ({ ...event, id: `shot-${index}`, kind: 'point', value }))
+  const totals = scoreboardIncidents(game('basket', 'Basquete', { liveEvents: shots }))
+  assert.equal(totals.length, 1)
+  assert.equal(totals[0].total, 7)
+  assert.equal(totals[0].player, 'Ana')
+  assert.equal(totals[0].minute, null)
+})
+
+test('volleyball totals include previous sets and stay separate from the latest points and cards', () => {
+  const match = game('volley', 'Vôlei', {
+    currentSet: { a: 18, b: 15 }, liveScoreA: 1, setScores: [{ a: 25, b: 21 }],
+    scorerStats: [
+      { side: 'A', playerId: 'one', playerName: 'Gustavo Souza', total: 19, minutes: [2, 5] },
+      { side: 'A', playerId: 'two', playerName: 'Gustavo Lima', total: 7 },
+      { side: 'B', playerId: 'one', playerName: 'Gustavo', total: 11 },
+    ],
+    liveEvents: [{ id: 'latest', kind: 'point', side: 'A', playerId: 'one', playerName: 'Gustavo', value: 1, elapsedMs: 300000 }],
+    publicCardEvents: [{ id: 'yellow', kind: 'yellow', side: 'A', playerName: 'Gustavo Lima', elapsedMs: 120000 }],
+  })
+  const rows = scoreboardIncidents(match)
+  assert.deepEqual(rows.filter((row) => row.kind === 'point').map(({ id, total, minute }) => [id, total, minute]), [
+    ['scorer-A-one', 19, null], ['scorer-B-one', 11, null], ['scorer-A-two', 7, null],
+  ])
+  assert.equal(rows[0].kind, 'yellow')
+  assert.equal(rows[0].minute, 2)
+})
+
+test('multiple handball goals remain one row with each minute, including goals scored in the same minute', () => {
+  const liveEvents = [1, 5, 5].map((minute, index) => ({ id: `goal-${index}`, kind: 'goal', side: 'A', playerId: 'gustavo', playerName: 'Gustavo', elapsedMs: minute * 60000, value: 1 }))
+  const rows = scoreboardIncidents(game('handball', 'Handebol', { liveEvents }))
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0].total, 3)
+  assert.deepEqual(rows[0].minutes, [1, 5, 5])
 })

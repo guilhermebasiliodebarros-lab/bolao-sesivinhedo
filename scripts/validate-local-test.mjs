@@ -21,12 +21,13 @@ try {
     if (['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) || !['http:', 'https:'].includes(url.protocol)) return route.continue()
     return route.abort()
   })
-  context.on('request', (request) => {
+  context.on('page', (value) => value.on('pageerror', (error) => errors.push(error.message)))
+  page = await context.newPage()
+  // Track rehearsal actions in their own page. The separate master TV session can run background synchronization.
+  page.on('request', (request) => {
     const url = new URL(request.url())
     if (active && url.port === '8180' && (/\/Write\//.test(url.pathname) || /:commit|:batchWrite/.test(url.pathname))) writes.push(url.pathname)
   })
-  context.on('page', (value) => value.on('pageerror', (error) => errors.push(error.message)))
-  page = await context.newPage()
   page.setDefaultTimeout(30000)
   await page.goto(`${APP_ORIGIN}/#login`)
   await page.locator('input[autocomplete="username"]').fill('suporte')

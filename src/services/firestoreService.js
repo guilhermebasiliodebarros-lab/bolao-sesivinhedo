@@ -1294,6 +1294,14 @@ export function subscribeBroadcastSettings(onData, onError) {
   return onSnapshot(doc(ensureDb(), 'broadcastSettings', 'tv'), (snapshot) => onData(normalizeBroadcastSettings(snapshot.exists() ? snapshot.data() : {})), (error) => onError?.(error ? toFriendlyError(error) : ''))
 }
 
+export function subscribeTVAnnouncement(onData, onError, onSync) {
+  return onSnapshot(doc(ensureDb(), 'broadcastSettings', 'announcement'), (snapshot) => {
+    if (!snapshot.metadata?.fromCache && !snapshot.metadata?.hasPendingWrites) {
+      onData(snapshot.exists() ? snapshot.data() : null)
+    }
+  }, (error) => onError?.(error ? toFriendlyError(error) : ''), onSync)
+}
+
 export async function saveBroadcastSettings(value) {
   if (typeof value.autoCallsEnabled !== 'boolean' || ![5, 10, 15, 20, 30].includes(Number(value.leadMinutes))) throw new Error('Escolha uma antecedência válida para as chamadas automáticas.')
   await setDoc(doc(ensureDb(), 'broadcastSettings', 'tv'), { ...normalizeBroadcastSettings(value), updatedAt: serverTimestamp() })
@@ -1329,18 +1337,51 @@ export async function saveScoreboardSelection(gameIds, expectedRevision) {
   })
 }
 
-export async function saveAnnouncement({ text, type = 'aviso', minutes = 60 }) {
+export async function saveAnnouncement({ text, type = 'aviso', minutes }) {
   const firestore = ensureDb()
   const message = String(text || '').trim()
   if (!message || message.length > 240) throw new Error('Escreva um aviso de até 240 caracteres.')
   if (!['aviso', 'chamada', 'atraso'].includes(type)) throw new Error('Tipo de aviso inválido.')
-  const duration = Number(minutes)
-  if (!Number.isInteger(duration) || duration < 1 || duration > 1440) throw new Error('Escolha uma validade de 1 a 1440 minutos.')
-  await setDoc(doc(collection(firestore, 'announcements')), { text: message, type, active: true, expiresAt: Timestamp.fromDate(new Date(Date.now() + duration * 60000)), createdAt: serverTimestamp() })
+  const historyRef = doc(collection(firestore, 'announcements'))
+  const publishedAt = serverTimestamp()
+  if (minutes !== undefined) {
+    const duration = Number(minutes)
+    if (!Number.isInteger(duration) || duration < 1 || duration > 1440) throw new Error('Escolha uma validade de 1 a 1440 minutos.')
+    await setDoc(historyRef, { text: message, type, active: true, expiresAt: Timestamp.fromDate(new Date(Date.now() + duration * 60000)), createdAt: publishedAt })
+  } else {
+    const liveRef = doc(firestore, 'broadcastSettings', 'announcement')
+    const batch = writeBatch(firestore)
+    batch.set(historyRef, { text: message, type, presentation: 'screen', active: false, createdAt: publishedAt })
+    batch.set(liveRef, { id: historyRef.id, text: message, type, publishedAt })
+    await batch.commit()
+  }
+  return historyRef.id
 }
 
-export async function setAnnouncementActive(id, active) { await updateDoc(doc(ensureDb(), 'announcements', id), { active: Boolean(active) }) }
-export async function deleteAnnouncement(id) { await deleteDoc(doc(ensureDb(), 'announcements', id)) }
+export async function setAnnouncementActive(id, active) {
+  const firestore = ensureDb()
+  const historyRef = doc(firestore, 'announcements', id)
+  if (active) {
+    await updateDoc(historyRef, { active: true })
+    return
+  }
+  await runTransaction(firestore, async (transaction) => {
+    const liveRef = doc(firestore, 'broadcastSettings', 'announcement')
+    const live = await transaction.get(liveRef)
+    transaction.update(historyRef, { active: false })
+    if (live.data()?.id === id) transaction.delete(liveRef)
+  })
+}
+
+export async function deleteAnnouncement(id) {
+  const firestore = ensureDb()
+  await runTransaction(firestore, async (transaction) => {
+    const liveRef = doc(firestore, 'broadcastSettings', 'announcement')
+    const live = await transaction.get(liveRef)
+    transaction.delete(doc(firestore, 'announcements', id))
+    if (live.data()?.id === id) transaction.delete(liveRef)
+  })
+}
 
 async function matchProfile(transaction, firestore, game, refresh = false) {
   if (game.scoringMode && !refresh) return getSportProfile(game)
