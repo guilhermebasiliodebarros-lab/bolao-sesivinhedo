@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { subscribeBroadcastSettings, subscribeGames, subscribeScoreboardSelection } from '../services/bolaoService.js'
-import { buildSelectedScoreboard } from '../utils/scoreboardSelection.js'
+import { buildSelectedScoreboard, normalizeScoreboardSelection } from '../utils/scoreboardSelection.js'
 import { getMatchLabel } from '../utils/match.js'
 import { SCHOOL_TIMEZONE } from '../utils/tvSchedule.js'
 import { DEFAULT_BROADCAST_SETTINGS } from '../utils/automaticCalls.js'
@@ -16,11 +16,17 @@ import './TVScoreboard.css'
 
 const timeFormat = new Intl.DateTimeFormat('pt-BR', { timeZone: SCHOOL_TIMEZONE, hour: '2-digit', minute: '2-digit' })
 const fullDateFormat = new Intl.DateTimeFormat('pt-BR', { timeZone: SCHOOL_TIMEZONE, weekday: 'long', day: '2-digit', month: 'long' })
-const titles = { live: 'Acontecendo agora', upcoming: 'Aguardando o início', results: 'Resultado final', empty: 'Aguardando seleção da organização' }
+const titles = { live: 'Acontecendo agora', upcoming: 'Aguardando o início', results: 'Resultado final' }
+const emptyTitles = { automatic: 'Aguardando partidas ao vivo', manual: 'Aguardando seleção da organização', standby: 'TV em espera' }
+const emptyMessages = {
+  automatic: 'Os jogos aparecem aqui assim que a organização iniciar a partida.',
+  manual: 'A próxima seleção da organização aparecerá aqui.',
+  standby: 'A organização pode retomar a transmissão pelo painel.',
+}
 
 export default function TVScoreboard({ onNavigate }) {
   const [games, setGames] = useState([])
-  const [selection, setSelection] = useState({ gameIds: [], revision: 0 })
+  const [selection, setSelection] = useState(normalizeScoreboardSelection)
   const [broadcastSettings, setBroadcastSettings] = useState(DEFAULT_BROADCAST_SETTINGS)
   const [gamesLoading, setGamesLoading] = useState(true)
   const [selectionLoading, setSelectionLoading] = useState(true)
@@ -90,6 +96,7 @@ export default function TVScoreboard({ onNavigate }) {
   }, [])
 
   const model = useMemo(() => buildSelectedScoreboard(games, selection), [games, selection])
+  const title = titles[model.kind] || emptyTitles[model.mode]
   const health = transmissionHealth({
     now, startedAt: healthStartedAt, online,
     connected: gamesSynced && selectionSynced && broadcast.synced,
@@ -129,9 +136,9 @@ export default function TVScoreboard({ onNavigate }) {
       </div>
     </header>
     <div className="sb-broadcast-bar">
-      <div className="sb-headline"><span className={`sb-signal${connected ? '' : ' is-disconnected'}`}><i />{connected ? 'TRANSMISSÃO AO VIVO' : !online ? 'SEM CONEXÃO' : health.state === 'stale' ? 'DADOS ATRASADOS' : 'SINCRONIZANDO'}</span><span className="sb-headline-divider" /><h2>{loading ? 'Conectando à quadra…' : titles[model.kind]}</h2></div>
+      <div className="sb-headline"><span className={`sb-signal${connected ? '' : ' is-disconnected'}`}><i />{connected ? 'TRANSMISSÃO AO VIVO' : !online ? 'SEM CONEXÃO' : health.state === 'stale' ? 'DADOS ATRASADOS' : 'SINCRONIZANDO'}</span><span className="sb-headline-divider" /><h2>{loading ? 'Conectando à quadra…' : title}</h2></div>
       <div className="sb-broadcast-tools">
-        <span className="sb-match-count">{model.games.length ? <><b>{String(model.games.length).padStart(2, '0')}</b> {model.games.length === 1 ? 'JOGO SELECIONADO' : 'JOGOS SELECIONADOS'}</> : 'AGUARDANDO SELEÇÃO'}</span>
+        <span className="sb-match-count">{!loading && model.games.length ? <><b>{String(model.games.length).padStart(2, '0')}</b> {model.games.length === 1 ? 'JOGO NA TELA' : 'JOGOS NA TELA'}</> : null}</span>
         <TVSirenButton sound={broadcast.sound} />
       </div>
     </div>
@@ -141,16 +148,16 @@ export default function TVScoreboard({ onNavigate }) {
     {model.games.length && !loading ? <main className="sb-grid" data-count={model.games.length}>{model.games.map((game) => <ScoreboardMatch key={game.id} game={game} now={now} showClock={broadcastSettings.showMatchClock !== false} connected={connected} />)}</main> : <main className="sb-empty">
       <div className="sb-empty-court" aria-hidden="true"><span /><i /></div>
       <span className="sb-empty-eyebrow">{loading ? 'PREPARANDO A TRANSMISSÃO' : 'A TV ESTÁ PRONTA'}</span>
-      <h2>{loading ? 'Conectando à quadra…' : 'Aguardando os jogos.'}</h2>
-      <p>{loading ? 'Buscando os jogos escolhidos pela organização.' : 'As partidas selecionadas pela organização aparecerão aqui. Um jogo em tela inteira ou dois lado a lado.'}</p>
+      <h2>{loading ? 'Conectando à quadra…' : model.mode === 'standby' ? 'TV em espera.' : 'Aguardando os jogos.'}</h2>
+      <p>{loading ? 'Buscando a transmissão da organização.' : emptyMessages[model.mode]}</p>
       <div>{['basketball', 'volleyball', 'football', 'handball'].map((name, index) => <span key={name}><SportGlyph sport={name} />{['Basquete', 'Vôlei', 'Futebol', 'Handebol'][index]}</span>)}</div>
     </main>}
     <footer className="sb-footer"><TVConnectionStatus health={health} now={now} /><strong>DÉCADAS DIFERENTES. A MESMA PAIXÃO PELO JOGO.</strong><span className="sb-footer-label">INTERCLASSE 2026</span></footer>
     <dialog className="sb-settings" ref={settingsRef} aria-labelledby="sb-settings-title" onCancel={() => setSettingsOpen(false)} onClose={() => setSettingsOpen(false)}>
-      <header><div><span>TRANSMISSÃO · SESI VINHEDO</span><h2 id="sb-settings-title">Os jogos escolhidos. Ao vivo.</h2></div><button type="button" onClick={() => setSettingsOpen(false)} aria-label="Fechar ajustes">×</button></header>
-      <p>A organização escolhe os jogos em <strong>Painel master → Ao vivo / TV → Escolher jogos do placar</strong>. A seleção é enviada automaticamente para esta TV.</p>
-      <div className="sb-selected-summary" aria-label="Jogos selecionados">{model.games.map((game) => <p key={game.id}><strong>{game.timeA} × {game.timeB}</strong><span>{game.esporteNome} · {getMatchLabel(game)}</span></p>)}{!model.games.length ? <p>Nenhum jogo selecionado.</p> : null}</div>
-      <small>Um jogo ocupa a tela inteira. Dois jogos ficam lado a lado. O placar permanece nesta seleção até a organização alterá-la.</small>
+      <header><div><span>TRANSMISSÃO · SESI VINHEDO</span><h2 id="sb-settings-title">Ajustes do placar</h2></div><button type="button" onClick={() => setSettingsOpen(false)} aria-label="Fechar ajustes">×</button></header>
+      <p>Controle a transmissão em <strong>Painel master → Ao vivo / TV → Escolher jogos do placar</strong>.</p>
+      <div className="sb-selected-summary" aria-label="Jogos na tela">{model.games.map((game) => <p key={game.id}><strong>{game.timeA} × {game.timeB}</strong><span>{game.esporteNome} · {getMatchLabel(game)}</span></p>)}{!model.games.length ? <p>{title}</p> : null}</div>
+      <small>{model.mode === 'automatic' ? 'Acompanhamento automático. Basquete e vôlei podem dividir a tela. Futsal e handebol ocupam a tela inteira.' : model.mode === 'manual' ? 'Seleção manual. Os jogos ficam na tela até a organização trocar a seleção.' : 'TV em espera. A organização pode retomar a transmissão pelo painel.'}</small>
       <details className="sb-decade-legend"><summary>Décadas e cores das turmas</summary><p>Cada equipe recebe sua identidade automaticamente. As cores da turma e do colete são identificações separadas.</p>{[['tarde', 'Tarde'], ['manha', 'Manhã']].map(([shift, label]) => <section key={shift}><h3>{label}</h3><div>{Object.values(CLASS_DECADE_IDENTITIES).filter((identity) => identity.shift === shift).map((identity) => <article key={identity.code} className="decade-team" style={decadeTeamStyle(identity)}><DecadeEmblem decade={identity.decade} /><div><strong>{identity.className} · {identity.label}</strong><span>{identity.color}</span></div></article>)}</div></section>)}</details>
       <div className="sb-settings-actions"><button className="sb-primary-button" type="button" onClick={async () => { setSettingsOpen(false); await toggleFullscreen() }}>{fullscreen ? 'Sair da tela cheia' : 'Iniciar em tela cheia'}</button><button type="button" onClick={share}>Copiar link desta TV</button></div>
       {shareMessage ? <p role="status" className="sb-share-message">{shareMessage}</p> : null}

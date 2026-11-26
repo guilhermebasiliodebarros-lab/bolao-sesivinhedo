@@ -106,7 +106,7 @@ try {
     if (await clear.isEnabled()) await clear.click()
     for (const name of names) await selector.getByRole('checkbox', { name, exact: true }).check()
     await selector.getByRole('button', { name: 'Transmitir seleção', exact: true }).click()
-    await selector.getByText('Seleção publicada. A TV mostra somente estes jogos.', { exact: true }).waitFor()
+    await selector.getByText('Seleção publicada. Os jogos escolhidos estão fixados na TV.', { exact: true }).waitFor()
   }
   async function waitScores(gameId, a, b) {
     await tv.waitForFunction(({ id, a, b }) => {
@@ -121,6 +121,8 @@ try {
   }
 
   await start('ensaio-futebol', 'manha')
+  await waitScores('ensaio-futebol', 0, 0)
+  record('Placar automático recebe a partida iniciada em outra sessão sem escolha manual')
   await footballGuess.locator('.guess-form').waitFor({ state: 'hidden' })
   await transmit(['Transmitir Futebol: 9º A contra 9º B'])
   await waitScores('ensaio-futebol', 0, 0)
@@ -217,9 +219,12 @@ try {
   await waitScores('ensaio-volei-1', 2, 0)
   assert.doesNotMatch(await tv.locator('[data-game-id="ensaio-volei-1"]').innerText(), /3º SET/)
   await finish(volleyball)
-  assert.equal(number(await read(`users/${professorUser.uid}`), 'pontos'), 4)
-  assert.equal(number(await read(`users/${professorUser.uid}`), 'acertosExatos'), 2)
-  record('Dois jogos de vôlei; sets 25–23 e 25–19; resultado 2–0 e palpite pontuado em sets')
+  const volleyPrediction = await read(`predictions/${professorUser.uid}_ensaio-volei-1`)
+  assert.equal(number(volleyPrediction, 'pontos'), 1)
+  assert.equal(decode(volleyPrediction.fields.acertoResultado), true)
+  assert.equal(number(await read(`users/${professorUser.uid}`), 'pontos'), 3)
+  assert.equal(number(await read(`users/${professorUser.uid}`), 'acertosExatos'), 1)
+  record('Dois jogos de vôlei. A vitória por 2–0 dá um ponto pelo acerto da equipe vencedora.')
 
   const statistics = await tvContext.newPage()
   await statistics.goto(`${APP_ORIGIN}/#estatisticas`)
@@ -267,7 +272,9 @@ try {
     createdAt: { timestampValue: new Date().toISOString() }, updatedAt: { timestampValue: new Date().toISOString() },
   }
   const predictionUrl = `${base}/predictions/${professorUser.uid}_${cutoffId}`
-  const sendPrediction = () => fetch(predictionUrl, { method: 'PATCH', headers: { Authorization: `Bearer ${professorToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: predictionFields }) })
+  const predictionMask = Object.keys(predictionFields).map((field) => `updateMask.fieldPaths=${field}`).join('&')
+  // Match the application's merge and preserve fields updated by background scoring.
+  const sendPrediction = () => fetch(`${predictionUrl}?${predictionMask}`, { method: 'PATCH', headers: { Authorization: `Bearer ${professorToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: predictionFields }) })
   assert.equal((await sendPrediction()).status, 403, 'Server must deny guesses after the five-minute deadline')
   cutoffFields.dataHora.timestampValue = new Date(Date.now() + 35 * 60000).toISOString()
   cutoffFields.limitePalpites.timestampValue = new Date(Date.now() + 30 * 60000).toISOString()

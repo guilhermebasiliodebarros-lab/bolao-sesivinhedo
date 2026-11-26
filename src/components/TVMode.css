@@ -28,6 +28,7 @@ html:has(.tv-page) { scrollbar-gutter: auto; }
 .tv-section-nav { display: flex; gap: 8px; overflow-x: auto; flex-shrink: 0; }
 .tv-section-nav button { display: flex; gap: 10px; align-items: center; flex-shrink: 0; padding: 7px 14px; color: #bcd0e6; border: 1px solid #3c526c; border-radius: 24px; background: #142338; font-weight: 700; font-size: 14px; cursor: pointer; }
 .tv-section-nav button.is-active { color: #fff; background: #b31b31; border-color: #f96d80; }
+.tv-section-nav .tv-rehearsal-official { margin-inline-start: auto; color: #ffe1a6; border-color: #b99b65; }
 .tv-section-nav button > span { font-size: 11px; opacity: .8; }
 .tv-live-ticker { display: flex; align-items: center; gap: 20px; padding: 9px 14px; color: #d2e0ef; background: #12283a; border-left: 3px solid #ff6d83; border-radius: 6px; font-size: 14px; }
 .tv-live-ticker > strong { white-space: nowrap; color: #ff9aac; }

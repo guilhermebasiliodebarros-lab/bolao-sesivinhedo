@@ -14,15 +14,17 @@ import TVConnectionStatus from './TVConnectionStatus.jsx'
 import { transmissionHealth } from '../utils/transmissionHealth.js'
 import useTVAnnouncement from '../hooks/useTVAnnouncement.js'
 import TVAnnouncement, { TVSirenButton } from './TVAnnouncement.jsx'
+import { createLocalTestSession } from '../utils/localTestSession.js'
 
 const clockFormat = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', second: '2-digit' })
 const dateFormat = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit' })
 
-export default function TVMode({ onNavigate }) {
-  const [games, setGames] = useState([])
+export default function TVMode({ onNavigate, rehearsal = false }) {
+  const preference = rehearsal ? 'tv-rehearsal-' : 'tv-'
+  const [games, setGames] = useState(() => rehearsal ? createLocalTestSession().getSnapshot().games : [])
   const [announcements, setAnnouncements] = useState([])
   const [broadcastSettings, setBroadcastSettings] = useState(DEFAULT_BROADCAST_SETTINGS)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!rehearsal)
   const [error, setError] = useState('')
   const [announcementError, setAnnouncementError] = useState('')
   const [settingsError, setSettingsError] = useState('')
@@ -31,37 +33,41 @@ export default function TVMode({ onNavigate }) {
   const [synced, setSynced] = useState(false)
   const [online, setOnline] = useState(() => navigator.onLine)
   const [now, setNow] = useState(() => new Date())
-  const [sport, setSport] = useState(() => readPreference('tv-sport', ''))
-  const [turno, setTurno] = useState(() => ['manha', 'tarde'].includes(readPreference('tv-turno')) ? readPreference('tv-turno') : '')
-  const [cursor, setCursor] = useState(() => readPreference('tv-page', ''))
+  const [sport, setSport] = useState(() => readPreference(`${preference}sport`, ''))
+  const [turno, setTurno] = useState(() => ['manha', 'tarde'].includes(readPreference(`${preference}turno`)) ? readPreference(`${preference}turno`) : '')
+  const [cursor, setCursor] = useState(() => readPreference(`${preference}page`, ''))
   const [duration, setDuration] = useState(() => {
-    const stored = Number(readPreference('tv-interval'))
+    const stored = Number(readPreference(`${preference}interval`))
     return [8, 12, 20, 30].includes(stored) ? stored : 12
   })
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [density, setDensity] = useState(() => Number(readPreference('tv-density')) === 4 ? 4 : 2)
-  const [rotating, setRotating] = useState(() => readPreference('tv-rotating') !== 'false')
+  const [density, setDensity] = useState(() => Number(readPreference(`${preference}density`)) === 4 ? 4 : 2)
+  const [rotating, setRotating] = useState(() => readPreference(`${preference}rotating`) !== 'false')
   const [fullscreen, setFullscreen] = useState(() => Boolean(document.fullscreenElement))
   const [compactLive, setCompactLive] = useState(() => window.innerHeight < 1000)
   const [screenMessage, setScreenMessage] = useState('')
-  const broadcast = useTVAnnouncement()
+  const broadcast = useTVAnnouncement({ rehearsal })
   const showScreenAnnouncement = Boolean(broadcast.announcement)
 
   useEffect(() => {
     const previousTitle = document.title
-    document.title = 'Interclasse SESI Vinhedo'
+    document.title = rehearsal ? 'TV de ensaio · Interclasse SESI Vinhedo' : 'Interclasse SESI Vinhedo'
     return () => { document.title = previousTitle }
-  }, [])
+  }, [rehearsal])
 
-  useEffect(() => subscribeGames((items) => { setGames(items); setLoading(false) }, (message) => {
-    setError(message)
-    setLoading(false)
-    setSynced(false)
-  }, (connected, info) => { setSynced(connected); if (connected) { setError(''); setLastSync(info?.lastServerAt || Date.now()) } }), [])
+  useEffect(() => {
+    if (rehearsal) return
+    const stopGames = subscribeGames((items) => { setGames(items); setLoading(false) }, (message) => {
+      setError(message)
+      setLoading(false)
+      setSynced(false)
+    }, (connected, info) => { setSynced(connected); if (connected) { setError(''); setLastSync(info?.lastServerAt || Date.now()) } })
+    const stopAnnouncements = subscribeAnnouncements((items) => { setAnnouncements(items); setAnnouncementError('') }, setAnnouncementError)
+    const stopSettings = subscribeBroadcastSettings((settings) => { setBroadcastSettings(settings); setSettingsError('') }, setSettingsError)
+    return () => { stopGames(); stopAnnouncements(); stopSettings() }
+  }, [rehearsal])
 
-  useEffect(() => subscribeAnnouncements((items) => { setAnnouncements(items); setAnnouncementError('') }, setAnnouncementError), [])
-  useEffect(() => subscribeBroadcastSettings((settings) => { setBroadcastSettings(settings); setSettingsError('') }, setSettingsError), [])
-  useEffect(() => { writePreference('tv-sport', sport); writePreference('tv-rotating', String(rotating)); writePreference('tv-page', cursor) }, [sport, rotating, cursor])
+  useEffect(() => { writePreference(`${preference}sport`, sport); writePreference(`${preference}rotating`, String(rotating)); writePreference(`${preference}page`, cursor) }, [preference, sport, rotating, cursor])
 
   useEffect(() => {
     const clock = window.setInterval(() => setNow(new Date()), 1000)
@@ -141,28 +147,27 @@ export default function TVMode({ onNavigate }) {
   }
   const leave = async () => {
     if (document.fullscreenElement) await document.exitFullscreen().catch(() => {})
-    onNavigate('calendario')
+    onNavigate(rehearsal ? 'admin' : 'calendario')
   }
 
+  const announcementFeed = { name: rehearsal ? 'Avisos de ensaio' : 'Avisos da comissão', lastServerAt: broadcast.lastSync, maxAgeMs: 135000 }
+  const lastConfirmation = rehearsal ? broadcast.lastSync : lastSync
   const health = transmissionHealth({
     now, startedAt: healthStartedAt, online,
-    connected: synced && broadcast.synced,
+    connected: (rehearsal || synced) && broadcast.synced,
     error: Boolean(error || broadcast.error),
-    feeds: [
-      { name: 'Placares e programação', lastServerAt: lastSync, maxAgeMs: 75000 },
-      { name: 'Avisos da comissão', lastServerAt: broadcast.lastSync, maxAgeMs: 135000 },
-    ],
+    feeds: rehearsal ? [announcementFeed] : [{ name: 'Placares e programação', lastServerAt: lastSync, maxAgeMs: 75000 }, announcementFeed],
   })
   return (
-    <section className="tv-page" aria-label="Modo TV">
+    <section className="tv-page" aria-label={rehearsal ? 'Modo TV de ensaio' : 'Modo TV'}>
       <header className="tv-header">
-        <div className="tv-brand"><img src="/logo-interclasse.webp" alt="Interclasse SESI Vinhedo" /><div><span>SESI VINHEDO · ESPORTES</span><h1>Interclasse</h1></div></div>
+        <div className="tv-brand"><img src="/logo-interclasse.webp" alt="Interclasse SESI Vinhedo" /><div><span>{rehearsal ? 'JOGOS FICTÍCIOS' : 'SESI VINHEDO · ESPORTES'}</span><h1>{rehearsal ? 'TV de ensaio' : 'Interclasse'}</h1></div></div>
         <div id="tv-toolbar" className="tv-toolbar" role="group" aria-label="Ajustes da transmissão" hidden={fullscreen && !settingsOpen}>
           <div className="tv-filters">
-            <ShiftSelector value={turno} onChange={(value) => { setTurno(value); writePreference('tv-turno', value); setCursor('') }} />
+            <ShiftSelector value={turno} onChange={(value) => { setTurno(value); writePreference(`${preference}turno`, value); setCursor('') }} />
             <label className="tv-sport-select">Esporte<select value={sport} onChange={(event) => { setSport(event.target.value); setCursor('') }}><option value="">Todos os esportes</option>{sports.map((item) => <option value={item.id} key={item.id}>{item.nome}</option>)}</select></label>
-            <label className="tv-interval-select">Intervalo<select value={duration} onChange={(event) => { const seconds = Number(event.target.value); setDuration(seconds); writePreference('tv-interval', String(seconds)) }}>{[8, 12, 20, 30].map((seconds) => <option key={seconds} value={seconds}>{seconds} s</option>)}</select></label>
-            <label className="tv-density-select" title="Jogos ao vivo por tela">Jogos por tela<select value={density} onChange={(event) => { const value = Number(event.target.value); setDensity(value); writePreference('tv-density', String(value)) }}><option value="2">2 jogos</option><option value="4">4 jogos</option></select></label>
+            <label className="tv-interval-select">Intervalo<select value={duration} onChange={(event) => { const seconds = Number(event.target.value); setDuration(seconds); writePreference(`${preference}interval`, String(seconds)) }}>{[8, 12, 20, 30].map((seconds) => <option key={seconds} value={seconds}>{seconds} s</option>)}</select></label>
+            <label className="tv-density-select" title="Jogos ao vivo por tela">Jogos por tela<select value={density} onChange={(event) => { const value = Number(event.target.value); setDensity(value); writePreference(`${preference}density`, String(value)) }}><option value="2">2 jogos</option><option value="4">4 jogos</option></select></label>
             <TVConnectionStatus health={health} now={now} compact />
           </div>
           <div className="tv-controls">
@@ -171,7 +176,7 @@ export default function TVMode({ onNavigate }) {
             <button type="button" className="tv-step-button" aria-label="Próxima tela" title="Próxima tela" onClick={() => step(1)} disabled={pages.length < 2}>›</button>
             <button type="button" onClick={toggleFullscreen}>{fullscreen ? 'Sair da tela cheia' : 'Tela cheia'}</button>
             <button type="button" aria-label="Sair do modo TV" title="Sair do modo TV" onClick={leave}>Sair</button>
-            <button type="button" aria-label="Abrir placar fixo para TV" title="Abrir placar fixo para TV" onClick={() => onNavigate('placar')}>Placar fixo</button>
+            {rehearsal ? null : <button type="button" aria-label="Abrir placar fixo para TV" title="Abrir placar fixo para TV" onClick={() => onNavigate('placar')}>Placar fixo</button>}
           </div>
         </div>
         <div className="tv-header-end">
@@ -183,7 +188,10 @@ export default function TVMode({ onNavigate }) {
       {error || announcementError || settingsError || screenMessage ? <div className="tv-notice" role="alert">{error || announcementError || settingsError || screenMessage}{error || announcementError || settingsError ? ' Tentando reconectar automaticamente…' : ''}</div> : null}
       {health.state === 'stale' ? <div className="tv-notice" role="status">A confirmação do servidor está demorando. Mantendo a última programação. Abra o diagnóstico da TV para conferir a conexão.</div> : null}
       {announcement ? <aside className={`tv-announcement tv-announcement-${announcement.type}`} role="status"><strong>{announcement.type === 'chamada' ? 'CHAMADA' : announcement.type === 'atraso' ? 'ATENÇÃO' : 'AVISO'}</strong><span>{announcement.text}</span></aside> : null}
-      <nav className="tv-section-nav" aria-label="Páginas da transmissão">{TV_SECTIONS.filter((section) => counts[section.id]).map((section) => <button key={section.id} type="button" className={page?.kind === section.id ? 'is-active' : ''} aria-pressed={page?.kind === section.id} disabled={!counts[section.id]} onClick={() => setCursor(pages.find((item) => item.kind === section.id)?.id || '')}>{section.label}<span>{counts[section.id]}</span></button>)}</nav>
+      <nav className="tv-section-nav" aria-label="Páginas da transmissão">
+        {TV_SECTIONS.filter((section) => counts[section.id]).map((section) => <button key={section.id} type="button" className={page?.kind === section.id ? 'is-active' : ''} aria-pressed={page?.kind === section.id} onClick={() => setCursor(pages.find((item) => item.kind === section.id)?.id || '')}>{section.label}<span>{counts[section.id]}</span></button>)}
+        {rehearsal ? <button className="tv-rehearsal-official" type="button" onClick={() => onNavigate('tv')}>Abrir Modo TV oficial</button> : null}
+      </nav>
       {live.length ? <aside className="tv-live-ticker" aria-label="Placares ao vivo"><strong><span className="live-dot" />AO VIVO · {live.length}</strong><div>{ticker.map((game) => <span key={game.id}><b>{game.esporteNome}</b> {game.timeA} <strong><MatchScore game={game} /></strong> {game.timeB}</span>)}</div>{live.length > ticker.length ? <small>+{live.length - ticker.length} partida(s)</small> : null}</aside> : null}
       {page ? (
         <div className={`tv-slide tv-slide-${page.kind}`} key={page.id}>
@@ -193,8 +201,8 @@ export default function TVMode({ onNavigate }) {
           </div>
         </div>
       ) : <div className="tv-empty"><span aria-hidden="true">🏆</span><h2>{loading ? 'Carregando programação…' : 'Aguardando a programação'}</h2><p>Os jogos aparecerão aqui assim que forem cadastrados.</p></div>}
-      <footer className={health.connected ? 'tv-footer' : 'tv-footer is-offline'}><strong>INTERCLASSE SESI VINHEDO <span>{health.label}{lastSync ? ` · conferido às ${clockFormat.format(new Date(lastSync))}` : ''}</span></strong><span>{rotating ? `Rotação automática · ${duration} s por página` : 'Rotação pausada'} · Tela {pages.length ? pageIndex + 1 : 0}/{pages.length}</span></footer>
-      <TVAnnouncement announcement={broadcast.announcement} />
+      <footer className={health.connected ? 'tv-footer' : 'tv-footer is-offline'}><strong>{rehearsal ? 'ENSAIO · JOGOS FICTÍCIOS' : 'INTERCLASSE SESI VINHEDO'} <span>{health.label}{lastConfirmation ? ` · conferido às ${clockFormat.format(new Date(lastConfirmation))}` : ''}</span></strong><span>{rotating ? `Rotação automática · ${duration} s por página` : 'Rotação pausada'} · Tela {pages.length ? pageIndex + 1 : 0}/{pages.length}</span></footer>
+      <TVAnnouncement announcement={broadcast.announcement} rehearsal={rehearsal} />
     </section>
   )
 }

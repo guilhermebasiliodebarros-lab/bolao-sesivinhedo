@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState } from 'react'
 import { isRehearsal } from '../config/rehearsal.js'
 import { readPreference, writePreference } from '../utils/preferences.js'
+import RehearsalTVControl from './RehearsalTVControl.jsx'
 import './RehearsalGuide.css'
 
 const LocalTestMode = lazy(() => import('./LocalTestMode.jsx'))
@@ -36,6 +37,7 @@ export default function RehearsalGuide({ onLive }) {
   if (testing) return <Suspense fallback={<p role="status">Preparando os jogos fictícios…</p>}><LocalTestMode onClose={() => setTesting(false)} /></Suspense>
   return <section className="rehearsal-guide" aria-label="Ensaio geral da equipe">
     <div className="section-heading"><div><span className="eyebrow">Preparação para o evento</span><h2>Ensaio geral</h2><p>Uma rodada completa com quem vai operar. Cada etapa deve ser conferida pela equipe.</p></div><strong>{isRehearsal ? `${count} / ${tasks.length} etapas conferidas` : 'Roteiro do treinamento'}</strong></div>
+    <RehearsalTVControl />
     <div className="rehearsal-setup"><strong>Teste o placar aqui mesmo</strong><p>Experimente futebol, handebol, basquete e vôlei com jogos e alunos fictícios. Escolha as equipes entre as 14 turmas para conferir as cores e décadas de cada lado. Os controles da arbitragem e a apresentação da TV são os mesmos usados nos jogos.</p><div className="form-actions"><button type="button" className="btn btn-primary" onClick={() => setTesting(true)}>Iniciar modo de teste</button></div><p>Não precisa abrir outro link ou instalar nada. Os lances ficam somente nesta sessão e não alteram o campeonato nem a TV oficial.</p></div>
     {!isRehearsal ? <div className="rehearsal-roles"><article><h3>Gols e pontos</h3><p>Escolha o aluno, marque gols ou cestas de 1, 2 e 3 pontos e confira nomes e minutos na prévia.</p></article><article><h3>Cartões e relógio</h3><p>Registre e anule cartões, pause o relógio, teste intervalos e troque o tempo ou período.</p></article><article><h3>TV com um ou dois jogos</h3><p>Futebol e handebol mostram um jogo. Basquete e vôlei mostram dois. Amplie a TV de teste para conferir a apresentação.</p></article></div> : <>
     <div className="rehearsal-setup"><strong>Ensaio técnico da equipe</strong><p>Este ambiente local também permite conferir logins, palpites e a conexão com o servidor de ensaio.</p><div className="form-actions"><button type="button" className="btn btn-primary" onClick={onLive}>Abrir operação dos jogos</button><a className="btn btn-outline" href="/#placar" target="_blank" rel="noreferrer">Abrir TV do ensaio ↗</a></div></div>

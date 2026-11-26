@@ -1,13 +1,15 @@
 export const PARTICIPANT_VIEWS = ['dashboard', 'jogos', 'palpites', 'classificacao']
 export const CONSULTATION_VIEWS = ['calendario', 'chaveamento', 'simulador', 'regulamentos', 'estatisticas']
 export const PUBLIC_VIEWS = ['home', 'login', 'cadastro']
-export const PROTECTED_VIEWS = [...CONSULTATION_VIEWS, 'tv', 'placar', ...PARTICIPANT_VIEWS, 'admin', 'cadastros', 'aprovacao']
+export const REHEARSAL_TV_VIEW = 'tv-ensaio'
+export const PROTECTED_VIEWS = [...CONSULTATION_VIEWS, 'tv', 'placar', REHEARSAL_TV_VIEW, ...PARTICIPANT_VIEWS, 'admin', 'cadastros', 'aprovacao']
 export const APP_VIEWS = [...PUBLIC_VIEWS, ...PROTECTED_VIEWS]
 
 export const APP_VIEW_LABELS = {
   home: 'Início', calendario: 'Calendário', regulamentos: 'Regulamentos', estatisticas: 'Estatísticas',
   chaveamento: 'Chaveamento', simulador: 'Simulador', login: 'Entrar', cadastro: 'Criar conta',
   tv: 'Modo TV', placar: 'Placar ao vivo', dashboard: 'Meu painel', jogos: 'Jogos',
+  [REHEARSAL_TV_VIEW]: 'TV de ensaio',
   palpites: 'Meus palpites', classificacao: 'Classificação', admin: 'Painel master',
   cadastros: 'Aprovar cadastros', aprovacao: 'Situação do cadastro',
 }

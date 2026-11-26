@@ -1294,8 +1294,12 @@ export function subscribeBroadcastSettings(onData, onError) {
   return onSnapshot(doc(ensureDb(), 'broadcastSettings', 'tv'), (snapshot) => onData(normalizeBroadcastSettings(snapshot.exists() ? snapshot.data() : {})), (error) => onError?.(error ? toFriendlyError(error) : ''))
 }
 
-export function subscribeTVAnnouncement(onData, onError, onSync) {
-  return onSnapshot(doc(ensureDb(), 'broadcastSettings', 'announcement'), (snapshot) => {
+function tvAnnouncementRef(firestore, rehearsal = false) {
+  return rehearsal ? doc(firestore, 'operations', 'tvAnnouncementRehearsal') : doc(firestore, 'broadcastSettings', 'announcement')
+}
+
+export function subscribeTVAnnouncement(onData, onError, onSync, { rehearsal = false } = {}) {
+  return onSnapshot(tvAnnouncementRef(ensureDb(), rehearsal), (snapshot) => {
     if (!snapshot.metadata?.fromCache && !snapshot.metadata?.hasPendingWrites) {
       onData(snapshot.exists() ? snapshot.data() : null)
     }
@@ -1309,12 +1313,16 @@ export async function saveBroadcastSettings(value) {
 
 export function subscribeScoreboardSelection(onData, onError, onSync) {
   return onSnapshot(doc(ensureDb(), 'broadcastSettings', 'scoreboard'),
-    (snapshot) => onData(normalizeScoreboardSelection(snapshot.exists() ? snapshot.data() : {})),
+    (snapshot) => {
+      if (snapshot.exists()) onData(normalizeScoreboardSelection(snapshot.data()))
+      else if (!snapshot.metadata?.fromCache) onData(normalizeScoreboardSelection())
+    },
     (error) => onError?.(error ? toFriendlyError(error) : ''), onSync)
 }
 
-export async function saveScoreboardSelection(gameIds, expectedRevision) {
+export async function saveScoreboardSelection(gameIds, expectedRevision, mode = gameIds?.length ? 'manual' : 'standby') {
   if (!validScoreboardGameIds(gameIds)) throw new Error('Escolha no máximo dois jogos diferentes para o placar.')
+  if (gameIds.length ? mode !== 'manual' : !['automatic', 'standby'].includes(mode)) throw new Error('Escolha um modo válido para o placar.')
   if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) throw new Error('Carregue a seleção atual do placar antes de transmitir.')
   const firestore = ensureDb()
   return runTransaction(firestore, async (transaction) => {
@@ -1331,31 +1339,60 @@ export async function saveScoreboardSelection(gameIds, expectedRevision) {
       if (![MATCH_STATE.LIVE, MATCH_STATE.SCHEDULED].includes(state) && !mayKeepResult) throw new Error('Escolha partidas agendadas ou em andamento para transmitir.')
       if (game.seedLabelA || game.seedLabelB || !game.timeA || !game.timeB) throw new Error('Aguarde a definição das duas equipes antes de transmitir este jogo.')
     })
-    const next = { gameIds: [...gameIds], revision: current.revision + 1 }
+    const next = { gameIds: [...gameIds], revision: current.revision + 1, mode }
     transaction.set(ref, { ...next, updatedAt: serverTimestamp() })
     return next
   })
 }
 
-export async function saveAnnouncement({ text, type = 'aviso', minutes }) {
+export async function saveAnnouncement({ text, type = 'aviso', minutes, rehearsal = false }) {
   const firestore = ensureDb()
   const message = String(text || '').trim()
   if (!message || message.length > 240) throw new Error('Escreva um aviso de até 240 caracteres.')
   if (!['aviso', 'chamada', 'atraso'].includes(type)) throw new Error('Tipo de aviso inválido.')
-  const historyRef = doc(collection(firestore, 'announcements'))
   const publishedAt = serverTimestamp()
+  if (rehearsal) {
+    const id = doc(collection(firestore, 'operations')).id
+    await runTransaction(firestore, async (transaction) => {
+      transaction.set(tvAnnouncementRef(firestore, true), { id, text: message, type, publishedAt })
+    })
+    return id
+  }
+
+  const historyRef = doc(collection(firestore, 'announcements'))
   if (minutes !== undefined) {
     const duration = Number(minutes)
     if (!Number.isInteger(duration) || duration < 1 || duration > 1440) throw new Error('Escolha uma validade de 1 a 1440 minutos.')
     await setDoc(historyRef, { text: message, type, active: true, expiresAt: Timestamp.fromDate(new Date(Date.now() + duration * 60000)), createdAt: publishedAt })
   } else {
-    const liveRef = doc(firestore, 'broadcastSettings', 'announcement')
+    const liveRef = tvAnnouncementRef(firestore)
     const batch = writeBatch(firestore)
     batch.set(historyRef, { text: message, type, presentation: 'screen', active: false, createdAt: publishedAt })
     batch.set(liveRef, { id: historyRef.id, text: message, type, publishedAt })
     await batch.commit()
   }
   return historyRef.id
+}
+
+export async function confirmTVRehearsalReceipt(id, sirenStarted) {
+  const firestore = ensureDb()
+  const ref = tvAnnouncementRef(firestore, true)
+  return runTransaction(firestore, async (transaction) => {
+    const notice = (await transaction.get(ref)).data()
+    if (!notice || notice.id !== id || (notice.receipt && (!sirenStarted || notice.receipt.sirenStarted))) return
+    transaction.update(ref, { receipt: { receivedAt: notice.receipt?.receivedAt || serverTimestamp(), sirenStarted } })
+  })
+}
+
+export async function endTVRehearsalAnnouncement(id) {
+  const firestore = ensureDb()
+  const ref = tvAnnouncementRef(firestore, true)
+  return runTransaction(firestore, async (transaction) => {
+    const notice = await transaction.get(ref)
+    if (notice.data()?.id !== id) return false
+    transaction.delete(ref)
+    return true
+  })
 }
 
 export async function setAnnouncementActive(id, active) {
@@ -1366,7 +1403,7 @@ export async function setAnnouncementActive(id, active) {
     return
   }
   await runTransaction(firestore, async (transaction) => {
-    const liveRef = doc(firestore, 'broadcastSettings', 'announcement')
+    const liveRef = tvAnnouncementRef(firestore)
     const live = await transaction.get(liveRef)
     transaction.update(historyRef, { active: false })
     if (live.data()?.id === id) transaction.delete(liveRef)
@@ -1376,7 +1413,7 @@ export async function setAnnouncementActive(id, active) {
 export async function deleteAnnouncement(id) {
   const firestore = ensureDb()
   await runTransaction(firestore, async (transaction) => {
-    const liveRef = doc(firestore, 'broadcastSettings', 'announcement')
+    const liveRef = tvAnnouncementRef(firestore)
     const live = await transaction.get(liveRef)
     transaction.delete(doc(firestore, 'announcements', id))
     if (live.data()?.id === id) transaction.delete(liveRef)

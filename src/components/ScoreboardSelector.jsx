@@ -5,11 +5,12 @@ import { gameMatchesSearch, getUniqueGameSports } from '../utils/game.js'
 import { getGameShift, shiftLabel } from '../utils/schoolShifts.js'
 import { formatDateTime } from '../utils/format.js'
 import { matchVenueLabel } from '../utils/matchVenue.js'
+import { normalizeScoreboardSelection } from '../utils/scoreboardSelection.js'
 import MatchBadge from './MatchBadge.jsx'
 import './ScoreboardSelector.css'
 
 export default function ScoreboardSelector({ games, disabled = false }) {
-  const [selection, setSelection] = useState({ gameIds: [], revision: 0 })
+  const [selection, setSelection] = useState(normalizeScoreboardSelection)
   const [draft, setDraft] = useState(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -25,6 +26,7 @@ export default function ScoreboardSelector({ games, disabled = false }) {
   const value = draft || selection
   const stale = draft && draft.revision !== selection.revision
   const locked = disabled || busy || loading || Boolean(loadError)
+  const selectionStatus = selection.mode === 'manual' ? 'Seleção manual' : selection.mode === 'standby' ? 'TV em espera' : 'Acompanhamento automático'
   const eligible = games.filter((game) => !game.deletionPending && !game.seedLabelA && !game.seedLabelB && game.timeA && game.timeB
     && [MATCH_STATE.LIVE, MATCH_STATE.SCHEDULED].includes(getMatchState(game)))
   const candidates = eligible.filter((game) => (!sport || game.sportId === sport || game.esporteNome === sport)
@@ -41,25 +43,24 @@ export default function ScoreboardSelector({ games, disabled = false }) {
     setDraft({ gameIds, revision: value.revision })
     setMessage('')
   }
-  const publish = async (event) => {
-    event.preventDefault()
+  const publish = async (mode) => {
     if (locked || stale) return
     setBusy(true); setMessage(''); setFailed(false)
     try {
-      const next = await saveScoreboardSelection(value.gameIds, value.revision)
+      const next = await saveScoreboardSelection(mode === 'manual' ? value.gameIds : [], value.revision, mode)
       setSelection(next); setDraft(null)
-      setMessage(next.gameIds.length ? 'Seleção publicada. A TV mostra somente estes jogos.' : 'TV em espera. Nenhuma partida será exibida até uma nova seleção.')
+      setMessage(next.mode === 'automatic' ? 'O placar vai acompanhar os jogos ao vivo.' : next.mode === 'standby' ? 'TV em espera. Use Acompanhar jogos ao vivo para retomar.' : 'Seleção publicada. Os jogos escolhidos estão fixados na TV.')
     } catch (error) { setMessage(error.message); setFailed(true) }
     finally { setBusy(false) }
   }
 
   return <section className="scoreboard-selector" aria-label="Escolher jogos do placar da TV">
-    <div className="section-heading"><div><span className="eyebrow">Você controla a transmissão</span><h3>Escolher jogos do placar</h3><p>Marque um jogo para ocupar a tela inteira ou dois para exibir lado a lado. Depois, clique em Transmitir seleção.</p></div><span className="scoreboard-selection-status">{selection.gameIds.length ? `${selection.gameIds.length} ${selection.gameIds.length === 1 ? 'jogo na TV' : 'jogos na TV'}` : 'TV em espera'}</span></div>
+    <div className="section-heading"><div><h3>Escolher jogos do placar</h3><p>No modo automático, basquete e vôlei aparecem lado a lado quando jogam juntos. Futsal e handebol ocupam a tela inteira. Para fixar partidas, marque os jogos e clique em <strong>Transmitir seleção</strong>.</p></div><span className="scoreboard-selection-status">{selectionStatus}</span></div>
     {loadError ? <p className="alert alert-error" role="alert">{loadError}</p> : null}
     {stale ? <div className="schedule-warning" role="status">Outro responsável alterou os jogos da TV. <button type="button" className="btn btn-outline btn-small" onClick={() => { setDraft(null); setMessage('') }}>Carregar seleção atual</button></div> : null}
-    <form onSubmit={publish}>
+    <form onSubmit={(event) => { event.preventDefault(); void publish(value.gameIds.length ? 'manual' : 'standby') }}>
       <fieldset disabled={locked || Boolean(stale)}>
-        <legend>{draft ? 'Seleção ainda não transmitida' : 'Seleção atual do placar'}</legend>
+        <legend>{draft ? 'Seleção ainda não transmitida' : selection.mode === 'manual' ? 'Seleção atual do placar' : 'Fixar jogos no placar'}</legend>
         <div className="scoreboard-selection-slots">{[0, 1].map((index) => {
           const id = value.gameIds[index]
           const game = games.find((item) => item.id === id)
@@ -67,8 +68,14 @@ export default function ScoreboardSelector({ games, disabled = false }) {
         })}</div>
         <div className="scoreboard-selection-filters"><label>Buscar partida<input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Equipe, modalidade ou fase" /></label><label>Modalidade<select value={sport} onChange={(event) => setSport(event.target.value)}><option value="">Todas as modalidades</option>{getUniqueGameSports(eligible).map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}</select></label><label>Turno<select value={turno} onChange={(event) => setTurno(event.target.value)}><option value="">Todos os turnos</option><option value="manha">Manhã</option><option value="tarde">Tarde</option></select></label></div>
         <div className="scoreboard-selection-options">{candidates.map((game) => <label className={value.gameIds.includes(game.id) ? 'scoreboard-selection-option is-selected' : 'scoreboard-selection-option'} key={game.id}><input type="checkbox" checked={value.gameIds.includes(game.id)} disabled={!value.gameIds.includes(game.id) && value.gameIds.length >= 2} onChange={() => toggle(game.id)} aria-label={`Transmitir ${game.esporteNome}: ${game.timeA} contra ${game.timeB}`} /><span><strong>{game.timeA} × {game.timeB}</strong><small>{game.esporteNome} · {formatDateTime(game.dataHora)} · {shiftLabel(getGameShift(game))}{game.venue ? ` · ${matchVenueLabel(game)}` : ''}</small></span><MatchBadge game={game} /></label>)}{!candidates.length ? <p className="scoreboard-selection-empty">{loading ? 'Carregando partidas…' : 'Nenhuma partida disponível neste filtro.'}</p> : null}</div>
-        <p className="form-hint">{value.gameIds.length === 2 ? 'Dois jogos selecionados. Remova um para escolher outro.' : 'A escolha não inicia nem encerra partidas; ela define o que aparece na TV.'} Jogos encerrados continuam no placar até você trocar a seleção.</p>
-        <div className="form-actions"><button type="submit" className="btn btn-primary">{busy ? 'Publicando…' : value.gameIds.length ? 'Transmitir seleção' : 'Colocar TV em espera'}</button><button type="button" className="btn btn-outline" onClick={() => { setDraft({ gameIds: [], revision: value.revision }); setMessage('') }} disabled={!value.gameIds.length}>Limpar seleção</button>{draft ? <button type="button" className="btn btn-ghost" onClick={() => { setDraft(null); setMessage('') }}>Descartar alterações</button> : null}<a className="btn btn-outline" href="/#placar" target="_blank" rel="noreferrer">Abrir placar da TV ↗</a></div>
+        <p className="form-hint">{value.gameIds.length === 2 ? 'Remova um jogo para escolher outro. ' : ''} Na seleção manual, o resultado permanece na TV até a próxima seleção.</p>
+        <div className="form-actions">
+          <button type="submit" className="btn btn-primary" disabled={selection.mode === 'standby' && !value.gameIds.length}>{busy ? 'Publicando…' : value.gameIds.length ? 'Transmitir seleção' : 'Colocar TV em espera'}</button>
+          <button type="button" className="btn btn-outline" onClick={() => publish('automatic')} disabled={selection.mode === 'automatic' && !selection.gameIds.length && !draft}>Acompanhar jogos ao vivo</button>
+          <button type="button" className="btn btn-outline" onClick={() => { setDraft({ gameIds: [], revision: value.revision }); setMessage('') }} disabled={!value.gameIds.length}>Limpar seleção</button>
+          {draft ? <button type="button" className="btn btn-ghost" onClick={() => { setDraft(null); setMessage('') }}>Descartar alterações</button> : null}
+          <a className="btn btn-outline" href="/#placar" target="_blank" rel="noreferrer">Abrir placar da TV ↗</a>
+        </div>
       </fieldset>
     </form>
     {message ? <p className={failed ? 'alert alert-error' : 'alert alert-success'} role={failed ? 'alert' : 'status'}>{message}</p> : null}

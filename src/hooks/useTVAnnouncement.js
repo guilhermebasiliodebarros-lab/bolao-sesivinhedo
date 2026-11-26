@@ -1,17 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
-import { subscribeTVAnnouncement } from '../services/bolaoService.js'
+import { confirmTVRehearsalReceipt, subscribeTVAnnouncement } from '../services/bolaoService.js'
 import { getSirenContext, playTVSiren } from '../services/tvSiren.js'
 import { readPreference, writePreference } from '../utils/preferences.js'
 import { activeTVAnnouncement, TV_ANNOUNCEMENT_MS, TV_SIREN_MS } from '../utils/tvAnnouncements.js'
 
 const soundPreference = 'tv-siren-enabled'
-const heardKey = 'tv-last-announcement-heard'
-function lastHeard() {
+function lastHeard(heardKey) {
   try { return sessionStorage.getItem(heardKey) }
   catch { return null }
 }
 
-export default function useTVAnnouncement() {
+export default function useTVAnnouncement({ rehearsal = false } = {}) {
   const [announcement, setAnnouncement] = useState(null)
   const [error, setError] = useState('')
   const [soundEnabled, setSoundEnabled] = useState(() => readPreference(soundPreference) === 'true')
@@ -19,7 +18,8 @@ export default function useTVAnnouncement() {
   const [soundError, setSoundError] = useState('')
   const [lastSync, setLastSync] = useState(null)
   const [synced, setSynced] = useState(false)
-  const heard = useRef(lastHeard())
+  const heardKey = rehearsal ? 'tv-last-rehearsal-announcement-heard' : 'tv-last-announcement-heard'
+  const heard = useRef(lastHeard(heardKey))
 
   useEffect(() => subscribeTVAnnouncement(
     (value) => {
@@ -34,7 +34,8 @@ export default function useTVAnnouncement() {
       setSynced(connected)
       if (connected) setLastSync(info?.lastServerAt || Date.now())
     },
-  ), [])
+    { rehearsal },
+  ), [rehearsal])
 
   useEffect(() => {
     if (!announcement) return
@@ -70,7 +71,15 @@ export default function useTVAnnouncement() {
     heard.current = announcement.id
     try { sessionStorage.setItem(heardKey, announcement.id) } catch { /* The open tab still remembers this notice. */ }
     return stop
-  }, [announcement, soundEnabled, soundReady])
+  }, [announcement, heardKey, soundEnabled, soundReady])
+
+  useEffect(() => {
+    if (rehearsal && announcement && synced) {
+      const sirenStarted = soundReady && heard.current === announcement.id
+      // The sender only shows a confirmation after this acknowledgement reaches Firestore.
+      confirmTVRehearsalReceipt(announcement.id, sirenStarted).catch(() => {})
+    }
+  }, [announcement, rehearsal, soundReady, synced])
 
   const toggleSound = async () => {
     setSoundError('')

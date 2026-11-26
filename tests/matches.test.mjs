@@ -104,16 +104,19 @@ test('publishing one or two TV games updates only the shared selection and suppo
   documents.set('games/tv-b', { esporteNome: 'Basquete', timeA: '8º A', timeB: '8º B', status: 'aberto' })
   documents.set('broadcastSettings/tv', { showMatchClock: false, leadMinutes: 10 })
   const before = structuredClone(documents.get('games/tv-a'))
-  assert.deepEqual(await saveScoreboardSelection(['tv-a'], 0), { gameIds: ['tv-a'], revision: 1 })
-  assert.deepEqual(await saveScoreboardSelection(['tv-b', 'tv-a'], 1), { gameIds: ['tv-b', 'tv-a'], revision: 2 })
+  assert.deepEqual(await saveScoreboardSelection(['tv-a'], 0), { gameIds: ['tv-a'], revision: 1, mode: 'manual' })
+  assert.deepEqual(await saveScoreboardSelection(['tv-b', 'tv-a'], 1), { gameIds: ['tv-b', 'tv-a'], revision: 2, mode: 'manual' })
   assert.deepEqual(documents.get('games/tv-a'), before)
   assert.equal(documents.get('broadcastSettings/tv').showMatchClock, false)
   await assert.rejects(saveScoreboardSelection([], 1), /Outro responsável/)
-  assert.deepEqual(await saveScoreboardSelection([], 2), { gameIds: [], revision: 3 })
+  assert.deepEqual(await saveScoreboardSelection([], 2), { gameIds: [], revision: 3, mode: 'standby' })
+  assert.deepEqual(await saveScoreboardSelection([], 3, 'automatic'), { gameIds: [], revision: 4, mode: 'automatic' })
 })
 
 test('TV selection rejects extra games, stale results, invalid IDs, removed matches and unresolved teams without publishing a partial selection', async () => {
   for (const ids of [['a', 'b', 'c'], ['a', 'a'], ['a/path']]) await assert.rejects(saveScoreboardSelection(ids, 0), /no máximo dois/)
+  await assert.rejects(saveScoreboardSelection([], 0, 'manual'), /modo válido/)
+  await assert.rejects(saveScoreboardSelection(['a'], 0, 'automatic'), /modo válido/)
   await assert.rejects(saveScoreboardSelection(['missing'], 0), /removido/)
   for (const change of [{ matchCondition: 'cancelled' }, { matchCondition: 'postponed' }, { status: 'finalizado' }, { deletionPending: { requested: true } }, { seedLabelA: 'Vencedor 1' }]) {
     documents.set('games/rejected', { timeA: 'A', timeB: 'B', status: 'aberto', ...change })
@@ -127,7 +130,7 @@ test('a selected final result can remain beside a newly chosen live game, but un
   documents.set('games/final', { timeA: 'A', timeB: 'B', status: 'finalizado', placarA: 2, placarB: 1 })
   documents.set('games/live', { timeA: 'C', timeB: 'D', status: 'encerrado', liveStatus: 'live' })
   documents.set('games/old-final', { timeA: 'E', timeB: 'F', status: 'finalizado', placarA: 0, placarB: 1 })
-  assert.deepEqual(await saveScoreboardSelection(['final', 'live'], 1), { gameIds: ['final', 'live'], revision: 2 })
+  assert.deepEqual(await saveScoreboardSelection(['final', 'live'], 1), { gameIds: ['final', 'live'], revision: 2, mode: 'manual' })
   await assert.rejects(saveScoreboardSelection(['old-final'], 2), /agendadas ou em andamento/)
   assert.deepEqual(documents.get('broadcastSettings/scoreboard').gameIds, ['final', 'live'])
 })
@@ -1406,6 +1409,32 @@ test('manual TV announcements publish history and replace one live message, endi
   await deleteAnnouncement(third)
   assert.equal(documents.has(current), false)
   assert.equal(documents.has(`announcements/${third}`), false)
+})
+
+test('TV rehearsal writes to a private channel and accepts receipts only for the current test', async () => {
+  const { confirmTVRehearsalReceipt, endTVRehearsalAnnouncement } = await import('../src/services/firestoreService.js')
+  const official = await saveAnnouncement({ text: 'Chamada aos alunos.' })
+  const liveRef = 'broadcastSettings/announcement'
+  const rehearsalRef = 'operations/tvAnnouncementRehearsal'
+  const first = await saveAnnouncement({ text: 'Primeiro teste.', type: 'chamada', rehearsal: true })
+  assert.equal(documents.get(rehearsalRef).id, first)
+  assert.equal(documents.get(liveRef).id, official)
+  assert.equal(documents.has(`announcements/${first}`), false)
+
+  await confirmTVRehearsalReceipt(first, false)
+  const firstReceivedAt = documents.get(rehearsalRef).receipt.receivedAt
+  await confirmTVRehearsalReceipt(first, true)
+  await confirmTVRehearsalReceipt(first, false)
+  assert.deepEqual(documents.get(rehearsalRef).receipt, { receivedAt: firstReceivedAt, sirenStarted: true })
+
+  const second = await saveAnnouncement({ text: 'Segundo teste.', rehearsal: true })
+  await confirmTVRehearsalReceipt(first, true)
+  assert.equal(await endTVRehearsalAnnouncement(first), false)
+  assert.equal(documents.get(rehearsalRef).id, second)
+  assert.equal(documents.get(rehearsalRef).receipt, undefined)
+  assert.equal(await endTVRehearsalAnnouncement(second), true)
+  assert.equal(documents.has(rehearsalRef), false)
+  assert.equal(documents.get(liveRef).id, official)
 })
 
 const { exportEventBackup, finalizeEventRecovery, previewEventRestore, restoreEventBackup } = await import('../src/services/eventBackupService.js')

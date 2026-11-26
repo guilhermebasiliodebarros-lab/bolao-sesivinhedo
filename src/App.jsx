@@ -12,7 +12,7 @@ import { AuthProvider } from './context/AuthContext.jsx'
 import { useAuth } from './context/useAuth.js'
 import { firebaseEnvNames, isFirebaseConfigured, missingFirebaseConfig } from './config/firebase.js'
 import { readPreference, writePreference } from './utils/preferences.js'
-import { APP_VIEW_LABELS, APP_VIEWS, resolveAppView } from './utils/navigation.js'
+import { APP_VIEW_LABELS, APP_VIEWS, REHEARSAL_TV_VIEW, resolveAppView } from './utils/navigation.js'
 import MobileNavigation from './components/MobileNavigation.jsx'
 import PredictionReminders from './components/PredictionReminders.jsx'
 import ScheduleNotices from './components/ScheduleNotices.jsx'
@@ -77,9 +77,9 @@ function AppShell() {
     return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   })
   const { user, profile, isMaster, isViewer, isParticipant, canReviewRegistrations, hasEventAccess, loading, profileLoading, logout } = useAuth()
-  useOperatorProcessing(isMaster && !loading && !profileLoading, user?.uid)
   const { quick, setQuick } = useQuickPredictionMode(user?.uid)
   const activeView = resolveAppView(view, { signedIn: Boolean(user), isMaster, isViewer, isParticipant, canReviewRegistrations, participantHome: quick ? 'jogos' : 'dashboard' })
+  useOperatorProcessing(isMaster && !loading && !profileLoading && activeView !== REHEARSAL_TV_VIEW, user?.uid)
   const loadingVariant = { admin: 'admin', classificacao: 'ranking', calendario: 'calendar', dashboard: 'dashboard', login: 'form', cadastro: 'form' }[activeView] || 'cards'
   const focusTarget = searchTarget?.userId === user?.uid && searchTarget?.view === activeView ? searchTarget : null
   const quickShell = quick && !focusTarget && ((isParticipant && activeView === 'jogos') || (!user && ['home', 'login', 'cadastro'].includes(activeView)))
@@ -114,8 +114,9 @@ function AppShell() {
   }, [])
 
   useEffect(() => {
+    if (!user && view === REHEARSAL_TV_VIEW) return
     if (!authLoading && activeView !== view) window.location.replace(`#${activeView}`)
-  }, [activeView, authLoading, view])
+  }, [activeView, authLoading, user, view])
 
   useEffect(() => {
     if (authLoading) return
@@ -133,7 +134,10 @@ function AppShell() {
     setTheme((current) => (current === 'dark' ? 'light' : 'dark'))
   }
 
-  const afterLogin = (nextView) => navigate(['admin', 'calendario'].includes(nextView) ? nextView : quick ? 'jogos' : nextView || 'dashboard')
+  const afterLogin = (nextView) => {
+    if (nextView === 'admin' && view === REHEARSAL_TV_VIEW) return navigate(REHEARSAL_TV_VIEW)
+    navigate(['admin', 'calendario'].includes(nextView) ? nextView : quick ? 'jogos' : nextView || 'dashboard')
+  }
   const openQuickMode = () => { setQuick(true); navigate('jogos') }
   const leaveQuickMode = () => { setQuick(false); navigate(user ? 'jogos' : 'home') }
 
@@ -192,8 +196,8 @@ function AppShell() {
     return <>{updateNotice}<Suspense fallback={<LoadingState label="Preparando o placar ao vivo…" variant="screen" count={2} />}><TVScoreboard onNavigate={navigate} /></Suspense></>
   }
 
-  if (activeView === 'tv') {
-    return <>{updateNotice}<Suspense fallback={<LoadingState label="Abrindo modo TV…" variant="screen" count={2} />}><TVMode onNavigate={navigate} /></Suspense></>
+  if (activeView === 'tv' || activeView === REHEARSAL_TV_VIEW) {
+    return <>{updateNotice}<Suspense fallback={<LoadingState label="Abrindo modo TV…" variant="screen" count={2} />}><TVMode key={activeView} onNavigate={navigate} rehearsal={activeView === REHEARSAL_TV_VIEW} /></Suspense></>
   }
 
   return (

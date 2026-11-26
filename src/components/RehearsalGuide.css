@@ -3,6 +3,11 @@
 .rehearsal-setup { padding: 20px; border: 1px solid #449d8c66; border-radius: 12px; background: #449d8c0b; }
 .rehearsal-setup ol { padding-left: 22px; line-height: 1.7; }
 .rehearsal-setup p { margin-bottom: 0; }
+.rehearsal-tv-control { display: grid; gap: 14px; }
+.rehearsal-tv-control h3 { margin: 0; }
+.rehearsal-tv-control p { margin-top: 8px; }
+.rehearsal-tv-control .broadcast-form { padding: clamp(12px, 2vw, 20px); }
+.rehearsal-tv-control .form-actions { flex-wrap: wrap; }
 .rehearsal-roles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .rehearsal-roles article { min-width: 0; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-strong); }
 .rehearsal-roles h3 { margin-top: 0; font-size: 16px; }

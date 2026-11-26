@@ -64,7 +64,7 @@ Para simular uma queda apenas na aba da TV durante o ensaio local, abra as ferra
 2. **Conferir os atletas.** Na organização, abra **Jogadores**, selecione a equipe e confira os nomes. Você pode cadastrar outro jogador fictício para praticar.
 3. **Preparar a partida.** Abra **Ao vivo / TV**, escolha a partida em **Partida para iniciar** e clique em **Preparar partida**. Use **Todos presentes · equipe A/B**, confira local, área, coletes diferentes e duração.
 4. **Iniciar.** Clique em **Salvar e iniciar agora**. O cronômetro deve iniciar, a partida deve ficar ao vivo e os palpites desse jogo devem ficar bloqueados.
-5. **Colocar na TV.** Em **Escolher jogos do placar**, marque o jogo e clique em **Transmitir seleção**. Um jogo ocupa a tela inteira; dois ficam lado a lado. Partidas não selecionadas ficam fora do placar.
+5. **Colocar na TV.** Em **Escolher jogos do placar**, use **Acompanhar jogos ao vivo**. Basquete e vôlei aparecem lado a lado quando jogam juntos. Futsal e handebol ocupam a tela inteira. Para fixar jogos, marque um ou dois e clique em **Transmitir seleção**.
 6. **Marcar os lances.** No futebol, faça dois gols de Ana na equipe A e um de Carla na B. Veja o placar da outra janela chegar a `2 × 1` e mostrar o primeiro nome do autor.
 7. **Corrigir um erro.** Acrescente um gol por engano e use **Desfazer último lance**. Teste também **Equipe errada? Corrigir**, selecionando o autor da equipe correta. O placar e as estatísticas devem acompanhar a correção.
 8. **Pausar o tempo.** Use **Pausar cronômetro**; confira o tempo parado na TV. Depois clique em **Retomar cronômetro**.

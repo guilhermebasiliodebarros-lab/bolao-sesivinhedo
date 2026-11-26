@@ -14,7 +14,7 @@ export function TVSirenButton({ sound }) {
   </div>
 }
 
-export default function TVAnnouncement({ announcement }) {
+export default function TVAnnouncement({ announcement, rehearsal = false }) {
   const layer = useRef(null)
   const id = announcement?.id
 
@@ -32,7 +32,7 @@ export default function TVAnnouncement({ announcement }) {
     <aside key={id} ref={layer} popover="manual" className={`tv-announcement-overlay is-${announcement.type}${announcement.text.length > 120 ? ' is-long' : ''}`} role="alert">
       <div className="tv-announcement-content">
         <img src="/logo-interclasse.webp" alt="Interclasse SESI Vinhedo" />
-        <strong>{TV_ANNOUNCEMENT_TYPES[announcement.type]}</strong>
+        <strong>{rehearsal ? 'Ensaio · ' : ''}{TV_ANNOUNCEMENT_TYPES[announcement.type]}</strong>
         <p>{announcement.text}</p>
       </div>
       <div className="tv-announcement-progress" aria-hidden="true" style={{ animationDuration: `${announcement.remainingMs}ms` }} />
