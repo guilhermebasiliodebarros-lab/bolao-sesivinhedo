@@ -1,7 +1,110 @@
-// Transcrição dos murais oficiais, conferida nas imagens das páginas dos dois PDFs.
-// Linhas: número, início, fim, quadra (I/A/B), modalidade, fase (A/B/S1/S2/F), equipes, observação.
+// A numeração dos esportes secundários segue a ordem de cada tabela. O PDF não informa o local.
+const secondaryDays = [
+  { sport: 'xadrez', page: 3, days: [
+    ['2026-11-30', [
+      ['07:30', '07:50', 'A', '1B', '3A'],
+      ['07:55', '08:15', 'A', '2A', '3A'],
+      ['08:20', '08:40', 'A', '2B', '3A'],
+    ]],
+    ['2026-12-01', [
+      ['07:30', '07:50', 'B', '1A', '3B'],
+      ['07:55', '08:15', 'B', '3B', '9A'],
+      ['08:20', '08:40', 'B', '3B', '9B'],
+    ]],
+    ['2026-12-02', [
+      ['07:30', '07:50', 'A', '1B', '2A'],
+      ['07:55', '08:15', 'A', '1B', '2B'],
+      ['08:20', '08:40', 'A', '2A', '2B'],
+      ['08:45', '09:05', 'B', '1A', '9A'],
+      ['09:50', '10:10', 'B', '1A', '9B'],
+      ['10:40', '11:00', 'B', '9A', '9B'],
+      ['11:05', '11:25', 'S1', 'A', 'B'],
+      ['11:30', '11:50', 'S2', 'B', 'A'],
+    ]],
+    ['2026-12-03', [['10:40', '11:00', 'F']]],
+  ] },
+  { sport: 'tenis-mesa', page: 3, days: [
+    ['2026-11-30', [
+      ['07:30', '07:50', 'A', '2A', '3B'],
+      ['07:55', '08:15', 'A', '2B', '3B'],
+      ['08:20', '08:40', 'A', '3B', '9B'],
+    ]],
+    ['2026-12-01', [
+      ['07:30', '07:50', 'B', '1A', '3A'],
+      ['07:55', '08:15', 'B', '1B', '3A'],
+      ['08:20', '08:40', 'B', '3A', '9A'],
+    ]],
+    ['2026-12-02', [
+      ['07:30', '07:50', 'A', '2A', '2B'],
+      ['07:55', '08:15', 'A', '2A', '9B'],
+      ['08:20', '08:40', 'A', '2B', '9B'],
+      ['08:45', '09:05', 'B', '1A', '1B'],
+      ['09:50', '10:10', 'B', '1A', '9A'],
+      ['10:40', '11:00', 'B', '1B', '9A'],
+      ['11:05', '11:25', 'S1', 'A', 'B'],
+      ['11:30', '11:50', 'S2', 'B', 'A'],
+    ]],
+    ['2026-12-03', [['10:40', '11:00', 'F']]],
+  ] },
+  { sport: 'mancala', page: 4, days: [
+    ['2026-11-30', [
+      ['07:30', '07:50', 'A', '1A', '3B'],
+      ['07:55', '08:15', 'A', '2A', '3B'],
+      ['08:20', '08:40', 'A', '3B', '9B'],
+    ]],
+    ['2026-12-01', [
+      ['07:30', '07:50', 'B', '1B', '3A'],
+      ['07:55', '08:15', 'B', '2B', '3A'],
+      ['08:20', '08:40', 'B', '3A', '9A'],
+    ]],
+    ['2026-12-02', [
+      ['07:30', '07:50', 'A', '1A', '2A'],
+      ['07:55', '08:15', 'A', '1A', '9B'],
+      ['08:20', '08:40', 'A', '2A', '9B'],
+      ['08:45', '09:05', 'B', '1B', '2B'],
+      ['09:50', '10:10', 'B', '1B', '9A'],
+      ['10:40', '11:00', 'B', '2B', '9A'],
+      ['11:05', '11:25', 'S1', 'A', 'B'],
+      ['11:30', '11:50', 'S2', 'B', 'A'],
+    ]],
+    ['2026-12-03', [['10:40', '11:00', 'F']]],
+  ] },
+  { sport: 'futmesa', page: 4, days: [
+    ['2026-11-30', [
+      ['07:30', '07:50', 'A', '1A', '3A'],
+      ['07:55', '08:15', 'A', '1A', '3B'],
+      ['09:50', '10:10', 'A', '2B', '3A'],
+      ['10:40', '11:00', 'A', '1A', '2B'],
+    ]],
+    ['2026-12-01', [
+      ['07:30', '07:50', 'A', '2B', '3B'],
+      ['08:20', '08:40', 'A', '3A', '3B'],
+      ['08:45', '09:05', 'B', '1B', '2A'],
+      ['10:40', '11:00', 'B', '1B', '9A'],
+    ]],
+    ['2026-12-02', [
+      ['07:30', '07:50', 'B', '1B', '9B'],
+      ['07:55', '08:15', 'B', '2A', '9A'],
+      ['09:50', '10:10', 'B', '2A', '9B'],
+      ['10:40', '11:00', 'B', '9A', '9B'],
+      ['11:25', '11:45', 'S1', 'A', 'B'],
+    ]],
+    ['2026-12-03', [
+      ['08:20', '08:40', 'S2', 'B', 'A'],
+      ['10:40', '11:00', 'F'],
+    ]],
+  ] },
+].flatMap(({ sport, page, days }) => {
+  let row = 0
+  return days.map(([date, games]) => ({
+    date, shift: 'manha', source: 'secundarios', page, blocks: [],
+    games: games.map(([start, end, phase, a, b]) => [++row, start, end, '', sport, phase, a, b]),
+  }))
+})
+
+// Linhas: número, início, fim, quadra (I/A/B), modalidade, fase (A/B/S1/S2/F), equipes ou grupos da semifinal, observação.
 export const OFFICIAL_SCHEDULE_2026 = {
-  version: 'interclasse-2026-oficial-2026-11-24',
+  version: 'interclasse-2026-oficial-2026-11-27',
   year: 2026,
   timeZone: 'America/Sao_Paulo',
   sports: {
@@ -9,6 +112,10 @@ export const OFFICIAL_SCHEDULE_2026 = {
     futsal: { name: 'Futsal', aliases: ['futsal', 'futebol'] },
     handebol: { name: 'Handebol', aliases: ['handebol', 'handball'] },
     volei: { name: 'Vôlei', aliases: ['volei', 'voleibol', 'volleyball'] },
+    futmesa: { name: 'Futmesa', aliases: ['futmesa', 'fut mesa'] },
+    mancala: { name: 'Mancala', aliases: ['mancala'] },
+    'tenis-mesa': { name: 'Tênis de Mesa', aliases: ['tenis de mesa', 'tenis mesa'] },
+    xadrez: { name: 'Xadrez', aliases: ['xadrez'] },
   },
   groups: {
     manha: {
@@ -16,11 +123,15 @@ export const OFFICIAL_SCHEDULE_2026 = {
       futsal: { A: ['1A', '1B', '2A', '3A'], B: ['2B', '3B', '9A', '9B'] },
       handebol: { A: ['2A', '2B', '3B', '9A'], B: ['1A', '1B', '3A', '9B'] },
       volei: { A: ['1B', '2A', '3B', '9B'], B: ['1A', '2B', '3A', '9A'] },
+      futmesa: { A: ['1A', '2B', '3A', '3B'], B: ['1B', '2A', '9A', '9B'] },
+      mancala: { A: ['1A', '2A', '3B', '9B'], B: ['1B', '2B', '3A', '9A'] },
+      'tenis-mesa': { A: ['2A', '2B', '3B', '9B'], B: ['1A', '1B', '3A', '9A'] },
+      xadrez: { A: ['1B', '2A', '2B', '3A'], B: ['1A', '3B', '9A', '9B'] },
     },
     tarde: Object.fromEntries(['basquete', 'futsal', 'handebol', 'volei'].map((key) => [key, { A: ['6A', '7B', '8A'], B: ['6B', '7A', '8B'] }])),
   },
   days: [
-    { date: '2026-11-30', shift: 'manha', source: 2, page: 1, games: [
+    { date: '2026-11-30', shift: 'manha', source: 'manha', page: 2, games: [
       [1, '07:30', '07:55', 'A', 'basquete', 'A', '1A', '3A', 'Simultâneo; 3ºs até 11h'],
       [2, '07:30', '07:55', 'B', 'basquete', 'B', '1B', '9A', 'Simultâneo'],
       [3, '07:55', '08:20', 'A', 'basquete', 'A', '2A', '3B', 'Simultâneo; 3ºs até 11h'],
@@ -39,7 +150,7 @@ export const OFFICIAL_SCHEDULE_2026 = {
       [16, '11:20', '11:40', 'I', 'futsal', 'B', '2B', '9A', 'Sem 3ºs em quadra'],
       [17, '11:40', '12:00', 'I', 'handebol', 'A', '2A', '9A', 'Encerramento do dia 1'],
     ], blocks: [['09:25', '09:30', 'Ajuste da rede de vôlei nas duas meias-quadras']] },
-    { date: '2026-12-01', shift: 'manha', source: 2, page: 2, games: [
+    { date: '2026-12-01', shift: 'manha', source: 'manha', page: 3, games: [
       [1, '07:30', '07:52', 'I', 'basquete', 'A', '3A', '3B', 'Exclusivo 3ºs; saída às 09h'],
       [2, '07:52', '08:14', 'I', 'futsal', 'A', '1B', '3A', '3ºs liberados até 09h'],
       [3, '08:14', '08:36', 'I', 'handebol', 'B', '1B', '3A', '3ºs liberados até 09h'],
@@ -53,7 +164,7 @@ export const OFFICIAL_SCHEDULE_2026 = {
       [11, '11:02', '11:24', 'I', 'futsal', 'A', '1A', '2A', 'Sem 3ºs em quadra'],
       [12, '11:24', '12:00', 'I', 'handebol', 'A', '2B', '9A', 'Encerramento do dia 2; folga técnica'],
     ], blocks: [] },
-    { date: '2026-12-02', shift: 'manha', source: 2, page: 3, games: [
+    { date: '2026-12-02', shift: 'manha', source: 'manha', page: 4, games: [
       [1, '07:30', '07:55', 'A', 'basquete', 'A', '2A', '3A', 'Simultâneo'],
       [2, '07:30', '07:55', 'B', 'basquete', 'B', '2B', '9A', 'Simultâneo'],
       [3, '07:55', '08:20', 'A', 'basquete', 'A', '1A', '3B', 'Simultâneo'],
@@ -71,67 +182,88 @@ export const OFFICIAL_SCHEDULE_2026 = {
       [15, '11:05', '11:30', 'I', 'futsal', 'A', '2A', '3A', 'Fase de grupos'],
       [16, '11:30', '12:00', 'I', 'basquete', 'B', '9A', '9B', 'Fechamento dos grupos de basquete'],
     ], blocks: [['09:25', '09:30', 'Ajuste da rede de vôlei nas duas meias-quadras']] },
-    { date: '2026-12-03', shift: 'manha', source: 2, page: 4, games: [
+    { date: '2026-12-03', shift: 'manha', source: 'manha-anterior', page: 4, games: [
       [1, '07:30', '07:52', 'I', 'futsal', 'A', '1A', '1B', 'Fechamento do Grupo A de futsal'],
       [2, '07:52', '08:14', 'I', 'futsal', 'B', '9A', '9B', 'Fechamento do Grupo B de futsal'],
       [3, '08:14', '08:36', 'I', 'handebol', 'B', '1A', '1B', 'Fechamento do Grupo B de handebol'],
-      [4, '09:00', '09:25', 'A', 'basquete', 'S1', '', '', 'Semifinais simultâneas'],
-      [5, '09:00', '09:25', 'B', 'basquete', 'S2', '', '', 'Semifinais simultâneas'],
-      [6, '09:30', '09:50', 'I', 'futsal', 'S1', '', '', '1º intervalo: 9ºs/1ºs; classificados jogam'],
-      [7, '09:50', '10:15', 'I', 'futsal', 'S2', '', '', 'Mata-mata de futsal'],
-      [8, '10:20', '10:40', 'I', 'handebol', 'S1', '', '', '2º intervalo: 2ºs/3ºs; classificados jogam'],
-      [9, '10:40', '11:00', 'I', 'handebol', 'S2', '', '', 'Mata-mata de handebol'],
-      [10, '11:00', '11:18', 'A', 'volei', 'S1', '', '', 'Semifinais simultâneas'],
-      [11, '11:00', '11:18', 'B', 'volei', 'S2', '', '', 'Semifinais simultâneas'],
+      [4, '09:00', '09:25', 'A', 'basquete', 'S1', 'B', 'A', 'Semifinais simultâneas'],
+      [5, '09:00', '09:25', 'B', 'basquete', 'S2', 'A', 'B', 'Semifinais simultâneas'],
+      [6, '09:30', '09:50', 'I', 'futsal', 'S1', 'B', 'A', '1º intervalo: 9ºs/1ºs; classificados jogam'],
+      [7, '09:50', '10:15', 'I', 'futsal', 'S2', 'A', 'B', 'Mata-mata de futsal'],
+      [8, '10:20', '10:40', 'I', 'handebol', 'S1', 'B', 'A', '2º intervalo: 2ºs/3ºs; classificados jogam'],
+      [9, '10:40', '11:00', 'I', 'handebol', 'S2', 'A', 'B', 'Mata-mata de handebol'],
+      [10, '11:00', '11:18', 'A', 'volei', 'S1', 'B', 'A', 'Semifinais simultâneas'],
+      [11, '11:00', '11:18', 'B', 'volei', 'S2', 'A', 'B', 'Semifinais simultâneas'],
       [12, '11:18', '11:32', 'A', 'volei', 'F', '', '', 'Decisão de vôlei'],
       [13, '11:32', '11:46', 'B', 'basquete', 'F', '', '', 'Decisão de basquete'],
       [14, '11:46', '11:53', 'I', 'handebol', 'F', '', '', 'Decisão de handebol'],
       [15, '11:53', '12:00', 'I', 'futsal', 'F', '', '', 'Grande encerramento e premiação'],
     ], blocks: [['08:36', '09:00', 'Apuração geral de pontos e saldo']] },
-    { date: '2026-11-30', shift: 'tarde', source: 1, page: 1, games: [
-      [1, '14:20', '14:45', 'A', 'basquete', 'A', '6A', '7B', 'Simultâneo na Meia Quadra A'],
-      [2, '14:20', '14:45', 'B', 'basquete', 'B', '6B', '7A', 'Simultâneo na Meia Quadra B'],
-      [3, '14:45', '15:10', 'A', 'basquete', 'A', '6A', '8A', 'Simultâneo na Meia Quadra A'],
-      [4, '14:45', '15:10', 'B', 'basquete', 'B', '6B', '8B', 'Simultâneo na Meia Quadra B'],
-      [5, '15:10', '15:30', 'I', 'futsal', 'B', '6B', '7A', '1º intervalo: Grupo A lancha; somente Grupo B em quadra'],
+    { date: '2026-11-30', shift: 'tarde', source: 'tarde', page: 2, games: [
+      [1, '14:20', '14:40', 'A', 'basquete', 'A', '6A', '7B', 'Simultâneo na Meia Quadra A'],
+      [2, '14:20', '14:40', 'B', 'basquete', 'B', '6B', '7A', 'Simultâneo na Meia Quadra B'],
+      [3, '14:40', '15:00', 'A', 'basquete', 'A', '6A', '8A', 'Simultâneo na Meia Quadra A'],
+      [4, '14:40', '15:00', 'B', 'basquete', 'B', '6B', '8B', 'Simultâneo na Meia Quadra B'],
+      [5, '15:10', '15:30', 'I', 'futsal', 'B', '6B', '7A', '1º intervalo: Grupo A lancha e o Grupo B joga'],
       [6, '15:30', '15:55', 'I', 'handebol', 'B', '6B', '8B', 'Fase de grupos'],
-      [7, '16:00', '16:20', 'I', 'futsal', 'A', '6A', '7B', '2º intervalo: Grupo B lancha; somente Grupo A em quadra'],
-      [8, '16:40', '17:00', 'A', 'volei', 'A', '6A', '7B', 'Simultâneo na Meia Quadra A; encerramento do dia 1'],
-      [9, '16:40', '17:00', 'B', 'volei', 'B', '6B', '7A', 'Simultâneo na Meia Quadra B; encerramento do dia 1'],
-    ], blocks: [['13:00', '14:20', 'Apresentação cultural de abertura; todas as turmas'], ['16:20', '16:40', 'Montagem das redes de vôlei nas duas meias-quadras']] },
-    { date: '2026-12-01', shift: 'tarde', source: 1, page: 2, games: [
-      [1, '13:00', '13:25', 'A', 'volei', 'A', '6A', '8A', 'Simultâneo na Meia Quadra A; rede montada'],
-      [2, '13:00', '13:25', 'B', 'volei', 'B', '6B', '8B', 'Simultâneo na Meia Quadra B; rede montada'],
-      [3, '13:25', '13:50', 'A', 'volei', 'A', '7B', '8A', 'Fechamento do Grupo A de vôlei'],
-      [4, '13:25', '13:50', 'B', 'volei', 'B', '7A', '8B', 'Fechamento do Grupo B de vôlei'],
-      [5, '14:05', '14:35', 'A', 'basquete', 'A', '7B', '8A', 'Fechamento do Grupo A de basquete'],
-      [6, '14:05', '14:35', 'B', 'basquete', 'B', '7A', '8B', 'Fechamento do Grupo B de basquete'],
-      [7, '14:35', '15:05', 'I', 'handebol', 'A', '6A', '7B', 'Fase de grupos de handebol'],
-      [8, '15:10', '15:30', 'I', 'futsal', 'B', '6B', '8B', '1º intervalo: Grupo A lancha; somente Grupo B em quadra'],
-      [9, '15:30', '16:00', 'I', 'handebol', 'B', '6B', '7A', 'Fase de grupos de handebol'],
-      [10, '16:00', '16:20', 'I', 'futsal', 'A', '6A', '8A', '2º intervalo: Grupo B lancha; somente Grupo A em quadra'],
-      [11, '16:20', '17:00', 'I', 'futsal', 'A', '7B', '8A', 'Fechamento do Grupo A de futsal; encerramento do dia 2'],
-    ], blocks: [['13:50', '14:05', 'Retirada das redes de vôlei']] },
-    { date: '2026-12-02', shift: 'tarde', source: 1, page: 3, games: [
-      [1, '13:00', '13:30', 'I', 'futsal', 'B', '7A', '8B', 'Fechamento do Grupo B de futsal'],
-      [2, '13:30', '14:00', 'I', 'handebol', 'A', '6A', '8A', 'Fase de grupos de handebol'],
-      [3, '14:00', '14:35', 'A', 'basquete', 'S1', '', '', 'Semifinal simultânea na Meia Quadra A'],
-      [4, '14:00', '14:35', 'B', 'basquete', 'S2', '', '', 'Semifinal simultânea na Meia Quadra B'],
-      [5, '15:10', '15:30', 'I', 'handebol', 'B', '7A', '8B', '1º intervalo: Grupo A lancha; fechamento do Grupo B'],
-      [6, '15:30', '16:00', 'I', 'futsal', 'S1', '', '', 'Mata-mata de futsal'],
-      [7, '16:00', '16:20', 'I', 'handebol', 'A', '7B', '8A', '2º intervalo: Grupo B lancha; fechamento do Grupo A'],
-      [8, '16:20', '17:00', 'I', 'futsal', 'S2', '', '', 'Mata-mata de futsal; encerramento do dia 3'],
-    ], blocks: [['14:35', '15:10', 'Apuração de pontos e saldo de gols']] },
-    { date: '2026-12-03', shift: 'tarde', source: 1, page: 4, games: [
-      [1, '13:00', '13:30', 'I', 'handebol', 'S1', '', '', 'Mata-mata de handebol'],
-      [2, '13:30', '14:00', 'I', 'handebol', 'S2', '', '', 'Mata-mata de handebol'],
-      [3, '14:20', '14:50', 'A', 'volei', 'S1', '', '', 'Semifinal simultânea na Meia Quadra A'],
-      [4, '14:20', '14:50', 'B', 'volei', 'S2', '', '', 'Semifinal simultânea na Meia Quadra B'],
-      [5, '15:10', '15:30', 'I', 'handebol', 'F', '', '', '1º intervalo: Grupo A lancha; decisão de handebol'],
-      [6, '15:30', '16:00', 'A', 'volei', 'F', '', '', 'Decisão de vôlei; simultânea na Meia Quadra A'],
-      [7, '15:30', '16:00', 'B', 'basquete', 'F', '', '', 'Decisão de basquete; simultânea na Meia Quadra B'],
-      [8, '16:20', '17:00', 'I', 'futsal', 'F', '', '', 'Grande final de futsal e entrega de medalhas'],
-    ], blocks: [['14:00', '14:20', 'Montagem das redes de vôlei nas duas meias-quadras'], ['16:00', '16:20', '2º intervalo: Grupo B lancha; preparação da grande final']] },
+      [7, '16:00', '16:20', 'I', 'futsal', 'A', '6A', '7B', '2º intervalo: Grupo B lancha e o Grupo A joga'],
+      [8, '16:40', '17:05', 'A', 'volei', 'A', '6A', '7B', 'Simultâneo na Meia Quadra A'],
+      [9, '16:40', '17:05', 'B', 'volei', 'B', '6B', '7A', 'Simultâneo na Meia Quadra B'],
+    ], blocks: [
+      ['15:00', '15:10', 'Transição entre partidas'],
+      ['16:20', '16:40', 'Montagem das redes de vôlei nas duas meias-quadras'],
+      ['17:05', '18:00', 'Margem de segurança e encerramento'],
+    ] },
+    { date: '2026-12-01', shift: 'tarde', source: 'tarde', page: 3, games: [
+      [10, '14:20', '14:40', 'A', 'volei', 'A', '6A', '8A', 'Simultâneo na Meia Quadra A com a rede montada'],
+      [11, '14:20', '14:40', 'B', 'volei', 'B', '6B', '8B', 'Simultâneo na Meia Quadra B com a rede montada'],
+      [12, '14:40', '15:00', 'A', 'volei', 'A', '7B', '8A', 'Fechamento do Grupo A de vôlei'],
+      [13, '14:40', '15:00', 'B', 'volei', 'B', '7A', '8B', 'Fechamento do Grupo B de vôlei'],
+      [17, '15:10', '15:30', 'I', 'futsal', 'B', '6B', '8B', '1º intervalo: Grupo A lancha e o Grupo B joga'],
+      [16, '15:30', '15:43', 'I', 'handebol', 'A', '6A', '7B', 'Fase de grupos de handebol'],
+      [18, '15:43', '15:56', 'I', 'handebol', 'B', '6B', '7A', 'Fase de grupos de handebol'],
+      [19, '16:00', '16:12', 'I', 'futsal', 'A', '6A', '8A', '2º intervalo: Grupo B lancha e o Grupo A joga'],
+      [20, '16:27', '16:39', 'I', 'futsal', 'A', '7B', '8A', 'Fechamento do Grupo A de futsal'],
+      [14, '17:00', '17:20', 'A', 'basquete', 'A', '7B', '8A', 'Simultâneo na Meia Quadra A'],
+      [15, '17:00', '17:20', 'B', 'basquete', 'B', '7A', '8B', 'Simultâneo na Meia Quadra B'],
+    ], blocks: [
+      ['15:00', '15:10', 'Retirada das redes de vôlei'],
+      ['16:12', '16:27', 'Transição e descanso'],
+      ['16:39', '17:00', 'Transição para basquete'],
+      ['17:20', '18:00', 'Margem de segurança'],
+    ] },
+    { date: '2026-12-02', shift: 'tarde', source: 'tarde', page: 4, games: [
+      [21, '14:20', '14:35', 'I', 'futsal', 'B', '7A', '8B', 'Fechamento do Grupo B de futsal'],
+      [22, '14:35', '14:50', 'I', 'handebol', 'A', '6A', '8A', 'Fase de grupos de handebol'],
+      [23, '14:50', '15:10', 'A', 'basquete', 'S1', 'B', 'A', 'Semifinal simultânea na Meia Quadra A'],
+      [24, '14:50', '15:10', 'B', 'basquete', 'S2', 'A', 'B', 'Semifinal simultânea na Meia Quadra B'],
+      [25, '15:10', '15:30', 'I', 'handebol', 'B', '7A', '8B', '1º intervalo: Grupo A lancha enquanto o Grupo B joga sua última partida'],
+      [26, '15:30', '15:50', 'I', 'futsal', 'S1', 'B', 'A', 'Mata-mata de futsal'],
+      [27, '16:00', '16:20', 'I', 'handebol', 'A', '7B', '8A', '2º intervalo: Grupo B lancha enquanto o Grupo A joga sua última partida'],
+      [28, '16:20', '16:40', 'I', 'futsal', 'S2', 'A', 'B', 'Mata-mata de futsal'],
+    ], blocks: [
+      ['15:50', '16:00', 'Transição'],
+      ['16:40', '17:00', 'Apuração e classificação'],
+      ['17:00', '18:00', 'Margem de segurança'],
+    ] },
+    { date: '2026-12-03', shift: 'tarde', source: 'tarde', page: 5, games: [
+      [29, '14:20', '14:35', 'I', 'handebol', 'S1', 'B', 'A', 'Mata-mata de handebol'],
+      [30, '14:35', '14:50', 'I', 'handebol', 'S2', 'A', 'B', 'Mata-mata de handebol'],
+      [33, '15:10', '15:30', 'I', 'handebol', 'F', '', '', '1º intervalo: Grupo A lancha durante a decisão de handebol'],
+      [31, '15:30', '15:55', 'A', 'volei', 'S1', 'B', 'A', 'Semifinal simultânea na Meia Quadra A'],
+      [32, '15:30', '15:55', 'B', 'volei', 'S2', 'A', 'B', 'Semifinal simultânea na Meia Quadra B'],
+      [34, '16:20', '16:40', 'A', 'volei', 'F', '', '', 'Decisão de vôlei na Meia Quadra A'],
+      [35, '16:20', '16:40', 'B', 'basquete', 'F', '', '', 'Decisão de basquete na Meia Quadra B'],
+      [36, '16:40', '17:00', 'I', 'futsal', 'F', '', '', 'Grande final de futsal'],
+    ], blocks: [
+      ['14:50', '15:10', 'Montagem das redes de vôlei nas duas meias-quadras'],
+      ['16:00', '16:20', '2º intervalo: lanche do Grupo B e preparação'],
+      ['17:00', '18:00', 'Premiação e organização final'],
+    ] },
+    { date: '2026-12-04', shift: 'tarde', source: 'tarde', page: 1, games: [], blocks: [
+      ['12:40', '14:00', 'Apresentações culturais antes dos brinquedos infláveis'],
+    ] },
+    ...secondaryDays,
   ],
   breaks: {
     manha: [

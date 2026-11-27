@@ -377,7 +377,7 @@ Local, área, duração, presença e coletes continuam em **Preparar partida**. 
 
 ## Programação oficial de 2026
 
-Os murais oficiais de 30/11 a 03/12 foram transcritos em uma agenda com 96 partidas: 60 pela manhã e 36 à tarde. O comando `npm run agenda:oficial` permite conferir e aplicar datas, horários, quadras, grupos e mata-mata, com prazo de palpites cinco minutos antes de cada partida. Veja o [guia da programação oficial](docs/programacao-oficial-2026.md) para os comandos, a política de abertura e os registros de conferência.
+Os cronogramas oficiais de 30/11 a 03/12 reúnem 156 partidas, com 120 pela manhã e 36 à tarde. O comando `npm run agenda:oficial` aplica datas, horários, quadras, grupos e mata-mata, com prazo de palpites cinco minutos antes de cada partida. Os comandos e os registros de conferência estão no [guia da programação oficial](docs/programacao-oficial-2026.md).
 
 ## Palpite rápido no celular
 
